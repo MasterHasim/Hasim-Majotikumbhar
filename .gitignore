@@ -1,0 +1,33 @@
+﻿# Secrets
+.env
+.env.*
+!.env.example
+*.secret
+secrets/
+credentials/
+token*.json
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Build
+dist/
+build/
+coverage/
+
+# Local / OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# CLASP
+.clasp.json
+.claspignore
+
+# Temporary
+tmp/
+temp/
