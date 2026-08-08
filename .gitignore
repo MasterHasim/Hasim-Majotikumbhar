@@ -31,3 +31,10 @@ Thumbs.db
 # Temporary
 tmp/
 temp/
+
+# Local Google Apps Script / credential files
+.clasp.json
+.clasprc.json
+credentials.json
+*.pem
+*.key
