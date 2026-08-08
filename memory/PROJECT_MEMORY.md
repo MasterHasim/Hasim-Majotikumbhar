@@ -7,7 +7,7 @@ Multi-number WhatsApp CRM / panel.
 C:\DP\Whats App Panel
 
 ## Current Phase
-Phase 0 â€” Engineering foundation.
+Phase 1 — Access-control foundation.
 
 ## Agreed Direction
 - Multi-number WhatsApp Business / WABA architecture.

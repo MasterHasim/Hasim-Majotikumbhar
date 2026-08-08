@@ -1,7 +1,14 @@
 ﻿# Architecture
 
 ## Status
-Initial foundation. Detailed architecture is maintained in docs\REQUIREMENTS.md and related specification files.
+Phase 1 is implemented as a provider-neutral Google Apps Script domain layer. Detailed contracts are maintained in `docs/` and `data/schemas/`.
+
+## Phase 1 boundaries
+
+- Google Workspace identity is the authentication boundary.
+- Authorization is centralized in `AccessControl`; services must not perform ad-hoc role checks.
+- Persistence is behind repository contracts. The initial `PropertiesRepository` is suitable for low-volume administrative data only and can be replaced without changing domain services.
+- Phone/WhatsApp numbers are opaque external identifiers. No provider API, webhook, message, conversation, or Exotel behavior exists in Phase 1.
 
 ## Planned Logical Areas
 1. WhatsApp / Meta integration

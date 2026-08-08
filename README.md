@@ -1,21 +1,19 @@
-﻿# Whats App Panel
+# Whats App Panel
 
 Multi-number WhatsApp CRM / panel project.
 
-## Project Structure
+## Current implementation
 
-- src â€” application / Apps Script source
-- frontend â€” frontend assets
-- config â€” environment/configuration
-- data â€” data definitions and schemas
-- memory â€” persistent engineering context
-- docs â€” specifications
-- tests â€” automated tests
+Phase 1 provides the access-management foundation: Google Workspace identity authentication, users, roles, teams, opaque-number access grants, assignment eligibility, availability, centralized authorization, repositories, and audit logging. Provider integrations are intentionally not implemented.
 
-## Setup
+## Project structure
 
-Run Setup-WhatsApp-Panel.bat from this project directory to initialize the foundation.
+- `src` — Google Apps Script application source
+- `data/schemas` — provider-neutral domain contracts
+- `docs` — functional, security, API, and persistence specifications
+- `memory` — persistent engineering context and decisions
+- `tests` — test specifications
 
-## Engineering Context
+## Engineering context
 
-Read memory\CODEX_CONTEXT.md before making implementation changes.
+Read `memory/CODEX_CONTEXT.md` before making implementation changes.
