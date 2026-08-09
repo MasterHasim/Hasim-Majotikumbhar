@@ -6,9 +6,8 @@
 ## Action needed from you right now
 
 - Fill in `providerAccountId`/`wabaId`/`providerNumberId` for **`Spreewalk - Raipur`** and **`ECHT Advisory`** whenever convenient — not blocking anything.
-- **Unexplained deployment `Test_V02`** — still unconfirmed. We now know `Test_V01` is archived and `Test_V02` is active; still don't know what created it or what it's for.
-- That pre-existing **ngrok callback URL** (`https://chubby-overcrowd-system.ngrok-free.dev/webhooks/exotel/inbound`) is still configured alongside ours on all 10 numbers in Exotel — let me know if it's safe to remove or if something still depends on it.
-- Nothing else is currently blocking. Phase 5 can start when you're ready.
+- Remove the pre-existing **ngrok callback URL** (`https://chubby-overcrowd-system.ngrok-free.dev/webhooks/exotel/inbound`) from all 10 numbers in Exotel's Webhooks page whenever convenient — confirmed safe to remove (was just an Exotel demo), left as manual cleanup since it's per-number Exotel dashboard config, not scriptable from here.
+- Nothing else is currently blocking. Phase 5 is starting now.
 
 ## Phase status
 
@@ -62,9 +61,9 @@
 | 2026-08-09 | Bootstrap, OAuth consent, PR merge, spreadsheet + `SPREADSHEET_ID`, Phase 2/3 live smoke tests | ✅ Done by you |
 | 2026-08-09 | Set Exotel credentials, locate WABA/Phone IDs, seed + populate numbers | ✅ Done by you |
 | 2026-08-10 | Set `WEBHOOK_SECRET_TOKEN`, check Manage Deployments (caught the `webapp` manifest + `ANYONE` access bugs), configure webhook URL on all 10 numbers, send test WhatsApp messages | ✅ Done by you |
+| 2026-08-10 | Confirm `Test_V02` and the ngrok URL are safe to remove (both were just Exotel demo/testing artifacts) | ✅ Done by you — `Test_V02` deleted; ngrok URL removal left as manual cleanup (below) |
 | — | Fill in provider fields for `Spreewalk - Raipur` / `ECHT Advisory` | ⬜ **Open — whenever convenient** |
-| — | Confirm origin of deployment `Test_V02` | ⬜ **Open — needs you (or tell me to ignore it)** |
-| — | Confirm whether the pre-existing ngrok webhook URL can be removed | ⬜ **Open — needs you** |
+| — | Remove the ngrok callback URL from all 10 numbers in Exotel | ⬜ **Open — whenever convenient** |
 
 ## Next step
 
