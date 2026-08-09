@@ -42,11 +42,31 @@ harmless no-op if not.
 New conversations are created with `assignedUserId: ''` — round-robin assignment is
 explicitly Phase 7's job, not Phase 4's.
 
-## Unconfirmed
+## Confirmed live (2026-08-10)
 
-Exotel's real inbound webhook payload shape has not been live-verified as of this
-writing (only outbound `sendText`-style requests and `getTemplates()` have been).
-`doPost` logs the raw payload via `console.log` before parsing it specifically so a
-real webhook delivery can be inspected in the Apps Script Executions panel and
-`ExotelProvider.processWebhook()`'s parser corrected if it doesn't match reality — see
-`memory/DECISIONS.md` for the outcome once this has actually happened.
+Real inbound message payload shape (`incoming_message` callback):
+
+```json
+{"whatsapp":{"messages":[{"callback_type":"incoming_message","sid":"...",
+  "from":"+91...","to":"+91...","timestamp":"...","profile_name":"...",
+  "content":{"type":"text","text":{"body":"..."}}}]}}
+```
+
+Two corrections from the original best-effort guess:
+- The message id field is **`sid`**, not `id`/`message_sid`.
+- The `to` field is the **actual E.164 phone number** that received the message, not a
+  separate provider-specific number ID. Number lookup in `Phase4Api` matches on the
+  last 10 digits of `phoneNumber` (`normalizePhoneTail_`), not `providerNumberId` —
+  the `providerNumberId` values captured in Phase 3 (Meta "Phone Profile" IDs) aren't
+  what Exotel's webhook actually uses to identify numbers.
+
+`profile_name` carries the sender's real WhatsApp display name and is now used to seed
+a new customer's `name` field.
+
+Every `doPost` call — successful or not — is also logged to the `Webhook_Debug_Log`
+sheet tab (`logWebhookDebug_`), which is far easier to check than the Apps Script
+Executions panel for calls that didn't originate from the editor's Run button.
+
+**Still unverified**: status-callback payloads (delivery receipts) — triggering one for
+real requires actually sending a message, which is Phase 6's job. `applyStatusUpdate_`'s
+assumed field names (`message_sid`, `status_code`) have not been live-tested.

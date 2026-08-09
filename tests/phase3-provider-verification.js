@@ -74,10 +74,12 @@ assert.throws(() => new ExotelProvider(), error => error.code === 'CONFIGURATION
 properties.EXOTEL_API_KEY = 'key123';
 
 // processWebhook normalizes both an inbound-message payload and a status-callback payload.
-const inboundNormalized = provider.processWebhook({ whatsapp: { messages: [{ id: 'wamid.1', from: '+919999999999', to: 'provider-number-1', content: { type: 'text', text: { body: 'Hi' } }, timestamp: '2026-08-09T00:00:00.000Z' }] } });
+// Real confirmed shape (2026-08-10): the message id field is `sid`, not `id`/`message_sid`.
+const inboundNormalized = provider.processWebhook({ whatsapp: { messages: [{ callback_type: 'incoming_message', sid: 'wamid.1', from: '+919999999999', to: 'provider-number-1', profile_name: 'Eva', content: { type: 'text', text: { body: 'Hi' } }, timestamp: '2026-08-09T00:00:00.000Z' }] } });
 assert.strictEqual(inboundNormalized.providerMessageId, 'wamid.1');
 assert.strictEqual(inboundNormalized.direction, 'INBOUND');
 assert.strictEqual(inboundNormalized.text, 'Hi');
+assert.strictEqual(inboundNormalized.profileName, 'Eva');
 
 const statusNormalized = provider.processWebhook({ message_sid: 'msg_1', status_code: 30003 });
 assert.strictEqual(statusNormalized.status, 'READ');

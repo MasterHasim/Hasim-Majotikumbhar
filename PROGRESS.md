@@ -1,13 +1,14 @@
 # WhatsApp Multi-Number CRM — Progress Report
 
-**Last updated:** 2026-08-09 (Phase 3 done — `getTemplates()` live-verified against a real account)
+**Last updated:** 2026-08-10 (Phase 4 done — real inbound message live-verified end-to-end)
 **Purpose:** single source of truth for "what's done, what's left, and what needs you personally." Updated after every phase/transition. See `docs/ROADMAP.md` for full phase scope and `memory/` for detailed decisions/changelog.
 
 ## Action needed from you right now
 
 - Fill in `providerAccountId`/`wabaId`/`providerNumberId` for **`Spreewalk - Raipur`** and **`ECHT Advisory`** whenever convenient — not blocking anything.
-- **Unexplained deployment `Test_V02`** — still unconfirmed, still harmless either way.
-- Nothing else is currently blocking. Phase 4 can start when you're ready.
+- **Unexplained deployment `Test_V02`** — still unconfirmed. We now know `Test_V01` is archived and `Test_V02` is active; still don't know what created it or what it's for.
+- That pre-existing **ngrok callback URL** (`https://chubby-overcrowd-system.ngrok-free.dev/webhooks/exotel/inbound`) is still configured alongside ours on all 10 numbers in Exotel — let me know if it's safe to remove or if something still depends on it.
+- Nothing else is currently blocking. Phase 5 can start when you're ready.
 
 ## Phase status
 
@@ -17,9 +18,9 @@
 | 1 | Authentication, Users & Authorization | ✅ Done | Bootstrapped 2026-08-09; `hasim@echt.co.in` is ACTIVE ADMIN |
 | 2 | Core Database / Repository Layer | ✅ Done, live-verified | `SheetRepository` + 11 repositories; live-tested against real spreadsheet |
 | 3 | WhatsApp Numbers & Exotel Integration | ✅ Done | 10 numbers registered (8 fully, 2 partially); `getTemplates()` live-verified against a real account |
-| 4 | Webhook & Message Ingestion | ⬜ Not started | Next up |
-| 5 | Conversations & Inbox | ⬜ Not started | |
-| 6 | Agent Reply / Outbound Messaging | ⬜ Not started | Will live-verify `sendText`/`sendMedia`/`sendTemplate`/`getMessageStatus` here — deliberately deferred from Phase 3 since testing them means real sends/costs |
+| 4 | Webhook & Message Ingestion | ✅ Done, live-verified | Real WhatsApp message ingested end-to-end: customer, conversation, message all created correctly |
+| 5 | Conversations & Inbox | ⬜ Not started | Next up |
+| 6 | Agent Reply / Outbound Messaging | ⬜ Not started | Will live-verify `sendText`/`sendMedia`/`sendTemplate`/`getMessageStatus`/status-callbacks here — deliberately deferred since testing them means real sends/costs |
 | 7 | Assignment & Round-Robin Engine | ⬜ Not started | |
 | 8 | CRM-lite: Customers, Stages, Remarks | ⬜ Not started | |
 | 9 | Reminders, Snooze & Follow-up | ⬜ Not started | |
@@ -36,34 +37,35 @@
 | 20 | Production Hardening & Optimization | ⬜ Not started | |
 | 21 | Final Documentation & Handover | ⬜ Not started | |
 
+## What Phase 4 actually shipped
+
+- `src/Phase4Domain.gs` (`Phase4WebhookConfig`), `src/Phase4Services.gs` (`Phase4Api.ingestInboundMessage`, idempotent + status-callback handling), `src/Phase4Webhook.gs` (`doPost` — the project's first HTTP entry point)
+- New dedicated deployment `phase4-webhook-ingestion` (`Execute as: Me`, `Access: Anyone`), authenticated via a shared secret token (`WEBHOOK_SECRET_TOKEN`) since Exotel has no Google identity for Phase 1's `AccessControl` to check
+- Configured on all 10 numbers in Exotel's WhatsApp Console (alongside a pre-existing ngrok URL, left untouched)
+- `Webhook_Debug_Log` sheet tab — every webhook call logged (params/body/outcome), kept as a permanent diagnostic
+- **Live-verified completely**: real WhatsApp message → real `Customer` (name auto-populated from `profile_name`) → real `OPEN` `Conversation` → real `INBOUND` `Message`, all correctly linked. Two real bugs found and fixed along the way: message-id field is `sid` not `id`; number lookup needed to match on the actual phone number (`to` field), not the `providerNumberId` captured in Phase 3
+- Status-callback handling remains unverified live — needs Phase 6 to actually send a message first
+
 ## What Phase 3 actually shipped
 
-- `src/Phase3Domain.gs` (`Phase3ProviderContract`, `Phase3ExotelConfig`), `src/Phase3ExotelProvider.gs` (`ExotelProvider`), `src/Phase3Services.gs`/`src/Phase3Endpoints.gs` (`createNumber`/`updateNumber`/`listNumbers`, ADMIN-only), `src/Phase3ExotelConfigStatus.gs` (non-secret credential-status tab)
-- **All 10 WhatsApp numbers registered for real**; 8 have full `providerAccountId`/`wabaId`/`providerNumberId` (all share `providerAccountId: 'echt61'`), entered directly in the sheet (bypassed the audit log for those edits — noted in `memory/DECISIONS.md`, not a problem while you're the sole admin)
-- All four Node test suites pass; `appsscript.json` gained `spreadsheets` and `script.external_request` OAuth scopes
-- **`getTemplates()` is genuinely live-verified**, not just Node-mocked: real request against WABA `1359198589697291` returned two real approved templates (`otp_veri_code`, `otp`). Along the way, corrected a wrong assumed endpoint path (`whatsapp/templates` → `templates`) using a real curl example found via research.
-- `sendText`/`sendMedia`/`sendTemplate`/`createTemplate`/`getMessageStatus` remain **unverified by design** — confirming those means sending a real message or creating a real template, deliberately deferred to Phase 6
+- `ExotelProvider`, authorized number CRUD, all 10 numbers registered for real
+- **`getTemplates()` live-verified**: real request returned two real approved templates
 
 ## What Phase 2 actually shipped
 
-- `src/Phase2Domain.gs`, `src/Phase2Persistence.gs` (`SheetRepository`), `src/Phase2Repositories.gs` (11 repositories)
-- [PR #1](https://github.com/MasterHasim/Hasim-Majotikumbhar/pull/1) merged into `main`; backing spreadsheet `1qugfpq7dfNd2phwb8GVh_6VEsDe1Kf0fd76w3JQcqt4`
-- **Live-verified end-to-end**: caught and fixed two real bugs (Apps Script alphabetical file-load order; Google Sheets silently coercing numeric-looking strings into numbers)
+- `SheetRepository` + 11 repositories, live-verified end-to-end against the real spreadsheet ([PR #1](https://github.com/MasterHasim/Hasim-Majotikumbhar/pull/1))
 
 ## Manual-action log (things only you could do)
 
 | Date | Item | Status |
 |---|---|---|
-| 2026-08-09 | Run `bootstrapPhase1`, grant OAuth consent (multiple times as scopes were added) | ✅ Done by you |
-| 2026-08-09 | Open + merge PR #1 on GitHub (`gh` CLI not installed locally) | ✅ Done by you |
-| 2026-08-09 | Create backing spreadsheet + configure `SPREADSHEET_ID` Script Property | ✅ Done by you |
-| 2026-08-09 | Run live smoke tests diagnosing/verifying Phase 2's two bugs | ✅ Done by you |
-| 2026-08-09 | Run `seedPhase3NumbersOnce` — all 10 numbers registered | ✅ Done by you |
-| 2026-08-09 | Set `EXOTEL_API_KEY`/`EXOTEL_API_TOKEN`/`EXOTEL_ACCOUNT_SID`/`EXOTEL_SUBDOMAIN` Script Properties | ✅ Done by you |
-| 2026-08-09 | Locate WABA ID / Phone Number ID in Meta Business Manager, populate 8 of 10 numbers | ✅ Done by you |
-| 2026-08-09 | Fill in provider fields for `Spreewalk - Raipur` / `ECHT Advisory` | ⬜ **Open — whenever convenient** |
-| 2026-08-09 | Confirm origin of deployment `Test_V02` | ⬜ **Open — needs you (or tell me to ignore it)** |
+| 2026-08-09 | Bootstrap, OAuth consent, PR merge, spreadsheet + `SPREADSHEET_ID`, Phase 2/3 live smoke tests | ✅ Done by you |
+| 2026-08-09 | Set Exotel credentials, locate WABA/Phone IDs, seed + populate numbers | ✅ Done by you |
+| 2026-08-10 | Set `WEBHOOK_SECRET_TOKEN`, check Manage Deployments (caught the `webapp` manifest + `ANYONE` access bugs), configure webhook URL on all 10 numbers, send test WhatsApp messages | ✅ Done by you |
+| — | Fill in provider fields for `Spreewalk - Raipur` / `ECHT Advisory` | ⬜ **Open — whenever convenient** |
+| — | Confirm origin of deployment `Test_V02` | ⬜ **Open — needs you (or tell me to ignore it)** |
+| — | Confirm whether the pre-existing ngrok webhook URL can be removed | ⬜ **Open — needs you** |
 
 ## Next step
 
-**Phase 4 — Webhook & Message Ingestion**: receive real inbound WhatsApp messages via a webhook, identify the number/customer, find-or-create a conversation, store the message idempotently (dedupe on provider message ID), and update the conversation. This is the first phase that adds an HTTP entry point (`doPost`) — deliberately not added in any earlier phase. `ExotelProvider.processWebhook()` (built in Phase 3) already has a best-effort payload parser that will need live verification once a real webhook actually fires.
+**Phase 5 — Conversations & Inbox**: the actual WhatsApp panel UI (three-pane layout: numbers / conversations / customer detail). This is the first phase with a frontend — Admin sees all 10 numbers, an agent sees only their assigned numbers. Real conversation/message data already exists in the sheets from Phase 4's live test, ready to display.

@@ -33,16 +33,22 @@ fs.readdirSync(srcDir).filter(file => file.endsWith('.gs')).sort().forEach(file 
 });
 
 const api = () => new Phase4Api();
+// providerNumberId here is the raw webhook `to` value (a phone number, confirmed live
+// 2026-08-10), matched against the registered number's phoneNumber by digit tail —
+// not an opaque provider ID.
 const inboundMessage = (providerMessageId, overrides) => Object.assign({
-  providerMessageId, fromPhone: '+919999999999', providerNumberId: 'pn-1',
+  providerMessageId, fromPhone: '+919999999999', providerNumberId: '+917948502801',
   direction: 'INBOUND', messageType: 'text', text: 'Hello', timestamp: '2026-08-09T00:00:00.000Z', status: null
 }, overrides || {});
 
 // Unknown number is rejected before any customer/conversation is created.
 assert.throws(() => api().ingestInboundMessage(inboundMessage('wamid.1')), error => error.code === 'NOT_FOUND');
 
-// Register the number the message claims to be for.
-new NumberRepository().create({ id: 'number_1', displayName: 'Sales 1', phoneNumber: '079-1', provider: 'exotel', providerAccountId: '', wabaId: '', providerNumberId: 'pn-1', active: true, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' });
+// Register the number the message claims to be for (stored in our "079-485-02801" style; the webhook sends "+917948502801").
+new NumberRepository().create({ id: 'number_1', displayName: 'Sales 1', phoneNumber: '079-485-02801', provider: 'exotel', providerAccountId: '', wabaId: '', providerNumberId: '', active: true, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' });
+
+// A differently-formatted but digit-equivalent number ("917948502801" vs "079-485-02801") still matches.
+assert.doesNotThrow(() => api().ingestInboundMessage(inboundMessage('wamid.0', { providerNumberId: '917948502801' })));
 
 // First message: creates a customer, a conversation, and the message.
 const first = api().ingestInboundMessage(inboundMessage('wamid.1'));
@@ -53,16 +59,16 @@ assert.strictEqual(new CustomerRepository().list().length, 1);
 assert.strictEqual(new ConversationRepository().list().length, 1);
 assert.strictEqual(new ConversationRepository().get(first.conversationId).needsResponse, true);
 
-// Duplicate providerMessageId is a no-op.
+// Duplicate providerMessageId is a no-op. (2 messages so far: the format-check "wamid.0" plus "wamid.1".)
 const duplicate = api().ingestInboundMessage(inboundMessage('wamid.1'));
 assert.strictEqual(duplicate.duplicate, true);
-assert.strictEqual(new MessageRepository().list().length, 1);
+assert.strictEqual(new MessageRepository().list().length, 2);
 
 // A second, distinct message from the same customer reuses the same open conversation.
 const second = api().ingestInboundMessage(inboundMessage('wamid.2'));
 assert.strictEqual(second.conversationId, first.conversationId);
 assert.strictEqual(new CustomerRepository().list().length, 1);
-assert.strictEqual(new MessageRepository().list().length, 2);
+assert.strictEqual(new MessageRepository().list().length, 3);
 
 // A status-callback-shaped payload (direction not INBOUND) updates the matching message.
 const statusUpdate = api().ingestInboundMessage({ providerMessageId: 'wamid.1', direction: null, status: 'DELIVERED' });

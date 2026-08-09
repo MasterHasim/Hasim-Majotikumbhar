@@ -6,6 +6,19 @@
  * Round-robin assignment is explicitly Phase 7's job — conversations are created with
  * assignedUserId: '' here.
  */
+/**
+ * Confirmed live 2026-08-10: Exotel's webhook `to` field is the actual E.164 phone
+ * number (e.g. "+917948502801"), not the providerNumberId (Meta "Phone Profile" ID)
+ * captured for each number during Phase 3 registration — that ID isn't what Exotel's
+ * webhook uses to identify which number received a message. Numbers are matched by
+ * comparing the last 10 digits of phoneNumber against the last 10 digits of the
+ * incoming value, which absorbs formatting differences (dashes, leading 0, +91
+ * country code) between our stored "079-485-02801" style and Exotel's "+917948502801".
+ */
+function normalizePhoneTail_(phone) {
+  return String(phone || '').replace(/\D/g, '').slice(-10);
+}
+
 class Phase4Api {
   constructor() {
     this.repository_ = new PropertiesRepository();
@@ -27,13 +40,15 @@ class Phase4Api {
       if (this.messages_.findOne(function (m) { return m.providerMessageId === normalized.providerMessageId; })) {
         return { duplicate: true, providerMessageId: normalized.providerMessageId };
       }
-      var number = this.numbers_.findOne(function (n) { return n.providerNumberId === normalized.providerNumberId; });
-      if (!number) throw new Phase1Error('NOT_FOUND', 'No registered number matches providerNumberId: ' + normalized.providerNumberId);
+      var incomingNumberTail = normalizePhoneTail_(normalized.providerNumberId);
+      var number = this.numbers_.findOne(function (n) { return normalizePhoneTail_(n.phoneNumber) === incomingNumberTail; });
+      if (!number) throw new Phase1Error('NOT_FOUND', 'No registered number matches: ' + normalized.providerNumberId);
 
       var now = Phase1Ids.now();
-      var customer = this.customers_.findOne(function (c) { return c.phone === normalized.fromPhone; });
+      var incomingCustomerTail = normalizePhoneTail_(normalized.fromPhone);
+      var customer = this.customers_.findOne(function (c) { return normalizePhoneTail_(c.phone) === incomingCustomerTail; });
       if (!customer) {
-        customer = { id: Phase1Ids.create('customer'), phone: normalized.fromPhone, name: '', email: '', company: '', source: 'whatsapp', createdAt: now, updatedAt: now };
+        customer = { id: Phase1Ids.create('customer'), phone: normalized.fromPhone, name: normalized.profileName || '', email: '', company: '', source: 'whatsapp', createdAt: now, updatedAt: now };
         this.customers_.create(customer);
       }
 

@@ -67,17 +67,21 @@ class ExotelProvider {
   }
 
   processWebhook(payload) {
-    // UNVERIFIED — best-effort normalization; refine once a real webhook payload is captured (Phase 4).
+    // Confirmed live 2026-08-10 (real inbound message via Exotel's WhatsApp Console webhook):
+    // {"whatsapp":{"messages":[{"callback_type":"incoming_message","sid":"...","from":"+91...",
+    // "to":"+91...","timestamp":"...","profile_name":"...","content":{"type":"text","text":{"body":"..."}}}]}}
+    // The message id field is `sid`, not `id`/`message_sid` as originally assumed.
     var message = payload && payload.whatsapp && payload.whatsapp.messages && payload.whatsapp.messages[0];
     if (message) {
       return {
-        providerMessageId: message.id || message.message_sid || null,
+        providerMessageId: message.sid || message.id || message.message_sid || null,
         fromPhone: message.from || null,
         providerNumberId: message.to || null,
         direction: 'INBOUND',
         messageType: (message.content && message.content.type) || 'text',
         text: message.content && message.content.text && message.content.text.body,
         timestamp: message.timestamp || Phase1Ids.now(),
+        profileName: message.profile_name || null,
         status: null
       };
     }

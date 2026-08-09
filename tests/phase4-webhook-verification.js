@@ -40,9 +40,9 @@ fs.readdirSync(srcDir).filter(file => file.endsWith('.gs')).sort().forEach(file 
   vm.runInThisContext(fs.readFileSync(path.join(srcDir, file), 'utf8'), { filename: file });
 });
 
-new NumberRepository().create({ id: 'number_1', displayName: 'Sales 1', phoneNumber: '079-1', provider: 'exotel', providerAccountId: '', wabaId: '', providerNumberId: 'pn-1', active: true, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' });
+new NumberRepository().create({ id: 'number_1', displayName: 'Sales 1', phoneNumber: '079-485-02801', provider: 'exotel', providerAccountId: '', wabaId: '', providerNumberId: '', active: true, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' });
 
-const inboundPayload = { whatsapp: { messages: [{ id: 'wamid.1', from: '+919999999999', to: 'pn-1', content: { type: 'text', text: { body: 'Hi' } }, timestamp: '2026-08-09T00:00:00.000Z' }] } };
+const inboundPayload = { whatsapp: { messages: [{ callback_type: 'incoming_message', sid: 'wamid.1', from: '+919999999999', to: '+917948502801', profile_name: 'Eva', content: { type: 'text', text: { body: 'Hi' } }, timestamp: '2026-08-09T00:00:00.000Z' }] } };
 
 // Missing token: rejected, nothing written.
 let response = JSON.parse(doPost({ parameter: {}, postData: { contents: JSON.stringify(inboundPayload) } }).text);
@@ -60,6 +60,7 @@ response = JSON.parse(doPost({ parameter: { token: 'secret123' }, postData: { co
 assert.strictEqual(response.status, 'ok');
 assert.strictEqual(response.result.duplicate, false);
 assert.strictEqual(new MessageRepository().list().length, 1);
+assert.strictEqual(new CustomerRepository().get(response.result.customerId).name, 'Eva');
 
 // Same payload again: duplicate, no new message row.
 response = JSON.parse(doPost({ parameter: { token: 'secret123' }, postData: { contents: JSON.stringify(inboundPayload) } }).text);
