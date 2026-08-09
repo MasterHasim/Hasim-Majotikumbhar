@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Arial, Helvetica, sans-serif; font-size: 14px; color: #202124; }
+    .layout { display: grid; grid-template-columns: 220px 320px 1fr; height: 100vh; }
+    .pane { overflow-y: auto; border-right: 1px solid #e0e0e0; }
+    .pane:last-child { border-right: none; }
+    .pane-header { padding: 12px 14px; font-weight: bold; border-bottom: 1px solid #e0e0e0; position: sticky; top: 0; background: #fff; }
+    .list-item { padding: 10px 14px; cursor: pointer; border-bottom: 1px solid #f1f1f1; }
+    .list-item:hover { background: #f5f5f5; }
+    .list-item.active { background: #e8f0fe; }
+    .list-item .title { font-weight: 600; }
+    .list-item .subtitle { color: #5f6368; font-size: 12px; margin-top: 2px; }
+    .empty { padding: 16px; color: #5f6368; }
+    .detail { padding: 16px; }
+    .detail h2 { margin: 0 0 4px; font-size: 16px; }
+    .detail .meta { color: #5f6368; font-size: 12px; margin-bottom: 16px; }
+    .message { max-width: 70%; margin-bottom: 10px; padding: 8px 12px; border-radius: 8px; }
+    .message.INBOUND { background: #fff; border: 1px solid #e0e0e0; margin-right: auto; }
+    .message.OUTBOUND { background: #d9fdd3; margin-left: auto; }
+    .message .text { white-space: pre-wrap; }
+    .message .time { color: #5f6368; font-size: 11px; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <div class="pane" id="numbersPane">
+      <div class="pane-header">Numbers</div>
+      <div id="numbersList"><div class="empty">Loading…</div></div>
+    </div>
+    <div class="pane" id="conversationsPane">
+      <div class="pane-header">Conversations</div>
+      <div id="conversationsList"><div class="empty">Select a number</div></div>
+    </div>
+    <div class="pane" id="detailPane">
+      <div id="detailContent"><div class="empty">Select a conversation</div></div>
+    </div>
+  </div>
+
+  <script>
+    var selectedNumberId = null;
+    var selectedConversationId = null;
+
+    function escapeHtml(value) {
+      return String(value == null ? '' : value).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+
+    function loadNumbers() {
+      google.script.run.withSuccessHandler(renderNumbers).withFailureHandler(renderError('numbersList')).listMyNumbers();
+    }
+
+    function renderNumbers(numbers) {
+      var container = document.getElementById('numbersList');
+      if (!numbers.length) { container.innerHTML = '<div class="empty">No numbers assigned</div>'; return; }
+      container.innerHTML = numbers.map(function (number) {
+        return '<div class="list-item" data-id="' + escapeHtml(number.id) + '" onclick="selectNumber(\'' + number.id + '\')">' +
+          '<div class="title">' + escapeHtml(number.displayName) + '</div>' +
+          '<div class="subtitle">' + escapeHtml(number.phoneNumber) + '</div></div>';
+      }).join('');
+    }
+
+    function selectNumber(numberId) {
+      selectedNumberId = numberId;
+      selectedConversationId = null;
+      document.querySelectorAll('#numbersList .list-item').forEach(function (el) { el.classList.toggle('active', el.dataset.id === numberId); });
+      document.getElementById('conversationsList').innerHTML = '<div class="empty">Loading…</div>';
+      document.getElementById('detailContent').innerHTML = '<div class="empty">Select a conversation</div>';
+      google.script.run.withSuccessHandler(renderConversations).withFailureHandler(renderError('conversationsList')).listConversations(numberId);
+    }
+
+    function renderConversations(conversations) {
+      var container = document.getElementById('conversationsList');
+      if (!conversations.length) { container.innerHTML = '<div class="empty">No conversations</div>'; return; }
+      container.innerHTML = conversations.map(function (conversation) {
+        return '<div class="list-item" data-id="' + escapeHtml(conversation.id) + '" onclick="selectConversation(\'' + conversation.id + '\')">' +
+          '<div class="title">' + escapeHtml(conversation.status) + (conversation.needsResponse ? ' • Needs response' : '') + '</div>' +
+          '<div class="subtitle">' + escapeHtml(conversation.lastMessageAt || '') + '</div></div>';
+      }).join('');
+    }
+
+    function selectConversation(conversationId) {
+      selectedConversationId = conversationId;
+      document.querySelectorAll('#conversationsList .list-item').forEach(function (el) { el.classList.toggle('active', el.dataset.id === conversationId); });
+      document.getElementById('detailContent').innerHTML = '<div class="empty">Loading…</div>';
+      google.script.run.withSuccessHandler(renderDetail).withFailureHandler(renderError('detailContent')).getConversationDetail(conversationId);
+    }
+
+    function renderDetail(detail) {
+      var customerName = (detail.customer && detail.customer.name) || (detail.customer && detail.customer.phone) || 'Unknown customer';
+      var html = '<div class="detail">' +
+        '<h2>' + escapeHtml(customerName) + '</h2>' +
+        '<div class="meta">' + escapeHtml(detail.customer && detail.customer.phone) + ' • ' + escapeHtml(detail.number && detail.number.displayName) +
+        ' • Assigned: ' + escapeHtml(detail.conversation.assignedUserId || 'Unassigned') +
+        ' • Status: ' + escapeHtml(detail.conversation.status) + '</div>';
+      html += detail.messages.map(function (message) {
+        return '<div class="message ' + escapeHtml(message.direction) + '"><div class="text">' + escapeHtml(message.messageText) + '</div>' +
+          '<div class="time">' + escapeHtml(message.timestamp) + '</div></div>';
+      }).join('');
+      html += '</div>';
+      document.getElementById('detailContent').innerHTML = html;
+    }
+
+    function renderError(elementId) {
+      return function (error) {
+        document.getElementById(elementId).innerHTML = '<div class="empty">Error: ' + escapeHtml(error && error.message) + '</div>';
+      };
+    }
+
+    loadNumbers();
+  </script>
+</body>
+</html>
