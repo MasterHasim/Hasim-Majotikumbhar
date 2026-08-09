@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Whats App Panel Phase 2 repository-layer contracts",
+  "definitions": {
+    "whatsAppNumber": { "required": ["id", "displayName", "phoneNumber", "provider", "providerAccountId", "wabaId", "providerNumberId", "active"] },
+    "numberAssignmentConfig": { "required": ["id", "numberId", "roundRobinEnabled"] },
+    "numberAssignmentUser": { "required": ["id", "numberId", "userId", "sequenceOrder", "active"] },
+    "customer": { "required": ["id", "phone"] },
+    "conversation": { "required": ["id", "customerId", "numberId", "status", "needsResponse"] },
+    "conversationAssignment": { "required": ["id", "conversationId", "userId", "assignedAt"] },
+    "message": { "required": ["id", "conversationId", "numberId", "direction", "messageType", "status", "timestamp"] },
+    "remark": { "required": ["id", "conversationId", "authorUserId", "text", "createdAt"] },
+    "reminder": { "required": ["id", "conversationId", "ownerUserId", "text", "dueAt", "status"] },
+    "leadStage": { "required": ["id", "key", "name", "sequenceOrder", "active"] },
+    "whatsAppTemplate": { "required": ["id", "wabaId", "providerTemplateId", "name", "language", "category", "status"] },
+    "quickReply": { "required": ["id", "shortcut", "text", "active"] }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Whats App Panel Phase 1 access-control contracts",
+  "definitions": {
+    "userStatus": { "enum": ["active", "inactive", "suspended"] },
+    "availability": { "enum": ["available", "busy", "offline", "on_leave"] },
+    "roleKey": { "enum": ["ADMIN", "SUPERVISOR", "SITE_MANAGER", "AGENT", "VIEWER"] },
+    "user": { "required": ["id", "email", "displayName", "status", "roleIds"] },
+    "role": { "required": ["id", "key", "name", "permissions", "status"] },
+    "team": { "required": ["id", "name", "ownerUserId", "status"] },
+    "teamMember": { "required": ["id", "teamId", "userId", "status", "numberIds"] },
+    "numberAccess": { "required": ["id", "userId", "numberId", "granted", "status"] },
+    "assignmentEligibility": { "required": ["id", "userId", "numberId", "teamId", "eligible"] },
+    "availabilityRecord": { "required": ["userId", "status"] },
+    "auditLog": { "required": ["id", "occurredAt", "actorUserId", "action", "targetType", "targetId"] }
+  }
+}
