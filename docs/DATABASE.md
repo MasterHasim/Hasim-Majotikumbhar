@@ -64,7 +64,12 @@ of method names (`sendText`, `sendMedia`, `sendTemplate`, `getTemplates`,
 `createTemplate`, `getMessageStatus`, `processWebhook`), matching Phase1/Phase2's
 contract-array convention. `ExotelProvider` (`src/Phase3ExotelProvider.gs`) is the first
 implementation. Credentials come from Script Properties `EXOTEL_API_KEY`,
-`EXOTEL_API_TOKEN`, `EXOTEL_ACCOUNT_SID`, `EXOTEL_SUBDOMAIN` — never committed to Git.
+`EXOTEL_API_TOKEN`, `EXOTEL_ACCOUNT_SID`, `EXOTEL_SUBDOMAIN` — never committed to Git,
+never stored in the spreadsheet either (see `memory/DECISIONS.md`, 2026-08-09).
+
+`Exotel_Config_Status` is a non-secret status tab (`refreshExotelConfigStatus()` in
+`src/Phase3ExotelConfigStatus.gs`) listing only the four `EXOTEL_*` property NAMES and
+whether each is currently set — never the actual values.
 
 **Every Exotel request/response field name in `ExotelProvider` is unverified** (Exotel's
 detailed API reference pages returned 404 on fetch); only the base URL pattern and Basic

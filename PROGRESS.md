@@ -6,7 +6,7 @@
 ## Action needed from you right now
 
 - **Set 4 Script Properties in the Apps Script editor** so we can live-verify `ExotelProvider` against your real Exotel account (same way we live-tested Phase 2): `EXOTEL_API_KEY`, `EXOTEL_API_TOKEN`, `EXOTEL_ACCOUNT_SID`, `EXOTEL_SUBDOMAIN` (e.g. `api.exotel.com` or `api.in.exotel.com` depending on your region). Set these the same way you set `SPREADSHEET_ID` — Project Settings → Script Properties. Do **not** paste the values into chat.
-- Once set, tell me and I'll walk through a live smoke test of `getTemplates()` (read-only, lowest risk) to confirm the request shape actually works against your account.
+- Once set, tell me and I'll walk through a live smoke test of `getTemplates()` (read-only, lowest risk) to confirm the request shape actually works against your account. You can then run `refreshExotelConfigStatus()` once in the editor to get a non-secret `Exotel_Config_Status` tab confirming what's set.
 - **Unexplained deployment `Test_V02`** — still unconfirmed, still harmless either way.
 
 ## Phase status
@@ -42,6 +42,7 @@
 - **All 10 known WhatsApp numbers registered for real** in the live `WhatsApp_Numbers` sheet, via the authorized `createNumber` endpoint (not written directly). `providerAccountId`/`wabaId`/`providerNumberId` are still empty — use `updateNumber` to fill them in once you have the Exotel-side values.
 - `tests/phase3-numbers-verification.js` and `tests/phase3-provider-verification.js` both pass (Node-mocked)
 - `appsscript.json` gained the `spreadsheets` and `script.external_request` OAuth scopes
+- Added `refreshExotelConfigStatus()` (`src/Phase3ExotelConfigStatus.gs`) — a non-secret `Exotel_Config_Status` tab showing which `EXOTEL_*` properties are set (names only, never values). You asked about storing the actual credentials in a sheet tab; declined per `docs/SECURITY.md`'s existing rule, this is the safe middle ground instead.
 - **Not yet done:** live verification of `ExotelProvider` against a real Exotel account — every request/response field name in it is a flagged best-effort guess (Exotel's detailed API docs 404'd on fetch; only base URL, auth scheme, and status codes were confirmed). See `memory/DECISIONS.md` for exactly what's confirmed vs. assumed. No webhook HTTP endpoint yet — that's Phase 4.
 
 ## What Phase 2 actually shipped
