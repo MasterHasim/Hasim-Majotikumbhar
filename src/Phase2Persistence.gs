@@ -7,11 +7,18 @@
  * SheetRepository is instantiated once per entity/tab, so its methods are not passed
  * a collection name — the instance already knows which tab it owns.
  *
- * No repository below is wired to any service or endpoint yet; wap.phase2.spreadsheetId
- * is intentionally left unconfigured until Phase 3 needs to persist real data.
+ * Named Phase2Persistence.gs (not Phase2Repository.gs) so it sorts alphabetically
+ * before Phase2Repositories.gs: Apps Script loads .gs files in filename order, and
+ * `class NumberRepository extends SheetRepository` is evaluated at file-load time, so
+ * SheetRepository must already exist by then. "Repositories" < "Repository"
+ * alphabetically, so any "Phase2Repository*.gs" name would still load too late.
+ *
+ * No repository below is wired to any service or endpoint yet. The backing spreadsheet
+ * is configured via the SPREADSHEET_ID Script Property (set 2026-08-09, pointing at
+ * spreadsheet 1qugfpq7dfNd2phwb8GVh_6VEsDe1Kf0fd76w3JQcqt4).
  */
 var Phase2Spreadsheet = {
-  SCRIPT_PROPERTY: 'wap.phase2.spreadsheetId',
+  SCRIPT_PROPERTY: 'SPREADSHEET_ID',
   requireSpreadsheetId_: function () {
     var id = PropertiesService.getScriptProperties().getProperty(this.SCRIPT_PROPERTY);
     if (!id) throw new Phase1Error('CONFIGURATION_ERROR', 'Script Property ' + this.SCRIPT_PROPERTY + ' is not configured.');
@@ -75,7 +82,12 @@ class SheetRepository {
     var sheet = spreadsheet.getSheetByName(this.collectionName_);
     if (!sheet) {
       sheet = spreadsheet.insertSheet(this.collectionName_);
-      sheet.appendRow(['id'].concat(this.columns_));
+      var header = ['id'].concat(this.columns_);
+      // Force plain-text formatting before any data is written, otherwise Sheets
+      // silently coerces numeric-looking strings (e.g. a phone number "000") into
+      // actual numbers, losing leading zeros and exact string identity.
+      sheet.getRange(1, 1, sheet.getMaxRows(), header.length).setNumberFormat('@');
+      sheet.appendRow(header);
     }
     return sheet;
   }
@@ -98,12 +110,20 @@ class SheetRepository {
   }
   appendRow_(sheet, record) {
     var header = ['id'].concat(this.columns_);
-    sheet.appendRow(header.map(function (field) { return record[field] !== undefined ? record[field] : ''; }));
+    var values = header.map(function (field) { return record[field] !== undefined ? record[field] : ''; });
+    // Re-applying '@' directly on the exact target range immediately before the write
+    // — a sheet-wide format set once at creation was not enough to reliably stop
+    // Sheets from coercing numeric-looking strings (e.g. "000") into numbers.
+    var range = sheet.getRange(sheet.getLastRow() + 1, 1, 1, values.length);
+    range.setNumberFormat('@');
+    range.setValues([values]);
   }
   writeRow_(sheet, rowIndex, record) {
     var header = ['id'].concat(this.columns_);
     var values = header.map(function (field) { return record[field] !== undefined ? record[field] : ''; });
-    sheet.getRange(rowIndex, 1, 1, values.length).setValues([values]);
+    var range = sheet.getRange(rowIndex, 1, 1, values.length);
+    range.setNumberFormat('@');
+    range.setValues([values]);
   }
   mutate_(mutator) {
     var lock = LockService.getScriptLock();

@@ -12,9 +12,9 @@ Phase 1 and Phase 2 are implemented as a provider-neutral Google Apps Script dom
 
 ## Phase 2 boundaries
 
-- A second persistence adapter, `SheetRepository` (`src/Phase2Repository.gs`), backs the CRM-scale entities (numbers, customers, conversations, messages, remarks, reminders, stages, templates, quick replies, number-assignment config) — one Google Sheet tab per entity, one repository instance per tab, conforming to the same repository contract shape as `PropertiesRepository`.
+- A second persistence adapter, `SheetRepository` (`src/Phase2Persistence.gs`), backs the CRM-scale entities (numbers, customers, conversations, messages, remarks, reminders, stages, templates, quick replies, number-assignment config) — one Google Sheet tab per entity, one repository instance per tab, conforming to the same repository contract shape as `PropertiesRepository`.
 - Phase 1's own collections (Users, Teams, Team_Members, User_Number_Access, Audit_Log) are unchanged and remain on `PropertiesRepository`; Phase 2 does not migrate them.
-- No Phase 2 repository is wired to a service or public endpoint yet, and no real spreadsheet has been provisioned (`wap.phase2.spreadsheetId` is unset) — both are deferred to Phase 3, the first phase with a real caller.
+- No Phase 2 repository is wired to a service or public endpoint yet — that's deferred to Phase 3, the first phase with a real caller. The backing spreadsheet itself is now provisioned: Script Property `SPREADSHEET_ID` = `1qugfpq7dfNd2phwb8GVh_6VEsDe1Kf0fd76w3JQcqt4` (configured by the user 2026-08-09, ahead of Phase 3 starting).
 
 ## Planned Logical Areas
 1. WhatsApp / Meta integration

@@ -4,7 +4,7 @@ const path = require('path');
 const vm = require('vm');
 const assert = require('assert');
 
-const properties = { 'wap.phase2.spreadsheetId': 'mock-spreadsheet-id' };
+const properties = { 'SPREADSHEET_ID': 'mock-spreadsheet-id' };
 global.PropertiesService = { getScriptProperties: () => ({ getProperty: key => properties[key] || null, setProperty: (key, value) => { properties[key] = value; } }) };
 global.LockService = { getScriptLock: () => ({ waitLock: () => {}, releaseLock: () => {} }) };
 global.Utilities = { getUuid: (() => { let n = 0; return () => String(++n); })() };
@@ -14,7 +14,12 @@ function makeSheet() {
   return {
     appendRow: values => { rows.push(values.slice()); },
     getDataRange: () => ({ getValues: () => rows.map(row => row.slice()) }),
-    getRange: (rowIndex) => ({ setValues: values => { rows[rowIndex - 1] = values[0].slice(); } }),
+    getRange: (rowIndex) => ({
+      setValues: values => { rows[rowIndex - 1] = values[0].slice(); },
+      setNumberFormat: () => {}
+    }),
+    getMaxRows: () => 1000,
+    getLastRow: () => rows.length,
     deleteRow: rowIndex => { rows.splice(rowIndex - 1, 1); }
   };
 }
@@ -28,9 +33,13 @@ function makeSpreadsheet() {
 const mockSpreadsheet = makeSpreadsheet();
 global.SpreadsheetApp = { openById: () => mockSpreadsheet };
 
-['Phase1Domain.gs', 'Phase2Domain.gs', 'Phase2Repository.gs', 'Phase2Repositories.gs'].forEach(file => {
-  const dir = file.indexOf('Phase1') === 0 ? 'src' : 'src';
-  vm.runInThisContext(fs.readFileSync(path.join(__dirname, '..', dir, file), 'utf8'), { filename: file });
+// Load every .gs file in filename-sorted order, matching how Apps Script actually
+// concatenates project files at runtime (this caught a real load-order bug: a class
+// declared `extends SheetRepository` at file-load time in a file that alphabetically
+// preceded SheetRepository's own definition).
+const srcDir = path.join(__dirname, '..', 'src');
+fs.readdirSync(srcDir).filter(file => file.endsWith('.gs')).sort().forEach(file => {
+  vm.runInThisContext(fs.readFileSync(path.join(srcDir, file), 'utf8'), { filename: file });
 });
 
 // Generic SheetRepository contract, exercised through NumberRepository.
@@ -60,9 +69,9 @@ assert.strictEqual(numbers.get('number_1'), null);
 assert.throws(() => numbers.remove('number_1'), error => error.code === 'NOT_FOUND');
 
 // Configuration guard: repository operations fail clearly when unconfigured.
-delete properties['wap.phase2.spreadsheetId'];
+delete properties['SPREADSHEET_ID'];
 assert.throws(() => new NumberRepository().list(), error => error.code === 'CONFIGURATION_ERROR');
-properties['wap.phase2.spreadsheetId'] = 'mock-spreadsheet-id';
+properties['SPREADSHEET_ID'] = 'mock-spreadsheet-id';
 
 // All concrete repositories instantiate with their configured schema.
 const access = new AccessRepository();

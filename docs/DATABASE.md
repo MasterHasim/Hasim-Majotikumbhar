@@ -17,15 +17,19 @@ Administrative records are stored through the repository contract with UTC times
 
 # Phase 2 data contracts
 
-Phase 2 adds a second repository adapter, `SheetRepository` (`src/Phase2Repository.gs`),
+Phase 2 adds a second repository adapter, `SheetRepository` (`src/Phase2Persistence.gs`),
 backed by a Google Spreadsheet — one tab per entity, one repository instance per tab —
 conforming to the same `list/get/findOne/create/update/remove/replace/count` contract as
 `PropertiesRepository`. `Users`, `Teams`, `Team_Members`, `User_Number_Access`, and
 `Audit_Log` are **not** part of Phase 2; they remain on Phase 1's `PropertiesRepository`
 by deliberate decision (see `memory/DECISIONS.md`). No repository below is wired to a
 service or public endpoint yet — that happens as each entity's own phase arrives. The
-backing spreadsheet ID (Script Property `wap.phase2.spreadsheetId`) is intentionally left
-unconfigured until Phase 3.
+backing spreadsheet ID is read from Script Property `SPREADSHEET_ID` (configured
+2026-08-09, spreadsheet `1qugfpq7dfNd2phwb8GVh_6VEsDe1Kf0fd76w3JQcqt4`). The property is
+named `SPREADSHEET_ID` rather than the `wap.*` namespaced style used elsewhere
+(`wap.phase1.bootstrapAdminEmail`) because it was configured directly in the Apps Script
+project before the naming convention was reconciled; the code was adjusted to match
+rather than asking for a rename.
 
 | Tab (`Phase2Schemas` key) | Repository | Columns beyond `id` |
 | --- | --- | --- |
