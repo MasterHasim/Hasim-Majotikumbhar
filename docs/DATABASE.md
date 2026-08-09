@@ -50,3 +50,23 @@ rather than asking for a rename.
 (`.config` and `.users`) rather than extending `SheetRepository` itself, since a
 number's round-robin configuration and its ordered participant list are two related but
 distinct tabs.
+
+# Phase 3 data contracts
+
+`WhatsApp_Numbers` is now populated with real (partial) data: the 10 known numbers,
+registered through the authorized `createNumber` endpoint (`src/Phase3Services.gs`),
+not written directly to the repository. `providerAccountId`, `wabaId`, and
+`providerNumberId` are seeded as empty strings until the user supplies the real Exotel
+values, at which point `updateNumber` fills them in — no schema change needed.
+
+Provider abstraction: `Phase3ProviderContract` (`src/Phase3Domain.gs`) is a plain array
+of method names (`sendText`, `sendMedia`, `sendTemplate`, `getTemplates`,
+`createTemplate`, `getMessageStatus`, `processWebhook`), matching Phase1/Phase2's
+contract-array convention. `ExotelProvider` (`src/Phase3ExotelProvider.gs`) is the first
+implementation. Credentials come from Script Properties `EXOTEL_API_KEY`,
+`EXOTEL_API_TOKEN`, `EXOTEL_ACCOUNT_SID`, `EXOTEL_SUBDOMAIN` — never committed to Git.
+
+**Every Exotel request/response field name in `ExotelProvider` is unverified** (Exotel's
+detailed API reference pages returned 404 on fetch); only the base URL pattern and Basic
+Auth scheme are confirmed from public docs. See `memory/DECISIONS.md` for what's
+confirmed vs. assumed, and `PROGRESS.md` for the live-verification status.
