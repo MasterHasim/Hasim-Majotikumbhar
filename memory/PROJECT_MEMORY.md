@@ -7,7 +7,9 @@ Multi-number WhatsApp CRM / panel.
 C:\DP\Whats App Panel
 
 ## Current Phase
-Phase 1 — Access-control foundation.
+Phase 1 — Access-control foundation. Bootstrap executed and verified 2026-08-09; Hasim
+(hasim@echt.co.in) is the ACTIVE ADMIN user. Phase 2 — Core Database/Repository Layer —
+is next. See `docs/ROADMAP.md` for the full master 21-phase index.
 
 ## Agreed Direction
 - Multi-number WhatsApp Business / WABA architecture.
