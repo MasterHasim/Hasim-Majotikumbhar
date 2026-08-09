@@ -79,3 +79,9 @@ confirmed, documented inline in `src/Phase3ExotelProvider.gs`. `sendText`/`sendM
 by design — verifying those means sending a real message or creating a real template,
 deliberately deferred to Phase 6. See `memory/DECISIONS.md` for exactly what's confirmed
 vs. assumed, and `PROGRESS.md` for current status.
+
+# Phase 4 data contracts
+
+No new entities — Phase 4 is the first real writer of `Customers`, `Conversations`, and
+`Messages` (all defined in Phase 2, unused until now). See `docs/WEBHOOK.md` for the
+full ingestion flow, idempotency, and authentication model.
