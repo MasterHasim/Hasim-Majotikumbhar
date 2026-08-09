@@ -3,8 +3,11 @@
  * ExotelProvider.processWebhook(), src/Phase3ExotelProvider.gs) into Customer/
  * Conversation/Message records. No AccessControl check — a webhook has no Google
  * Workspace identity; it's a system-level operation, audited with actorUserId: null.
- * Round-robin assignment is explicitly Phase 7's job — conversations are created with
- * assignedUserId: '' here.
+ *
+ * Round-robin assignment (Phase 7) is invoked here for brand-new conversations, once
+ * this method's own lock has been released — Phase7Api.assignConversation acquires
+ * its own LockService lock, and nesting two locks from the same execution risks a
+ * deadlock, so the call happens strictly after this method's try/finally completes.
  */
 /**
  * Confirmed live 2026-08-10: Exotel's webhook `to` field is the actual E.164 phone
@@ -33,7 +36,7 @@ class Phase4Api {
     if (!normalized || !normalized.providerMessageId) throw new Phase1Error('VALIDATION_ERROR', 'providerMessageId is required.');
     if (normalized.direction !== 'INBOUND') return this.applyStatusUpdate_(normalized);
 
-    var self = this;
+    var isNewCustomer = false, isNewConversation = false, conversation, customer, message;
     var lock = LockService.getScriptLock();
     lock.waitLock(10000);
     try {
@@ -46,19 +49,21 @@ class Phase4Api {
 
       var now = Phase1Ids.now();
       var incomingCustomerTail = normalizePhoneTail_(normalized.fromPhone);
-      var customer = this.customers_.findOne(function (c) { return normalizePhoneTail_(c.phone) === incomingCustomerTail; });
+      customer = this.customers_.findOne(function (c) { return normalizePhoneTail_(c.phone) === incomingCustomerTail; });
       if (!customer) {
         customer = { id: Phase1Ids.create('customer'), phone: normalized.fromPhone, name: normalized.profileName || '', email: '', company: '', source: 'whatsapp', createdAt: now, updatedAt: now };
         this.customers_.create(customer);
+        isNewCustomer = true;
       }
 
-      var conversation = this.conversations_.findOne(function (c) { return c.customerId === customer.id && c.numberId === number.id && c.status === 'OPEN'; });
+      conversation = this.conversations_.findOne(function (c) { return c.customerId === customer.id && c.numberId === number.id && c.status === 'OPEN'; });
       if (!conversation) {
         conversation = { id: Phase1Ids.create('conversation'), customerId: customer.id, numberId: number.id, assignedUserId: '', status: 'OPEN', needsResponse: true, lastMessageAt: normalized.timestamp || now, createdAt: now, updatedAt: now };
         this.conversations_.create(conversation);
+        isNewConversation = true;
       }
 
-      var message = {
+      message = {
         id: Phase1Ids.create('message'), conversationId: conversation.id, numberId: number.id, senderUserId: '',
         direction: 'INBOUND', messageType: normalized.messageType || 'text', messageText: normalized.text || '',
         providerMessageId: normalized.providerMessageId, status: normalized.status || 'RECEIVED', timestamp: normalized.timestamp || now
@@ -66,11 +71,12 @@ class Phase4Api {
       this.messages_.create(message);
       this.conversations_.update(conversation.id, { needsResponse: true, lastMessageAt: message.timestamp });
       this.audit_.write(null, 'message.ingested', 'message', message.id, { conversationId: conversation.id, customerId: customer.id, numberId: number.id });
-
-      return { duplicate: false, messageId: message.id, conversationId: conversation.id, customerId: customer.id };
     } finally {
       lock.releaseLock();
     }
+
+    if (isNewConversation) new Phase7Api().assignConversation(conversation, isNewCustomer);
+    return { duplicate: false, messageId: message.id, conversationId: conversation.id, customerId: customer.id };
   }
 
   applyStatusUpdate_(normalized) {

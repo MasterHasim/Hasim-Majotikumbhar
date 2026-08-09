@@ -47,14 +47,28 @@ assert.throws(() => api().ingestInboundMessage(inboundMessage('wamid.1')), error
 // Register the number the message claims to be for (stored in our "079-485-02801" style; the webhook sends "+917948502801").
 new NumberRepository().create({ id: 'number_1', displayName: 'Sales 1', phoneNumber: '079-485-02801', provider: 'exotel', providerAccountId: '', wabaId: '', providerNumberId: '', active: true, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' });
 
+// A brand-new lead should come out of ingestion auto-assigned via Phase 7's round robin
+// (integration check — Phase7's own test suite covers the algorithm in depth). Written
+// directly to the repositories since this file has no bootstrapped Phase 1 identity
+// (a webhook has none either) and Phase 7's auto-assign path needs none.
+const propsRepo = new PropertiesRepository();
+propsRepo.create('users', { id: 'user_agent1', email: 'agent1@example.com', displayName: 'Agent One', status: 'active', roleIds: [], createdAt: '', updatedAt: '' });
+propsRepo.create('numberAccess', { id: 'na_1', userId: 'user_agent1', numberId: 'number_1', granted: true, status: 'active', createdAt: '', updatedAt: '' });
+propsRepo.create('assignmentEligibility', { id: 'user_agent1:number_1', userId: 'user_agent1', numberId: 'number_1', teamId: 'team_x', eligible: true, updatedAt: '' });
+propsRepo.replace('availability', 'user_agent1', { userId: 'user_agent1', status: 'available', createdAt: '', updatedAt: '' });
+new AccessRepository().users.create({ id: 'nau_1', numberId: 'number_1', userId: 'user_agent1', sequenceOrder: 1, active: true, createdAt: '', updatedAt: '' });
+new AccessRepository().config.create({ id: 'config_1', numberId: 'number_1', roundRobinEnabled: true, fallbackUserId: '', workingHoursStart: '', workingHoursEnd: '', lastAssignedUserId: '', createdAt: '', updatedAt: '' });
+
 // A differently-formatted but digit-equivalent number ("917948502801" vs "079-485-02801") still matches.
 assert.doesNotThrow(() => api().ingestInboundMessage(inboundMessage('wamid.0', { providerNumberId: '917948502801' })));
 
-// First message: creates a customer, a conversation, and the message.
+// First message: creates a customer, a conversation, and the message — and the new
+// lead gets auto-assigned via Phase 7's round robin (the number's only eligible agent).
 const first = api().ingestInboundMessage(inboundMessage('wamid.1'));
 assert.strictEqual(first.duplicate, false);
 assert.ok(first.customerId);
 assert.ok(first.conversationId);
+assert.strictEqual(new ConversationRepository().get(first.conversationId).assignedUserId, 'user_agent1');
 assert.strictEqual(new CustomerRepository().list().length, 1);
 assert.strictEqual(new ConversationRepository().list().length, 1);
 assert.strictEqual(new ConversationRepository().get(first.conversationId).needsResponse, true);

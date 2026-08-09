@@ -9,7 +9,7 @@
  */
 var Phase2Schemas = {
   WhatsApp_Numbers: ['displayName', 'phoneNumber', 'provider', 'providerAccountId', 'wabaId', 'providerNumberId', 'active', 'createdAt', 'updatedAt'],
-  Number_Assignment_Config: ['numberId', 'roundRobinEnabled', 'fallbackUserId', 'workingHoursStart', 'workingHoursEnd', 'createdAt', 'updatedAt'],
+  Number_Assignment_Config: ['numberId', 'roundRobinEnabled', 'fallbackUserId', 'workingHoursStart', 'workingHoursEnd', 'lastAssignedUserId', 'createdAt', 'updatedAt'],
   Number_Assignment_Users: ['numberId', 'userId', 'sequenceOrder', 'active', 'createdAt', 'updatedAt'],
   Customers: ['phone', 'name', 'email', 'company', 'source', 'createdAt', 'updatedAt'],
   Conversations: ['customerId', 'numberId', 'assignedUserId', 'status', 'needsResponse', 'lastMessageAt', 'createdAt', 'updatedAt'],
