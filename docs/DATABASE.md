@@ -85,3 +85,18 @@ vs. assumed, and `PROGRESS.md` for current status.
 No new entities — Phase 4 is the first real writer of `Customers`, `Conversations`, and
 `Messages` (all defined in Phase 2, unused until now). See `docs/WEBHOOK.md` for the
 full ingestion flow, idempotency, and authentication model.
+
+# Phase 5 data contracts
+
+No new entities — the first UI, reading `WhatsApp_Numbers`/`Conversations`/`Customers`/
+`Messages` through the authorization-scoped `Phase5Api`. See `docs/UI_SPECIFICATION.md`.
+
+# Phase 6 data contracts
+
+No new entities — `Phase6Api.sendReply` (`src/Phase6Services.gs`) is the first writer
+of `direction: 'OUTBOUND'` `Messages`. `senderUserId` records who actually sent it
+(the roadmap's explicit rule: "Rahul replied at 2:41 PM," not just "Agent replied").
+`status` is `SENT` on a successful provider call, `FAILED` on a provider/network error
+(the message is still recorded, for visibility/retry — `needsResponse` is only cleared
+on `SENT`). `ExotelProvider.sendText`'s request/response shape used here is
+**unverified** — see `memory/DECISIONS.md`.

@@ -8,10 +8,13 @@ server via `google.script.run` (Apps Script's own RPC mechanism), not `fetch`/RE
 
 ## Entry point
 
-`doGet(e)` in `src/Phase5Endpoints.gs` renders `frontend/Index.html`. Served from a
-domain-restricted Web App deployment (`Execute as: User accessing the web app`,
-`Access: Anyone within ECHT`) — a real Google Workspace identity, so Phase 1's
-`AccessControl` applies normally here (unlike the anonymous webhook deployment).
+`doGet(e)` in `src/Phase5Endpoints.gs` renders `frontend/Index.html`. Served from
+deployment `phase5-admin-ui` (`Execute as: Me`, `Access: Anyone within ECHT`) — see
+`memory/DECISIONS.md` for why `Execute as: Me` (not "User accessing the web app") is
+the architecturally correct choice. Domain-restricted access means
+`Session.getActiveUser()` still correctly reports each visitor's real identity, so
+Phase 1's `AccessControl` applies normally here (unlike the anonymous webhook
+deployment).
 
 ## Layout (Phase 5: view-only inbox)
 
@@ -31,12 +34,24 @@ they hold an active `numberAccess` grant for.
   full message thread (inbound left-aligned, outbound right-aligned — outbound styling
   exists in the CSS in advance of Phase 6, but nothing produces outbound messages yet).
 
-## Deliberately not in Phase 5
+## Phase 6: reply
 
-No compose/reply box (Phase 6 — Agent Reply / Outbound Messaging). No stage, remarks,
-or reminder panels (Phase 8/9 — those entities exist in storage from Phase 2 but have
-no service layer yet; showing non-functional placeholder UI for them was ruled out as
-a "half-finished implementation"). No round-robin assignment UI (Phase 7).
+A fixed compose box at the bottom of the detail pane (`#composeText`/`#composeSend` in
+`frontend/Index.html`) calls `sendReply(conversationId, text)`
+(`src/Phase6Services.gs`). On success, both the detail pane and the conversation list
+are reloaded (to reflect the cleared `needsResponse` flag and the new message). On
+failure (including authorization denial for a non-assigned agent), an inline error
+shows under the compose box rather than a full-page error — the box itself isn't
+hidden based on role, since the backend enforces authorization regardless and adding a
+"can I reply" pre-check endpoint wasn't needed for that. Failed sends render with a
+red-tinted message bubble (`.message.FAILED`) and "Failed to send" label.
+
+## Deliberately not yet in the UI
+
+No stage, remarks, or reminder panels (Phase 8/9 — those entities exist in storage
+from Phase 2 but have no service layer yet; showing non-functional placeholder UI for
+them was ruled out as a "half-finished implementation"). No round-robin assignment UI
+(Phase 7 — "Assigned" still shows "Unassigned" for new conversations).
 
 ## Testing note
 

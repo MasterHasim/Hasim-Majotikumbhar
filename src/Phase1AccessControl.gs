@@ -46,12 +46,42 @@ class AccessControl {
       if (this.hasRole(user, Phase1Roles.AGENT) && context.assignedUserId === user.id) return this.require(Phase1Permissions.CONVERSATIONS_VIEW_ASSIGNED);
       if ((this.hasRole(user, Phase1Roles.SUPERVISOR) || this.hasRole(user, Phase1Roles.SITE_MANAGER)) && context.teamId) return this.requireTeamOperation(Phase1Permissions.CONVERSATIONS_VIEW_TEAM, context.teamId);
     }
-    if (action === 'reply' && this.hasRole(user, Phase1Roles.AGENT) && context.assignedUserId === user.id) return this.require(Phase1Permissions.CONVERSATIONS_REPLY_ASSIGNED);
-    if (action === 'reassign' && context.teamId) {
+    if (action === 'reply') {
+      if (this.hasRole(user, Phase1Roles.ADMIN)) return user;
+      if (this.hasRole(user, Phase1Roles.AGENT) && context.assignedUserId === user.id) return this.require(Phase1Permissions.CONVERSATIONS_REPLY_ASSIGNED);
+    }
+    if (action === 'reassign') {
       if (this.hasRole(user, Phase1Roles.ADMIN)) return this.require(Phase1Permissions.CONVERSATIONS_REASSIGN_GLOBAL);
-      if (this.hasRole(user, Phase1Roles.SUPERVISOR) || this.hasRole(user, Phase1Roles.SITE_MANAGER)) return this.requireTeamOperation(Phase1Permissions.CONVERSATIONS_REASSIGN_TEAM, context.teamId);
+      if ((this.hasRole(user, Phase1Roles.SUPERVISOR) || this.hasRole(user, Phase1Roles.SITE_MANAGER)) && context.teamId) return this.requireTeamOperation(Phase1Permissions.CONVERSATIONS_REASSIGN_TEAM, context.teamId);
     }
     return this.denied_(user, 'conversationOperation', action, 'ROLE_OR_ASSIGNMENT_SCOPE');
+  }
+  /**
+   * Resolves a teamId for a given number for the current user, since Conversations
+   * (Phase 2) has no teamId field of its own — see memory/DECISIONS.md (Phase 5).
+   * For SITE_MANAGER: a team they own whose active Team_Members.numberIds includes
+   * numberId. For SUPERVISOR: a team they're an active member of with numberId in
+   * their own numberIds. Returns null if none qualify (or the role doesn't use
+   * team scope at all) — requireConversationOperation then denies as appropriate.
+   */
+  resolveTeamIdForNumber(numberId) {
+    var user = this.currentUser();
+    if (this.hasRole(user, Phase1Roles.SITE_MANAGER)) {
+      var owned = this.repository_.list('teams').filter(function (team) { return team.status === Phase1Constants.ACTIVE && team.ownerUserId === user.id; });
+      for (var i = 0; i < owned.length; i++) {
+        var hasNumber = this.repository_.list('teamMembers').some(function (member) {
+          return member.teamId === owned[i].id && member.status === Phase1Constants.ACTIVE && member.numberIds.indexOf(numberId) !== -1;
+        });
+        if (hasNumber) return owned[i].id;
+      }
+    }
+    if (this.hasRole(user, Phase1Roles.SUPERVISOR)) {
+      var membership = this.repository_.list('teamMembers').find(function (member) {
+        return member.userId === user.id && member.status === Phase1Constants.ACTIVE && member.numberIds.indexOf(numberId) !== -1;
+      });
+      if (membership) return membership.teamId;
+    }
+    return null;
   }
   hasGrantedNumber_(userId, numberId) { return !!this.repository_.findOne('numberAccess', function (item) { return item.userId === userId && item.numberId === numberId && item.status === Phase1Constants.ACTIVE && item.granted === true; }); }
   denied_(user, targetType, targetId, reason) { this.audit_(user.id, 'authorization.denied', targetType, targetId, { reason: reason }); throw new Phase1Error('FORBIDDEN', 'Access is denied.'); }

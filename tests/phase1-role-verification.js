@@ -38,6 +38,10 @@ api().addTeamMember({ teamId: teamB.id, userId: managerB.id, numberIds: ['number
 // ADMIN global operations.
 assert.ok(api().listUsers().length >= 8);
 assert.ok(api().listNumberAccess().length >= 6);
+// ADMIN has global reply/reassign scope too, not just view (regression: these action
+// branches originally had no ADMIN bypass, unlike 'view').
+assert.ok(api().access_.requireConversationOperation('reply', { numberId: 'number-a', teamId: null, assignedUserId: agentA.id }));
+assert.ok(api().access_.requireConversationOperation('reassign', { numberId: 'number-a', teamId: null, assignedUserId: agentA.id }));
 
 // SUPERVISOR cannot administer users, settings, or number grants, but can view an assigned team.
 email = 'supervisor@example.com';

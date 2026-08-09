@@ -1,71 +1,60 @@
 # WhatsApp Multi-Number CRM — Progress Report
 
-**Last updated:** 2026-08-10 (Phase 5 done — three-pane inbox UI live-verified with real data)
-**Purpose:** single source of truth for "what's done, what's left, and what needs you personally." Updated after every phase/transition. See `docs/ROADMAP.md` for full phase scope and `memory/` for detailed decisions/changelog.
+**Last updated:** 2026-08-10 (working autonomously overnight per user's go-ahead — see `memory/DECISIONS.md`)
+**Purpose:** single source of truth for "what's done, what's left, and what needs you personally." Updated after every phase/transition. See `docs/ROADMAP.md` for full phase scope, `memory/CHANGELOG.md` for full per-phase detail (this file stays intentionally brief per phase), and `memory/DECISIONS.md` for architectural reasoning.
 
 ## Action needed from you right now
 
-- Fill in `providerAccountId`/`wabaId`/`providerNumberId` for **`Spreewalk - Raipur`** and **`ECHT Advisory`** whenever convenient — not blocking anything.
-- Remove the pre-existing **ngrok callback URL** from all 10 numbers in Exotel's Webhooks page whenever convenient — confirmed safe to remove.
-- Optional: if you have a second ECHT Google account handy, signing in as a non-admin user (e.g. someone with AGENT role and limited `numberAccess`) and opening the UI would give extra confidence that per-user visibility works correctly live, not just for the admin view. Not required — the authorization logic itself is Node-tested — just a nice-to-have.
-- Nothing else is currently blocking. Phase 6 can start when you're ready.
+- **Live-verify `sendText`** (Phase 6): code is written and Node-tested, but actually calling it means sending a real WhatsApp message with real cost — deliberately not done unattended. Once you're back: open the UI, reply to a conversation, and we'll check together whether it actually reaches the recipient and what Exotel's real response shape looks like (same live-verify-and-fix pattern as every other Exotel integration point).
+- See the **full wake-up task list** at the bottom of this file for everything else queued up.
 
 ## Phase status
 
 | # | Phase | Status | Notes |
 |---|---|---|---|
-| 0 | Project Foundation & Architecture | ✅ Done | Repo, git, CLASP, memory/docs structure |
-| 1 | Authentication, Users & Authorization | ✅ Done | Bootstrapped 2026-08-09; `hasim@echt.co.in` is ACTIVE ADMIN |
-| 2 | Core Database / Repository Layer | ✅ Done, live-verified | `SheetRepository` + 11 repositories; live-tested against real spreadsheet |
-| 3 | WhatsApp Numbers & Exotel Integration | ✅ Done | 10 numbers registered (8 fully, 2 partially); `getTemplates()` live-verified against a real account |
-| 4 | Webhook & Message Ingestion | ✅ Done, live-verified | Real WhatsApp message ingested end-to-end: customer, conversation, message all created correctly |
-| 5 | Conversations & Inbox | ✅ Done, live-verified | Three-pane UI live at the deployed URL, showing real numbers/conversations/messages |
-| 6 | Agent Reply / Outbound Messaging | ⬜ Not started | Next up — will also live-verify `sendText`/`sendMedia`/`sendTemplate`/`getMessageStatus`/status-callbacks, deliberately deferred from Phase 3 since testing them means real sends/costs |
-| 7 | Assignment & Round-Robin Engine | ⬜ Not started | |
-| 8 | CRM-lite: Customers, Stages, Remarks | ⬜ Not started | |
-| 9 | Reminders, Snooze & Follow-up | ⬜ Not started | |
-| 10 | WhatsApp Templates | ⬜ Not started | |
-| 11 | Quick Replies & Media | ⬜ Not started | |
-| 12 | Admin Panel & Configuration | ⬜ Not started | |
-| 13 | Notifications, Search & Productivity | ⬜ Not started | |
-| 14 | Dashboard & Analytics | ⬜ Not started | |
-| 15 | Audit, Security, Backup & Reliability | ⬜ Not started | |
-| 16 | Testing & QA | ⬜ Not started | |
-| 17 | Production Deployment | ⬜ Not started | |
-| 18 | Zoho Integration Preparation | ⬜ Not started | |
-| 19 | Zoho CRM Integration | ⬜ Not started | |
-| 20 | Production Hardening & Optimization | ⬜ Not started | |
-| 21 | Final Documentation & Handover | ⬜ Not started | |
+| 0 | Project Foundation & Architecture | ✅ Done | |
+| 1 | Authentication, Users & Authorization | ✅ Done, live-verified | Hasim is ACTIVE ADMIN |
+| 2 | Core Database / Repository Layer | ✅ Done, live-verified | |
+| 3 | WhatsApp Numbers & Exotel Integration | ✅ Done, live-verified | 10 numbers registered (8 fully, 2 partially) |
+| 4 | Webhook & Message Ingestion | ✅ Done, live-verified | |
+| 5 | Conversations & Inbox | ✅ Done, live-verified | |
+| 6 | Agent Reply / Outbound Messaging | 🟡 Code done, Node-tested — live send pending you | `sendText` request shape unverified until a real send happens |
+| 7 | Assignment & Round-Robin Engine | ⬜ In progress (autonomous session) | |
+| 8 | CRM-lite: Customers, Stages, Remarks | ⬜ Not started yet | |
+| 9 | Reminders, Snooze & Follow-up | ⬜ Not started yet | |
+| 10 | WhatsApp Templates | ⬜ Not started yet | |
+| 11 | Quick Replies & Media | ⬜ Not started yet | |
+| 12 | Admin Panel & Configuration | ⬜ Not started yet | |
+| 13 | Notifications, Search & Productivity | ⬜ Not started yet | |
+| 14 | Dashboard & Analytics | ⬜ Not started yet | |
+| 15 | Audit, Security, Backup & Reliability | ⬜ Not started yet | |
+| 16 | Testing & QA | ⬜ Not started yet | |
+| 17 | Production Deployment | ⬜ Not started — needs your go-live decisions | |
+| 18 | Zoho Integration Preparation | ⬜ Not started yet | |
+| 19 | Zoho CRM Integration | ⬜ Not started — needs your Zoho credentials | |
+| 20 | Production Hardening & Optimization | ⬜ Not started — needs real usage data | |
+| 21 | Final Documentation & Handover | ⬜ Not started yet | |
 
-## What Phase 5 actually shipped
+## Recently shipped (brief — see `memory/CHANGELOG.md` for full detail)
 
-- `src/Phase5Services.gs` (`Phase5Api` — `listMyNumbers`, `listConversations`, `getConversationDetail`), `src/Phase5Endpoints.gs` (`doGet`, the project's first HTML entry point), `frontend/Index.html` (three-pane plain HTML/CSS/JS UI, `google.script.run`-based)
-- New deployment `phase5-admin-ui` — `Execute as: Me`, `Access: Anyone within ECHT` (domain-restricted, deliberately different from the public webhook deployment)
-- Resolved a real gap: `Conversations` has no `teamId`, but Phase 1's authorization contract needed one for Supervisor/Site Manager — fixed by deriving team scope from number access on the fly, no schema change
-- Testing caught a real design gap: `listConversations` needed an explicit upfront access-denial check (previously a completely inaccessible number silently returned an empty list instead of `FORBIDDEN`)
-- Discovered `.claspignore` was silently excluding `frontend/**` entirely (Phase 0 leftover) — fixed before the first push, would have blocked the UI from ever deploying
-- **Live-verified completely**: opened the real URL, saw all 10 real numbers, clicked into "Entartica - CRM," saw the real "OPEN • Needs response" conversation, clicked in, saw customer "Eva" and the real "Hola" message from Phase 4's test — all rendering correctly end to end
-- Nothing to reply with yet (Phase 6) — this is view-only, and no stage/remarks/reminders panels (Phase 8/9, no service layer yet)
+- **Phase 6**: `Phase6Api.sendReply` — ADMIN or the assigned AGENT only (fixed a real ADMIN-scope gap in `AccessControl.requireConversationOperation` along the way, promoted team-scope resolution into a shared `AccessControl` method). Compose box added to the UI. Records `senderUserId`/`SENT`/`FAILED`. Not live-sent yet.
+- **Phase 5**: Three-pane inbox UI, live-verified with real data.
+- **Phase 4**: Webhook ingestion, live-verified with a real WhatsApp message.
+- **Phase 3**: Numbers registered, `getTemplates()` live-verified.
+- **Phase 2**: Repository layer, live-verified.
 
-## What Phase 4 actually shipped
-
-- `doPost` (first HTTP entry point), idempotent ingestion, live-verified with a real WhatsApp message creating a real customer/conversation/message
-
-## What Phase 2 & 3 shipped
-
-- `SheetRepository` + 11 repositories, live-verified ([PR #1](https://github.com/MasterHasim/Hasim-Majotikumbhar/pull/1)); `ExotelProvider` with live-verified `getTemplates()`; all 10 numbers registered
-
-## Manual-action log (things only you could do)
+## Manual-action log (things only you could do) — historical
 
 | Date | Item | Status |
 |---|---|---|
-| 2026-08-09 | Bootstrap, OAuth consent, PR merge, spreadsheet + `SPREADSHEET_ID`, Phase 2/3 live smoke tests, Exotel credentials, WABA/Phone IDs, seed numbers | ✅ Done by you |
-| 2026-08-10 | `WEBHOOK_SECRET_TOKEN`, webhook deployment checks, configure webhook URL on all 10 numbers, send test WhatsApp messages | ✅ Done by you |
-| 2026-08-10 | Confirm `Test_V02`/ngrok URL safe to remove | ✅ Done by you — `Test_V02` deleted |
-| 2026-08-10 | Check `phase5-admin-ui` deployment settings, open and confirm the live UI | ✅ Done by you |
-| — | Fill in provider fields for `Spreewalk - Raipur` / `ECHT Advisory` | ⬜ **Open — whenever convenient** |
-| — | Remove the ngrok callback URL from all 10 numbers in Exotel | ⬜ **Open — whenever convenient** |
+| 2026-08-09 – 2026-08-10 | Bootstrap, spreadsheet, Exotel credentials, webhook config, all live-verification click-throughs for Phases 1–5 | ✅ Done by you |
+| 2026-08-10 | Confirm `Test_V02`/ngrok URL safe to remove | ✅ Done — `Test_V02` deleted |
+| — | Fill in provider fields for `Spreewalk - Raipur` / `ECHT Advisory` | ⬜ Open, whenever convenient |
+| — | Remove the ngrok callback URL from all 10 numbers in Exotel | ⬜ Open, whenever convenient |
 
-## Next step
+## Full wake-up task list (updated as the overnight session progresses)
 
-**Phase 6 — Agent Reply / Outbound Messaging**: add a compose/reply box to the UI, wire it to `ExotelProvider.sendText`/`sendMedia`/`sendTemplate`, record every outbound message with the sending agent's identity, and finally live-verify the send-side of `ExotelProvider` (deliberately deferred since Phase 3, since testing means a real message with real cost). Also the natural place to live-verify status-callback handling (`Phase4Api.applyStatusUpdate_`), since sending a real message is what triggers one.
+1. **Live-verify Phase 6 sending** — reply to a real conversation in the UI, confirm the message actually arrives, check Exotel's real response shape with me so I can fix `extractOutboundProviderMessageId_` if the field name guess is wrong (same pattern as every other Exotel field-name fix this project has needed).
+2. Fill in `Spreewalk - Raipur` / `ECHT Advisory` provider fields (optional).
+3. Remove the ngrok callback URL from Exotel (optional).
+4. *(This list will grow as I continue — check the bottom of this file for the latest.)*

@@ -7,8 +7,9 @@
  * numberAccess grant before anything else is checked (AccessControl.hasGrantedNumber_,
  * src/Phase1AccessControl.gs) — that's the uniform gate for "which numbers can I see."
  * Team membership's numberIds is a separate, additional scope used only for the
- * team-view path (SUPERVISOR/SITE_MANAGER), resolved on the fly here since
- * Conversations (Phase 2) has no teamId field of its own — see memory/DECISIONS.md.
+ * team-view path (SUPERVISOR/SITE_MANAGER), resolved via
+ * AccessControl.resolveTeamIdForNumber() since Conversations (Phase 2) has no teamId
+ * field of its own — see memory/DECISIONS.md.
  */
 class Phase5Api {
   constructor() {
@@ -41,7 +42,7 @@ class Phase5Api {
     if (!this.access_.hasRole(actor, Phase1Roles.ADMIN) && !this.access_.hasGrantedNumber_(actor.id, numberId)) {
       this.access_.denied_(actor, 'number', numberId, 'NUMBER_ACCESS');
     }
-    var teamId = this.resolveTeamIdForNumber_(actor, numberId);
+    var teamId = this.access_.resolveTeamIdForNumber(numberId);
     var self = this;
     return this.conversations_.list().filter(function (conversation) { return conversation.numberId === numberId; })
       .filter(function (conversation) {
@@ -57,8 +58,7 @@ class Phase5Api {
   getConversationDetail(conversationId) {
     var conversation = this.conversations_.get(conversationId);
     if (!conversation) throw new Phase1Error('NOT_FOUND', 'Conversation was not found.');
-    var actor = this.access_.currentUser();
-    var teamId = this.resolveTeamIdForNumber_(actor, conversation.numberId);
+    var teamId = this.access_.resolveTeamIdForNumber(conversation.numberId);
     this.access_.requireConversationOperation('view', { numberId: conversation.numberId, teamId: teamId, assignedUserId: conversation.assignedUserId });
 
     var customer = this.customers_.get(conversation.customerId);
@@ -66,25 +66,5 @@ class Phase5Api {
     var messages = this.messages_.list().filter(function (message) { return message.conversationId === conversationId; })
       .sort(function (a, b) { return (a.timestamp || '').localeCompare(b.timestamp || ''); });
     return { conversation: conversation, customer: customer, number: number, messages: messages };
-  }
-
-  resolveTeamIdForNumber_(actor, numberId) {
-    var repo = this.repository_;
-    if (this.access_.hasRole(actor, Phase1Roles.SITE_MANAGER)) {
-      var owned = repo.list('teams').filter(function (team) { return team.status === Phase1Constants.ACTIVE && team.ownerUserId === actor.id; });
-      for (var i = 0; i < owned.length; i++) {
-        var hasNumber = repo.list('teamMembers').some(function (member) {
-          return member.teamId === owned[i].id && member.status === Phase1Constants.ACTIVE && member.numberIds.indexOf(numberId) !== -1;
-        });
-        if (hasNumber) return owned[i].id;
-      }
-    }
-    if (this.access_.hasRole(actor, Phase1Roles.SUPERVISOR)) {
-      var membership = repo.list('teamMembers').find(function (member) {
-        return member.userId === actor.id && member.status === Phase1Constants.ACTIVE && member.numberIds.indexOf(numberId) !== -1;
-      });
-      if (membership) return membership.teamId;
-    }
-    return null;
   }
 }

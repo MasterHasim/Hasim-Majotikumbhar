@@ -8,6 +8,7 @@
     .layout { display: grid; grid-template-columns: 220px 320px 1fr; height: 100vh; }
     .pane { overflow-y: auto; border-right: 1px solid #e0e0e0; }
     .pane:last-child { border-right: none; }
+    #detailPane { display: flex; flex-direction: column; overflow: hidden; }
     .pane-header { padding: 12px 14px; font-weight: bold; border-bottom: 1px solid #e0e0e0; position: sticky; top: 0; background: #fff; }
     .list-item { padding: 10px 14px; cursor: pointer; border-bottom: 1px solid #f1f1f1; }
     .list-item:hover { background: #f5f5f5; }
@@ -15,14 +16,21 @@
     .list-item .title { font-weight: 600; }
     .list-item .subtitle { color: #5f6368; font-size: 12px; margin-top: 2px; }
     .empty { padding: 16px; color: #5f6368; }
-    .detail { padding: 16px; }
-    .detail h2 { margin: 0 0 4px; font-size: 16px; }
-    .detail .meta { color: #5f6368; font-size: 12px; margin-bottom: 16px; }
+    .detail-header { padding: 12px 16px; border-bottom: 1px solid #e0e0e0; }
+    .detail-header h2 { margin: 0 0 4px; font-size: 16px; }
+    .detail-header .meta { color: #5f6368; font-size: 12px; }
+    .messages { flex: 1; overflow-y: auto; padding: 16px; }
     .message { max-width: 70%; margin-bottom: 10px; padding: 8px 12px; border-radius: 8px; }
     .message.INBOUND { background: #fff; border: 1px solid #e0e0e0; margin-right: auto; }
     .message.OUTBOUND { background: #d9fdd3; margin-left: auto; }
+    .message.FAILED { background: #fce8e6; border: 1px solid #f28b82; }
     .message .text { white-space: pre-wrap; }
     .message .time { color: #5f6368; font-size: 11px; margin-top: 4px; }
+    .compose { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid #e0e0e0; }
+    .compose textarea { flex: 1; resize: none; padding: 8px; font-family: inherit; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; }
+    .compose button { padding: 0 18px; border: none; border-radius: 4px; background: #1a73e8; color: #fff; cursor: pointer; }
+    .compose button:disabled { background: #9aa0a6; cursor: default; }
+    .compose-error { color: #d93025; font-size: 12px; padding: 0 16px 8px; }
   </style>
 </head>
 <body>
@@ -68,9 +76,13 @@
       selectedNumberId = numberId;
       selectedConversationId = null;
       document.querySelectorAll('#numbersList .list-item').forEach(function (el) { el.classList.toggle('active', el.dataset.id === numberId); });
-      document.getElementById('conversationsList').innerHTML = '<div class="empty">Loading…</div>';
+      loadConversations();
       document.getElementById('detailContent').innerHTML = '<div class="empty">Select a conversation</div>';
-      google.script.run.withSuccessHandler(renderConversations).withFailureHandler(renderError('conversationsList')).listConversations(numberId);
+    }
+
+    function loadConversations() {
+      document.getElementById('conversationsList').innerHTML = '<div class="empty">Loading…</div>';
+      google.script.run.withSuccessHandler(renderConversations).withFailureHandler(renderError('conversationsList')).listConversations(selectedNumberId);
     }
 
     function renderConversations(conversations) {
@@ -81,28 +93,67 @@
           '<div class="title">' + escapeHtml(conversation.status) + (conversation.needsResponse ? ' • Needs response' : '') + '</div>' +
           '<div class="subtitle">' + escapeHtml(conversation.lastMessageAt || '') + '</div></div>';
       }).join('');
+      if (selectedConversationId) {
+        var el = container.querySelector('[data-id="' + selectedConversationId + '"]');
+        if (el) el.classList.add('active');
+      }
     }
 
     function selectConversation(conversationId) {
       selectedConversationId = conversationId;
       document.querySelectorAll('#conversationsList .list-item').forEach(function (el) { el.classList.toggle('active', el.dataset.id === conversationId); });
       document.getElementById('detailContent').innerHTML = '<div class="empty">Loading…</div>';
-      google.script.run.withSuccessHandler(renderDetail).withFailureHandler(renderError('detailContent')).getConversationDetail(conversationId);
+      loadDetail();
+    }
+
+    function loadDetail() {
+      google.script.run.withSuccessHandler(renderDetail).withFailureHandler(renderError('detailContent')).getConversationDetail(selectedConversationId);
     }
 
     function renderDetail(detail) {
       var customerName = (detail.customer && detail.customer.name) || (detail.customer && detail.customer.phone) || 'Unknown customer';
-      var html = '<div class="detail">' +
-        '<h2>' + escapeHtml(customerName) + '</h2>' +
+      var messagesHtml = detail.messages.map(function (message) {
+        return '<div class="message ' + escapeHtml(message.direction) + ' ' + escapeHtml(message.status === 'FAILED' ? 'FAILED' : '') + '">' +
+          '<div class="text">' + escapeHtml(message.messageText) + '</div>' +
+          '<div class="time">' + escapeHtml(message.timestamp) + (message.status === 'FAILED' ? ' • Failed to send' : '') + '</div></div>';
+      }).join('');
+
+      document.getElementById('detailContent').innerHTML =
+        '<div class="detail-header"><h2>' + escapeHtml(customerName) + '</h2>' +
         '<div class="meta">' + escapeHtml(detail.customer && detail.customer.phone) + ' • ' + escapeHtml(detail.number && detail.number.displayName) +
         ' • Assigned: ' + escapeHtml(detail.conversation.assignedUserId || 'Unassigned') +
-        ' • Status: ' + escapeHtml(detail.conversation.status) + '</div>';
-      html += detail.messages.map(function (message) {
-        return '<div class="message ' + escapeHtml(message.direction) + '"><div class="text">' + escapeHtml(message.messageText) + '</div>' +
-          '<div class="time">' + escapeHtml(message.timestamp) + '</div></div>';
-      }).join('');
-      html += '</div>';
-      document.getElementById('detailContent').innerHTML = html;
+        ' • Status: ' + escapeHtml(detail.conversation.status) + '</div></div>' +
+        '<div class="messages" id="messagesList">' + (messagesHtml || '<div class="empty">No messages yet</div>') + '</div>' +
+        '<div class="compose-error" id="composeError"></div>' +
+        '<div class="compose">' +
+        '<textarea id="composeText" rows="2" placeholder="Type a reply…"></textarea>' +
+        '<button id="composeSend" onclick="sendCurrentReply()">Send</button>' +
+        '</div>';
+
+      var messagesList = document.getElementById('messagesList');
+      messagesList.scrollTop = messagesList.scrollHeight;
+    }
+
+    function sendCurrentReply() {
+      var textarea = document.getElementById('composeText');
+      var button = document.getElementById('composeSend');
+      var errorBox = document.getElementById('composeError');
+      var text = textarea.value.trim();
+      if (!text) return;
+      button.disabled = true;
+      errorBox.textContent = '';
+      google.script.run
+        .withSuccessHandler(function () {
+          textarea.value = '';
+          button.disabled = false;
+          loadDetail();
+          loadConversations();
+        })
+        .withFailureHandler(function (error) {
+          button.disabled = false;
+          errorBox.textContent = 'Could not send: ' + (error && error.message);
+        })
+        .sendReply(selectedConversationId, text);
     }
 
     function renderError(elementId) {
