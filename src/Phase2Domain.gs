@@ -19,5 +19,11 @@ var Phase2Schemas = {
   Reminders: ['conversationId', 'ownerUserId', 'text', 'dueAt', 'status', 'createdAt', 'updatedAt'],
   Lead_Stages: ['key', 'name', 'sequenceOrder', 'active', 'createdAt', 'updatedAt'],
   WhatsApp_Templates: ['wabaId', 'providerTemplateId', 'name', 'language', 'category', 'status', 'components', 'variables', 'createdAt', 'updatedAt', 'lastSyncedAt'],
-  Quick_Replies: ['shortcut', 'text', 'active', 'createdAt', 'updatedAt']
+  Quick_Replies: ['shortcut', 'text', 'active', 'createdAt', 'updatedAt'],
+  // Phase 8: a customer's current lead stage. Deliberately its own tab rather than a
+  // new column on Customers — Customers already has real live data, and
+  // SheetRepository doesn't do safe header migration (a new column added to an
+  // existing schema would misalign already-written rows, since appendRow_/writeRow_
+  // build values positionally from this array). See memory/DECISIONS.md.
+  Customer_Stage: ['customerId', 'stageId', 'setByUserId', 'updatedAt']
 };

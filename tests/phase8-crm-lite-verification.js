@@ -1,0 +1,110 @@
+/* Run with: node tests/phase8-crm-lite-verification.js */
+const fs = require('fs');
+const path = require('path');
+const vm = require('vm');
+const assert = require('assert');
+
+const properties = { SPREADSHEET_ID: 'mock-spreadsheet-id', 'wap.phase1.bootstrapAdminEmail': 'admin@example.com' };
+let email = 'admin@example.com';
+global.Utilities = { getUuid: (() => { let n = 0; return () => String(++n); })(), formatDate: () => '12:00' };
+global.PropertiesService = { getScriptProperties: () => ({ getProperty: key => properties[key] || null, setProperty: (key, value) => { properties[key] = value; } }) };
+global.LockService = { getScriptLock: () => ({ waitLock: () => {}, releaseLock: () => {} }) };
+global.Session = { getActiveUser: () => ({ getEmail: () => email }) };
+
+function makeSheet() {
+  let rows = [];
+  return {
+    appendRow: values => { rows.push(values.slice()); },
+    getDataRange: () => ({ getValues: () => rows.map(row => row.slice()) }),
+    getRange: (rowIndex) => ({ setValues: values => { rows[rowIndex - 1] = values[0].slice(); }, setNumberFormat: () => {} }),
+    getMaxRows: () => 1000,
+    getLastRow: () => rows.length,
+    deleteRow: rowIndex => { rows.splice(rowIndex - 1, 1); }
+  };
+}
+function makeSpreadsheet() {
+  const sheetsByName = {};
+  return { getSheetByName: name => sheetsByName[name] || null, insertSheet: name => { const sheet = makeSheet(); sheetsByName[name] = sheet; return sheet; } };
+}
+const mockSpreadsheet = makeSpreadsheet();
+global.SpreadsheetApp = { openById: () => mockSpreadsheet };
+
+const srcDir = path.join(__dirname, '..', 'src');
+fs.readdirSync(srcDir).filter(file => file.endsWith('.gs')).sort().forEach(file => {
+  vm.runInThisContext(fs.readFileSync(path.join(srcDir, file), 'utf8'), { filename: file });
+});
+
+const phase1 = () => new Phase1Api();
+const phase8 = () => new Phase8Api();
+const forbidden = fn => assert.throws(fn, error => error && error.code === 'FORBIDDEN');
+
+phase1().bootstrap({ email, displayName: 'Admin' });
+const roles = phase1().listRoles();
+const roleId = key => roles.find(role => role.key === key).id;
+const agent = phase1().createUser({ email: 'agent@example.com', displayName: 'Agent', roleIds: [roleId('AGENT')] });
+const supervisor = phase1().createUser({ email: 'supervisor@example.com', displayName: 'Supervisor', roleIds: [roleId('SUPERVISOR')] });
+const viewer = phase1().createUser({ email: 'viewer@example.com', displayName: 'Viewer', roleIds: [roleId('VIEWER')] });
+
+const number = new NumberRepository().create({ id: 'number_1', displayName: 'Sales 1', phoneNumber: '079-1', provider: 'exotel', providerAccountId: '', wabaId: '', providerNumberId: '', active: true, createdAt: '', updatedAt: '' });
+const customer = new CustomerRepository().create({ id: 'customer_1', phone: '+919999999999', name: 'Test Customer', email: '', company: '', source: 'whatsapp', createdAt: '', updatedAt: '' });
+const otherCustomer = new CustomerRepository().create({ id: 'customer_2', phone: '+919999999998', name: 'Other Customer', email: '', company: '', source: 'whatsapp', createdAt: '', updatedAt: '' });
+const conversation = new ConversationRepository().create({ id: 'conversation_1', customerId: customer.id, numberId: number.id, assignedUserId: agent.id, status: 'OPEN', needsResponse: true, lastMessageAt: '', createdAt: '', updatedAt: '' });
+
+phase1().grantNumberAccess({ userId: agent.id, numberId: number.id });
+phase1().grantNumberAccess({ userId: supervisor.id, numberId: number.id });
+phase1().grantNumberAccess({ userId: viewer.id, numberId: number.id });
+// Supervisor needs an actual team relationship to the number — resolveTeamIdForNumber
+// (and therefore requireConversationOperation's team-view path) needs it, a plain
+// numberAccess grant alone isn't enough for SUPERVISOR/SITE_MANAGER (see Phase 5/7 notes).
+const siteManager = phase1().createUser({ email: 'sitemanager@example.com', displayName: 'Site Manager', roleIds: [roleId('SITE_MANAGER')] });
+const team = phase1().createTeam({ name: 'Team 1', ownerUserId: siteManager.id });
+phase1().addTeamMember({ teamId: team.id, userId: supervisor.id, numberIds: [number.id] });
+
+// Seeding default stages: ADMIN only, and only once.
+forbidden(() => { email = 'agent@example.com'; phase8().seedDefaultLeadStages(); });
+email = 'admin@example.com';
+const seeded = phase8().seedDefaultLeadStages();
+assert.strictEqual(seeded.length, 7);
+assert.strictEqual(seeded[0].key, 'new');
+assert.throws(() => phase8().seedDefaultLeadStages(), error => error.code === 'CONFLICT');
+
+// Any authenticated user can list stages (needed for the UI dropdown).
+email = 'viewer@example.com';
+assert.strictEqual(phase8().listStages().length, 7);
+
+// Only ADMIN can create/update stage definitions.
+email = 'admin@example.com';
+const customStage = phase8().createStage({ key: 'demo_booked', name: 'Demo Booked', sequenceOrder: 8 });
+forbidden(() => { email = 'agent@example.com'; phase8().createStage({ key: 'x', name: 'X' }); });
+email = 'admin@example.com';
+phase8().updateStage(customStage.id, { name: 'Demo Scheduled' });
+
+// AGENT can set the stage of a customer they have a related (viewable) conversation with.
+email = 'agent@example.com';
+const won = seeded.find(s => s.key === 'won');
+const stageRecord = phase8().setCustomerStage(customer.id, won.id);
+assert.strictEqual(stageRecord.stageId, won.id);
+assert.strictEqual(phase8().getCustomerStage(customer.id).stageId, won.id);
+
+// AGENT cannot set the stage of a customer with no related conversation.
+forbidden(() => phase8().setCustomerStage(otherCustomer.id, won.id));
+
+// ADMIN can set any customer's stage regardless of relationship.
+email = 'admin@example.com';
+assert.doesNotThrow(() => phase8().setCustomerStage(otherCustomer.id, won.id));
+
+// Remarks: AGENT (assigned) can add; SUPERVISOR (view-only permission) cannot add but can list; VIEWER can neither add nor list.
+email = 'agent@example.com';
+const remark = phase8().addRemark(conversation.id, 'Called the customer, following up tomorrow.');
+assert.strictEqual(remark.authorUserId, agent.id);
+
+email = 'supervisor@example.com';
+forbidden(() => phase8().addRemark(conversation.id, 'Trying to add one'));
+const remarksForSupervisor = phase8().listRemarks(conversation.id);
+assert.strictEqual(remarksForSupervisor.length, 1);
+
+email = 'viewer@example.com';
+forbidden(() => phase8().addRemark(conversation.id, 'Trying to add one'));
+forbidden(() => phase8().listRemarks(conversation.id));
+
+console.log('Phase 8 CRM-lite verification: PASS');

@@ -100,3 +100,25 @@ of `direction: 'OUTBOUND'` `Messages`. `senderUserId` records who actually sent 
 (the message is still recorded, for visibility/retry — `needsResponse` is only cleared
 on `SENT`). `ExotelProvider.sendText`'s request/response shape used here is
 **unverified** — see `memory/DECISIONS.md`.
+
+# Phase 7 data contracts
+
+No new entities — the first real writer of `Conversation_Assignments`
+(`AssignmentRepository`, Phase 2) and of `Conversations.assignedUserId`. Added
+`lastAssignedUserId` to `Number_Assignment_Config`'s schema (a genuinely new column on
+an until-now-unused, empty tab — no migration risk). See `docs/ROUND_ROBIN.md`.
+
+# Phase 8 data contracts
+
+One new entity: `Customer_Stage` (`CustomerStageRepository`,
+`customerId, stageId, setByUserId, updatedAt`) — deliberately its **own tab**, not a
+new column on `Customers`, since `Customers` already holds real live data and
+`SheetRepository` has no safe header-migration mechanism (a new column on an existing
+schema would misalign already-written rows — `appendRow_`/`writeRow_` build row values
+positionally from the schema array). One record per customer (`replace`-upserted), not
+a history log. `Lead_Stages` (already defined in Phase 2, unused until now) holds the
+admin-configurable stage definitions; `Phase8DefaultStages`
+(`src/Phase8Domain.gs`) is a one-time seed list, not hardcoded business logic — the
+roadmap's suggested initial set (New, Contacted, Interested, Quotation Sent,
+Negotiation, Won, Lost), seeded via `seedDefaultLeadStages()` and freely editable by an
+admin afterward. `Remarks` (Phase 2, unused until now) is now written via `addRemark`.

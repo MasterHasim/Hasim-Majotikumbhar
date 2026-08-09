@@ -54,3 +54,7 @@ class TemplateRepository extends SheetRepository {
 class QuickReplyRepository extends SheetRepository {
   constructor() { super('Quick_Replies', Phase2Schemas.Quick_Replies); }
 }
+
+class CustomerStageRepository extends SheetRepository {
+  constructor() { super('Customer_Stage', Phase2Schemas.Customer_Stage); }
+}

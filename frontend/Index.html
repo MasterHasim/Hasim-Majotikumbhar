@@ -31,6 +31,14 @@
     .compose button { padding: 0 18px; border: none; border-radius: 4px; background: #1a73e8; color: #fff; cursor: pointer; }
     .compose button:disabled { background: #9aa0a6; cursor: default; }
     .compose-error { color: #d93025; font-size: 12px; padding: 0 16px 8px; }
+    .stage-select { margin-top: 6px; padding: 4px 6px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; }
+    .remarks { background: #fff8e1; border-bottom: 1px solid #e0e0e0; padding: 10px 16px; }
+    .remarks-title { font-weight: 600; font-size: 12px; color: #5f6368; margin-bottom: 6px; }
+    .remark { font-size: 13px; margin-bottom: 6px; }
+    .remark .remark-meta { color: #5f6368; font-size: 11px; }
+    .remark-add { display: flex; gap: 6px; margin-top: 6px; }
+    .remark-add input { flex: 1; padding: 5px 8px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; }
+    .remark-add button { padding: 0 12px; border: none; border-radius: 4px; background: #5f6368; color: #fff; cursor: pointer; font-size: 12px; }
   </style>
 </head>
 <body>
@@ -51,6 +59,8 @@
   <script>
     var selectedNumberId = null;
     var selectedConversationId = null;
+    var selectedCustomerId = null;
+    var cachedStages = null;
 
     function escapeHtml(value) {
       return String(value == null ? '' : value).replace(/[&<>"']/g, function (c) {
@@ -111,6 +121,7 @@
     }
 
     function renderDetail(detail) {
+      selectedCustomerId = detail.customer && detail.customer.id;
       var customerName = (detail.customer && detail.customer.name) || (detail.customer && detail.customer.phone) || 'Unknown customer';
       var messagesHtml = detail.messages.map(function (message) {
         return '<div class="message ' + escapeHtml(message.direction) + ' ' + escapeHtml(message.status === 'FAILED' ? 'FAILED' : '') + '">' +
@@ -122,7 +133,10 @@
         '<div class="detail-header"><h2>' + escapeHtml(customerName) + '</h2>' +
         '<div class="meta">' + escapeHtml(detail.customer && detail.customer.phone) + ' • ' + escapeHtml(detail.number && detail.number.displayName) +
         ' • Assigned: ' + escapeHtml(detail.conversation.assignedUserId || 'Unassigned') +
-        ' • Status: ' + escapeHtml(detail.conversation.status) + '</div></div>' +
+        ' • Status: ' + escapeHtml(detail.conversation.status) + '</div>' +
+        '<select class="stage-select" id="stageSelect" onchange="changeStage()"><option value="">Stage: (loading…)</option></select>' +
+        '</div>' +
+        '<div class="remarks" id="remarksPane"><div class="remarks-title">Internal remarks (never sent to WhatsApp)</div><div class="empty">Loading…</div></div>' +
         '<div class="messages" id="messagesList">' + (messagesHtml || '<div class="empty">No messages yet</div>') + '</div>' +
         '<div class="compose-error" id="composeError"></div>' +
         '<div class="compose">' +
@@ -132,6 +146,58 @@
 
       var messagesList = document.getElementById('messagesList');
       messagesList.scrollTop = messagesList.scrollHeight;
+
+      loadStageControl();
+      loadRemarks();
+    }
+
+    function loadStageControl() {
+      if (cachedStages) { populateStageSelect(); return; }
+      google.script.run.withSuccessHandler(function (stages) { cachedStages = stages; populateStageSelect(); }).withFailureHandler(function () {}).listStages();
+    }
+
+    function populateStageSelect() {
+      var select = document.getElementById('stageSelect');
+      if (!select) return;
+      google.script.run.withSuccessHandler(function (current) {
+        var currentStageId = current && current.stageId;
+        select.innerHTML = '<option value="">Stage: (none)</option>' + cachedStages.map(function (stage) {
+          return '<option value="' + escapeHtml(stage.id) + '"' + (stage.id === currentStageId ? ' selected' : '') + '>Stage: ' + escapeHtml(stage.name) + '</option>';
+        }).join('');
+      }).withFailureHandler(function () {}).getCustomerStage(selectedCustomerId);
+    }
+
+    function changeStage() {
+      var select = document.getElementById('stageSelect');
+      if (!select.value) return;
+      google.script.run.withFailureHandler(function (error) { alert('Could not change stage: ' + (error && error.message)); }).setCustomerStage(selectedCustomerId, select.value);
+    }
+
+    function loadRemarks() {
+      google.script.run.withSuccessHandler(renderRemarks).withFailureHandler(function () {
+        var pane = document.getElementById('remarksPane');
+        if (pane) pane.style.display = 'none'; // e.g. VIEWER has no remarks access — hide rather than show an error here
+      }).listRemarks(selectedConversationId);
+    }
+
+    function renderRemarks(remarks) {
+      var pane = document.getElementById('remarksPane');
+      if (!pane) return;
+      var listHtml = remarks.map(function (remark) {
+        return '<div class="remark">' + escapeHtml(remark.text) + '<div class="remark-meta">' + escapeHtml(remark.createdAt) + '</div></div>';
+      }).join('') || '<div class="empty">No remarks yet</div>';
+      pane.innerHTML = '<div class="remarks-title">Internal remarks (never sent to WhatsApp)</div>' + listHtml +
+        '<div class="remark-add"><input id="remarkText" placeholder="Add a remark…" onkeydown="if(event.key===\'Enter\')addCurrentRemark();">' +
+        '<button onclick="addCurrentRemark()">Add</button></div>';
+    }
+
+    function addCurrentRemark() {
+      var input = document.getElementById('remarkText');
+      var text = input.value.trim();
+      if (!text) return;
+      google.script.run.withSuccessHandler(function () { input.value = ''; loadRemarks(); })
+        .withFailureHandler(function (error) { alert('Could not add remark: ' + (error && error.message)); })
+        .addRemark(selectedConversationId, text);
     }
 
     function sendCurrentReply() {

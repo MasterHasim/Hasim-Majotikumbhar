@@ -46,12 +46,23 @@ hidden based on role, since the backend enforces authorization regardless and ad
 "can I reply" pre-check endpoint wasn't needed for that. Failed sends render with a
 red-tinted message bubble (`.message.FAILED`) and "Failed to send" label.
 
+## Phase 8: stage & remarks
+
+A `<select>` in the detail header (`#stageSelect`) lists all lead stages
+(`listStages()`) and shows the customer's current one (`getCustomerStage`); changing
+it calls `setCustomerStage`. A remarks mini-panel (`#remarksPane`, yellow-tinted,
+clearly distinct from the WhatsApp message thread) shows existing remarks and a small
+add-remark input, calling `addRemark`/`listRemarks`. If the signed-in user lacks
+remarks access (e.g. VIEWER — has neither `REMARKS_VIEW` nor `REMARKS_MANAGE`), the
+panel just hides itself rather than showing an error, since that's an expected,
+role-based absence, not a failure.
+
 ## Deliberately not yet in the UI
 
-No stage, remarks, or reminder panels (Phase 8/9 — those entities exist in storage
-from Phase 2 but have no service layer yet; showing non-functional placeholder UI for
-them was ruled out as a "half-finished implementation"). No round-robin assignment UI
-(Phase 7 — "Assigned" still shows "Unassigned" for new conversations).
+No reminder panel (Phase 9 — the entity exists in storage from Phase 2 but has no
+service layer yet). No round-robin assignment UI (Phase 7's engine runs automatically
+on ingestion; manual reassignment exists at the API level but the UI control is
+deferred to Phase 12, which needs a properly role-scoped user-listing endpoint anyway).
 
 ## Testing note
 
