@@ -53,11 +53,12 @@ distinct tabs.
 
 # Phase 3 data contracts
 
-`WhatsApp_Numbers` is now populated with real (partial) data: the 10 known numbers,
-registered through the authorized `createNumber` endpoint (`src/Phase3Services.gs`),
-not written directly to the repository. `providerAccountId`, `wabaId`, and
-`providerNumberId` are seeded as empty strings until the user supplies the real Exotel
-values, at which point `updateNumber` fills them in — no schema change needed.
+`WhatsApp_Numbers` is now populated with real data: the 10 known numbers, registered
+through the authorized `createNumber` endpoint (`src/Phase3Services.gs`). 8 of 10 now
+have real `providerAccountId`/`wabaId`/`providerNumberId` values (all share
+`providerAccountId: 'echt61'`), entered directly in the sheet rather than through
+`updateNumber` — see `memory/DECISIONS.md` for the audit-trail note this leaves.
+`Spreewalk - Raipur` and `ECHT Advisory` still have blank provider fields.
 
 Provider abstraction: `Phase3ProviderContract` (`src/Phase3Domain.gs`) is a plain array
 of method names (`sendText`, `sendMedia`, `sendTemplate`, `getTemplates`,
@@ -71,7 +72,10 @@ never stored in the spreadsheet either (see `memory/DECISIONS.md`, 2026-08-09).
 `src/Phase3ExotelConfigStatus.gs`) listing only the four `EXOTEL_*` property NAMES and
 whether each is currently set — never the actual values.
 
-**Every Exotel request/response field name in `ExotelProvider` is unverified** (Exotel's
-detailed API reference pages returned 404 on fetch); only the base URL pattern and Basic
-Auth scheme are confirmed from public docs. See `memory/DECISIONS.md` for what's
-confirmed vs. assumed, and `PROGRESS.md` for the live-verification status.
+**`getTemplates()` is live-verified** (2026-08-09, real account, real templates
+returned) — endpoint path, required `waba_id` parameter, and full response shape are
+confirmed, documented inline in `src/Phase3ExotelProvider.gs`. `sendText`/`sendMedia`/
+`sendTemplate`/`createTemplate`/`getMessageStatus` remain unverified best-effort guesses
+by design — verifying those means sending a real message or creating a real template,
+deliberately deferred to Phase 6. See `memory/DECISIONS.md` for exactly what's confirmed
+vs. assumed, and `PROGRESS.md` for current status.

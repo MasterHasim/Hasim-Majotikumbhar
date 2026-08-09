@@ -46,13 +46,17 @@ assert.deepStrictEqual(lastRequest.body.whatsapp.messages[0].content, { type: 'i
 provider.sendTemplate('provider-number-1', '+919999999999', 'order_update', 'en', [{ type: 'body', parameters: [] }]);
 assert.deepStrictEqual(lastRequest.body.whatsapp.messages[0].content, { type: 'template', template: { name: 'order_update', language: { code: 'en' }, components: [{ type: 'body', parameters: [] }] } });
 
+// getTemplates omits the query string entirely when no wabaId is given.
+provider.getTemplates();
+assert.strictEqual(lastRequest.url, 'https://api.exotel.com/v2/accounts/sid789/templates');
+
 // getTemplates / createTemplate build the expected GET/POST paths.
 provider.getTemplates('waba-1');
-assert.strictEqual(lastRequest.url, 'https://api.exotel.com/v2/accounts/sid789/whatsapp/templates?waba_id=waba-1');
+assert.strictEqual(lastRequest.url, 'https://api.exotel.com/v2/accounts/sid789/templates?waba_id=waba-1');
 assert.strictEqual(lastRequest.options.method, 'GET');
 
 provider.createTemplate('waba-1', { name: 'order_update', language: 'en' });
-assert.strictEqual(lastRequest.url, 'https://api.exotel.com/v2/accounts/sid789/whatsapp/templates');
+assert.strictEqual(lastRequest.url, 'https://api.exotel.com/v2/accounts/sid789/templates');
 assert.deepStrictEqual(lastRequest.body, { waba_id: 'waba-1', name: 'order_update', language: 'en' });
 
 // getMessageStatus maps the confirmed status codes.

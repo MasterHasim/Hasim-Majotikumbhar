@@ -4,12 +4,15 @@
  * `https://<subdomain>/v2/accounts/<account_sid>/messages` and HTTP Basic Auth with
  * API key/token (https://developer.exotel.com/docs/whatsapp-api/overview).
  *
- * UNVERIFIED — Exotel's detailed API reference pages could not be fetched (404,
- * likely JS-rendered), so every request/response field name below is a best-effort
- * guess modeled on WhatsApp Cloud API conventions (Exotel's product sits on top of
- * WABA). Each guessed shape is flagged inline. Do not trust these field names until
- * live-verified against a real account (see memory/DECISIONS.md, Phase 3 entry) —
- * the same live-verification step that caught two real bugs in Phase 2.
+ * Exotel's detailed API reference pages could not be fetched (404, likely
+ * JS-rendered), so most of this was originally a best-effort guess modeled on
+ * WhatsApp Cloud API conventions (Exotel's product sits on top of WABA). Fields still
+ * marked UNVERIFIED below have not been live-tested — do not trust them until they
+ * are. getTemplates() IS live-confirmed (2026-08-09, real account, real templates
+ * returned) — see memory/DECISIONS.md for exactly what's confirmed vs. assumed.
+ * sendText/sendMedia/sendTemplate/createTemplate/getMessageStatus remain unverified:
+ * verifying those means actually sending a real message or creating a real template
+ * (real cost/effect), so that's deferred to Phase 6 rather than done speculatively now.
  *
  * Status code mapping is confirmed from public docs: 30001 Sent, 30002 Delivered,
  * 30003 Seen; 30004-30041 are various failure codes.
@@ -46,12 +49,15 @@ class ExotelProvider {
   }
 
   getTemplates(wabaId) {
-    return this.request_('GET', 'whatsapp/templates?waba_id=' + encodeURIComponent(wabaId)); // UNVERIFIED path
+    // Confirmed live 2026-08-09: GET /v2/accounts/<sid>/templates?waba_id=<waba_id> (not /whatsapp/templates).
+    // Confirmed response shape: {request_id, method, http_code, response: {whatsapp: {templates: [{code, error_data, status, data: {waba_id, name, components, language, status, category, id, ...}}], paging: {cursors: {after, before}}}}}.
+    var path = 'templates' + (wabaId ? '?waba_id=' + encodeURIComponent(wabaId) : '');
+    return this.request_('GET', path);
   }
 
   createTemplate(wabaId, definition) {
-    var body = Object.assign({ waba_id: wabaId }, definition); // UNVERIFIED shape
-    return this.request_('POST', 'whatsapp/templates', body);
+    var body = Object.assign({ waba_id: wabaId }, definition); // UNVERIFIED shape (path fixed 2026-08-09, body still assumed)
+    return this.request_('POST', 'templates', body);
   }
 
   getMessageStatus(providerMessageId) {
