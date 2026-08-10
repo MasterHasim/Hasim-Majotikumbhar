@@ -5,11 +5,11 @@
 
 ## Action needed from you right now
 
-- **Test the new email/password login (@37).** Google Sign-In is completely unchanged and untouched — this is a second, additive path for anyone Google identity isn't working for. To test: open the Users admin page, click **"Send setup link"** next to a user (e.g. yourself or Mandeep), check that the email actually arrives (this is unverified — first real test), open the link, set a password, confirm you can sign in and use the app normally with it. Password reset emails could plausibly get spam-filtered — check spam if nothing arrives in a minute or two.
-- **Confirm sent replies now show up in the thread.** You reported a sent reply not appearing in the portal even though the customer received it. First fix (revert the new cross-request cache, @35) didn't resolve it per your last test — still open, needs an Apps Script Executions log check on the specific `sendReply` call to diagnose further, since I've now ruled out my top hypothesis.
-- **Media sending is still not live-verified end-to-end** — attaching from a local file works UI-wise now (and a real OAuth-scope bug in it is fixed, @36), but whether Exotel actually delivers it is untested.
-- **"Previous Conversations" confirmed missing older conversations** for the same customer/number — needs investigation; test again on a customer with a genuinely closed + reopened conversation so I can narrow down whether it's real data or a query bug.
-- **Firebase Realtime Database migration approved** (Messages/Conversations only) — not started yet, queued as the next major piece of work.
+- **"Sent reply not showing in the thread" — still open, top priority.** Not a caching issue (ruled out and reverted). No server-side error either. What's needed now: send a test reply, then immediately check the **browser's own JavaScript console** (F12 → Console tab — different from Apps Script's Executions log) for any red error, and share it.
+- **Test the email/password login (deployed @37).** Google Sign-In is untouched. Test: Users page → "Send setup link" on a user → confirm the email actually arrives (unverified — check spam) → set a password → confirm sign-in and normal use works.
+- **Media upload's OAuth-scope error is fixed and verified live** (@38) — confirm a fresh upload works, then separately confirm Exotel actually delivers it to the customer (still unverified end-to-end).
+- ~~"Previous Conversations" missing data~~ — turned out not to be a bug, just needed a visible scrollbar; fixed (@38).
+- **Firebase Realtime Database migration approved** (Messages/Conversations only) — not started yet, queued as the next major piece of work once the items above settle.
 - See the **full wake-up task list** at the bottom of this file for everything else queued up (template live-send verification, seeding lead stages, etc.)
 
 ## Phase status
