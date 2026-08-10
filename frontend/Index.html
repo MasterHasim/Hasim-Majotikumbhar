@@ -56,12 +56,20 @@
     .filter-bar .filter-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; font-size: 11px; }
     .filter-bar label { display: flex; align-items: center; gap: 3px; }
     .filter-bar button { padding: 2px 8px; font-size: 11px; border: 1px solid #ccc; border-radius: 4px; background: #fff; cursor: pointer; }
+    #reportsOverlay { display: none; position: fixed; inset: 0; background: #fff; z-index: 10; overflow-y: auto; padding: 20px 28px; }
+    #reportsOverlay table { border-collapse: collapse; width: 100%; max-width: 720px; margin-bottom: 18px; font-size: 13px; }
+    #reportsOverlay th, #reportsOverlay td { border-bottom: 1px solid #eee; padding: 6px 8px; text-align: left; }
+    #reportsOverlay th { color: #5f6368; }
+    #reportsOverlay h2 { font-size: 14px; margin: 18px 0 8px; }
   </style>
 </head>
 <body>
   <div class="layout">
     <div class="pane" id="numbersPane">
-      <div class="pane-header">Numbers <a id="adminLink" href="?page=admin" style="display:none; float:right; font-size:12px; font-weight:normal;">Admin Panel</a></div>
+      <div class="pane-header">Numbers
+        <a id="reportsLink" onclick="openReports()" style="display:none; float:right; font-size:12px; font-weight:normal; margin-left:10px; cursor:pointer;">Reports</a>
+        <a id="adminLink" href="?page=admin" style="display:none; float:right; font-size:12px; font-weight:normal;">Admin Panel</a>
+      </div>
       <div id="numbersList"><div class="empty">Loading…</div></div>
     </div>
     <div class="pane" id="conversationsPane">
@@ -79,6 +87,12 @@
     <div class="pane" id="detailPane">
       <div id="detailContent"><div class="empty">Select a conversation</div></div>
     </div>
+  </div>
+
+  <div id="reportsOverlay">
+    <button onclick="closeReports()" style="float:right; padding:6px 14px; border:1px solid #ccc; border-radius:4px; background:#fff; cursor:pointer;">Close</button>
+    <h1 style="margin-top:0;">Reports</h1>
+    <div id="reportsBody" class="empty">Loading…</div>
   </div>
 
   <script>
@@ -479,6 +493,53 @@
         if (link) link.style.display = '';
       }
     }).withFailureHandler(function () {}).whoAmI();
+
+    // Probing getDashboardMetrics() itself (rather than checking role names) decides
+    // whether to show the Reports link — REPORTS_VIEW is what actually gates it
+    // server-side, not any particular role, and this avoids duplicating that mapping
+    // client-side (same reasoning as the hide-on-denied remarks/reminders panels).
+    google.script.run.withSuccessHandler(function (metrics) {
+      window.__reportsMetrics = metrics;
+      var link = document.getElementById('reportsLink');
+      if (link) link.style.display = '';
+    }).withFailureHandler(function () {}).getDashboardMetrics();
+
+    function openReports() {
+      document.getElementById('reportsOverlay').style.display = 'block';
+      google.script.run.withSuccessHandler(renderReports).withFailureHandler(function (error) {
+        document.getElementById('reportsBody').innerHTML = '<div class="empty">Could not load reports: ' + escapeHtml(error && error.message) + '</div>';
+      }).getDashboardMetrics();
+    }
+    function closeReports() { document.getElementById('reportsOverlay').style.display = 'none'; }
+    function renderReports(metrics) {
+      var c = metrics.conversations;
+      var html = '<h2>Conversations</h2><table><tr><th>Total</th><th>Open</th><th>Unassigned</th><th>Needs response</th><th>Resolved</th></tr>' +
+        '<tr><td>' + c.total + '</td><td>' + c.open + '</td><td>' + c.unassigned + '</td><td>' + c.needsResponse + '</td><td>' + c.resolved + '</td></tr></table>';
+
+      html += '<h2>By number</h2><table><tr><th>Number</th><th>Total</th><th>Open</th><th>Unassigned</th><th>Needs response</th></tr>' +
+        metrics.byNumber.map(function (n) { return '<tr><td>' + escapeHtml(n.displayName) + '</td><td>' + n.total + '</td><td>' + n.open + '</td><td>' + n.unassigned + '</td><td>' + n.needsResponse + '</td></tr>'; }).join('') +
+        '</table>';
+
+      html += '<h2>Agent workload</h2><table><tr><th>Agent</th><th>Open</th><th>Needs response</th></tr>' +
+        (metrics.byAgent.map(function (a) { return '<tr><td>' + escapeHtml(a.displayName) + '</td><td>' + a.open + '</td><td>' + a.needsResponse + '</td></tr>'; }).join('') || '<tr><td colspan="3" class="empty">Nobody currently has open conversations</td></tr>') +
+        '</table>';
+
+      html += '<h2>Response time</h2><table><tr><th>Average first response</th><th>Sample size</th></tr>' +
+        '<tr><td>' + (metrics.responseTime.averageFirstResponseMinutes === null ? 'N/A' : metrics.responseTime.averageFirstResponseMinutes + ' min') + '</td><td>' + metrics.responseTime.sampleSize + '</td></tr></table>';
+
+      html += '<h2>Stage distribution</h2><table><tr><th>Stage</th><th>Customers</th></tr>' +
+        (metrics.stageDistribution.map(function (s) { return '<tr><td>' + escapeHtml(s.name) + '</td><td>' + s.count + '</td></tr>'; }).join('') || '<tr><td colspan="2" class="empty">No stages seeded yet</td></tr>') +
+        '</table>';
+
+      html += '<h2>Template usage</h2><table><tr><th>Template</th><th>Times sent</th></tr>' +
+        (metrics.templateUsage.map(function (t) { return '<tr><td>' + escapeHtml(t.name) + '</td><td>' + t.count + '</td></tr>'; }).join('') || '<tr><td colspan="2" class="empty">No templates sent yet</td></tr>') +
+        '</table>';
+
+      html += '<h2>Lead conversion</h2><table><tr><th>Customers with a stage</th><th>Won</th><th>Conversion rate</th></tr>' +
+        '<tr><td>' + metrics.leadConversion.totalCustomersWithStage + '</td><td>' + metrics.leadConversion.wonCount + '</td><td>' + (metrics.leadConversion.conversionRate === null ? 'N/A' : metrics.leadConversion.conversionRate + '%') + '</td></tr></table>';
+
+      document.getElementById('reportsBody').innerHTML = html;
+    }
   </script>
 </body>
 </html>

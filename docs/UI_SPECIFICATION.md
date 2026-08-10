@@ -151,10 +151,25 @@ after every send/reassign/snooze action, not just on page load) — this is Phas
 Script has no clean push channel and building one wasn't asked for — see
 `memory/DECISIONS.md`.
 
+## Phase 14: Reports overlay
+
+A "Reports" link appears next to "Admin Panel" in the Numbers pane header, but its
+visibility isn't role-checked client-side — it's shown only if a probe call to
+`getDashboardMetrics()` succeeds on load (mirrors the hide-on-denied pattern already
+used for the remarks/reminders panels), since `REPORTS_VIEW` is what actually gates it
+server-side, not any specific role name. Clicking it opens a full-page overlay
+(`#reportsOverlay`) with tables for conversation totals, per-number and per-agent
+breakdowns, average first-response time, stage distribution, template usage, and lead
+conversion rate — all from `Phase14Api.getDashboardMetrics()`
+(`src/Phase14Services.gs`). A plain overlay rather than a third page (like
+`Admin.html`) since reports are a read-only, occasional lookup, not a distinct workflow
+surface.
+
 ## Deliberately not yet in the UI
 
-No template-usage analytics or dashboard trends (Phase 14). No backup/export UI
-(Phase 15). No push/email notifications (Phase 13's own scoping decision — see above).
+No backup/export UI (Phase 15). No push/email notifications (Phase 13's own scoping
+decision — see above). No conversation close/resolve workflow (no phase has added
+one yet — Phase 14's "resolved" metric is honestly reported as always 0 until it does).
 
 ## Testing note
 

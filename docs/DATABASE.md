@@ -193,3 +193,15 @@ allowed to see. `searchConversations` matches `Customers.name`/`.phone` and
 `Messages.messageText` (case-insensitive substring), plus filters on
 `assignedUserId`/`status`/`needsResponse`/`unassigned`/`stageId` (via Phase 8's
 `Customer_Stage`)/`dateFrom`/`dateTo` (against `lastMessageAt`).
+
+# Phase 14 data contracts
+
+No new entities. `Phase14Api` (`src/Phase14Services.gs`) computes dashboard metrics
+entirely from existing data, gated on `REPORTS_VIEW` — a permission Phase 1 already
+defined (SUPERVISOR/SITE_MANAGER/VIEWER/ADMIN have it, AGENT does not) but nothing used
+before now. `resolved` always reports `0`: `Conversations.status` has never been
+written as anything but `'OPEN'` by any phase — no close/resolve workflow exists yet
+(see `memory/DECISIONS.md`). Template usage is parsed from `Messages.messageText`'s
+`"[Template: name]"` marker rather than a `templateId` column, since `Messages` already
+has real live data and gaining a new column isn't safe (the same constraint documented
+since Phase 8).
