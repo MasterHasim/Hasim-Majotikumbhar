@@ -117,10 +117,21 @@ class Phase8Api {
       .sort(function (a, b) { return (a.createdAt || '').localeCompare(b.createdAt || ''); });
   }
 
-  /** Customer directory (2026-08-10, unified-app redesign): ADMIN sees every customer; anyone else sees only customers they have at least one viewable conversation with. */
-  listCustomers() {
+  /**
+   * Customer directory (2026-08-10, unified-app redesign): ADMIN sees every customer;
+   * anyone else sees only customers they have at least one viewable conversation with.
+   * numberId is optional (added same day, user-directed) — narrows the directory to
+   * customers with at least one conversation on that number, so switching between
+   * numbers in the UI doesn't blend customers from unrelated brands/numbers together.
+   */
+  listCustomers(numberId) {
     var actor = this.access_.currentUser();
-    var customers = this.customers_.list();
+    var customerIdsForNumber = null;
+    if (numberId) {
+      customerIdsForNumber = {};
+      this.conversations_.list().filter(function (c) { return c.numberId === numberId; }).forEach(function (c) { customerIdsForNumber[c.customerId] = true; });
+    }
+    var customers = this.customers_.list().filter(function (c) { return !customerIdsForNumber || customerIdsForNumber[c.id]; });
     if (this.access_.hasRole(actor, Phase1Roles.ADMIN)) return customers;
     var self = this;
     return customers.filter(function (customer) { return self.canSeeCustomer_(actor, customer.id); });

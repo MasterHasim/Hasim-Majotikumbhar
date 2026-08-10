@@ -14,14 +14,35 @@ Script's own RPC mechanism), not `fetch`/REST. Everything lives in one file,
 access still lets `Session.getActiveUser()` report each visitor's real identity, so
 Phase 1's `AccessControl` applies normally).
 
-## Overall structure (2026-08-10 redesign)
+## Overall structure (2026-08-10 redesign, refined same day)
 
-The app is a single-page shell matching a reference commercial WhatsApp CRM's layout
-the user shared screenshots of: a dark-green sidebar with icon+label navigation, a top
-bar, and a swappable content area. There is no longer a separate Admin Panel page
-(`frontend/Admin.html` and the `?page=admin` route are retired) — every section,
-including what used to be admin-only pages, is a client-side view within this one
-shell (`showPage(key)` toggles `.page` visibility and calls that page's load function).
+The app opens on a **number-picker landing screen** (`#landingScreen` — a card grid,
+`listMyNumbers()`, with needs-response badges per card via `getNeedsResponseCounts()`)
+before anything else. Picking a card (`enterWorkspace(numberId)`) sets `selectedNumberId`
+and reveals `#app` — the sidebar shell described below. This was the very first version
+of this redesign's own decision (drop the landing screen, since `searchConversations`
+can aggregate across every accessible number), **reversed same day per explicit user
+instruction**: "not everything mixed" — the user wants to pick a number first, then
+work entirely within that one number's context, with no cross-number blending anywhere
+in Dashboard/Inbox/Customers/Reminders/Reports. See `memory/DECISIONS.md` for both the
+original reasoning and the reversal.
+
+Once inside a number's workspace, `#app` is a single-page shell matching a reference
+commercial WhatsApp CRM's layout the user shared screenshots of: a dark-green sidebar
+with icon+label navigation (plus a "current number" pill at the top, click to go back
+to the landing screen — `showLanding()`), a top bar, and a swappable content area.
+There is no longer a separate Admin Panel page (`frontend/Admin.html` and the
+`?page=admin` route are retired) — every section, including what used to be
+admin-only pages, is a client-side view within this one shell (`showPage(key)` toggles
+`.page` visibility and calls that page's load function).
+
+**Every conversation-data endpoint call is scoped to `selectedNumberId`**: `Phase14Api.
+getDashboardMetrics(numberId)`, `Phase8Api.listCustomers(numberId)`, `Phase9Api.
+listMyReminders(numberId)`, and every `searchConversations({..., numberId})` call all
+take/pass it explicitly now (all three gained the optional parameter same day as this
+reversal — see `memory/DECISIONS.md`). Only the org-wide admin pages (Users, Teams,
+WhatsApp Numbers, Templates, Quick Replies, Settings, Audit Log) stay unscoped, since
+those are genuinely cross-number configuration, not conversation data.
 
 Sidebar nav items, in order: **Dashboard, Inbox, All Conversations, Unassigned,
 Reminders, Customers, Reports** (visible only if `REPORTS_VIEW` is probed successfully,
@@ -39,16 +60,17 @@ need a response (`searchConversations({needsResponse: true})`).
 ## Dashboard / Inbox / All Conversations / Unassigned — one shared view
 
 These four nav items are the same underlying list+chat+customer-detail three-column
-view, differing only in default filters passed to `searchConversations`:
-Dashboard/All Conversations have none, Inbox defaults to `needsResponse: true`,
-Unassigned to `unassigned: true`. Dashboard additionally shows a KPI row above the
-view (`getDashboardMetrics()` — Total Conversations, Assigned to me, Unassigned,
-Closed, Total Customers; **no trend deltas** like "+18% vs yesterday" — the user chose
-real-counts-only over building historical snapshot tracking for now, see
-`memory/DECISIONS.md`). No number-picker gate exists — `searchConversations` already
-aggregates across every number the signed-in user can access when no `numberId` is
-given, so browsing starts immediately; a number filter `<select>` in the list toolbar
-narrows to one number when wanted.
+view, always additionally filtered to `numberId: selectedNumberId` (the number chosen
+on the landing screen — see above), plus default filters passed to
+`searchConversations`: Dashboard/All Conversations add none beyond that, Inbox adds
+`needsResponse: true`, Unassigned adds `unassigned: true`. Dashboard additionally shows
+a KPI row above the view (`getDashboardMetrics(selectedNumberId)` — Total
+Conversations, Assigned to me, Unassigned, Closed, Total Customers, all for this one
+number; **no trend deltas** like "+18% vs yesterday" — the user chose real-counts-only
+over building historical snapshot tracking for now, see `memory/DECISIONS.md`). There
+is no per-list number filter anymore — that was removed the same day it was added,
+once the landing screen came back and made it redundant (a conversation list is always
+already scoped to exactly one number by construction).
 
 **Architecturally important**: there is exactly **one** DOM instance of the
 list+chat+detail split, ever (`window.__splitEl`, built once by `ensureSplitBuilt()`).
@@ -99,22 +121,24 @@ Note tab), **Reminders** (per-conversation, same `createReminder`/
 
 ## Customers page
 
-A flat directory (`Phase8Api.listCustomers()` — ADMIN sees everyone, others see only
-customers they have at least one viewable conversation with, same relationship gate
+A flat directory scoped to the current number (`Phase8Api.listCustomers(selectedNumberId)`
+— ADMIN sees everyone with a conversation on this number, others see only customers
+they have at least one viewable conversation with on it, same relationship gate
 `setCustomerStage` already used). "View conversations" jumps into All Conversations
-and opens that customer's most recent conversation.
+and opens that customer's most recent conversation on this number.
 
 ## Reminders page
 
-The signed-in user's own pending reminders across every conversation
-(`listMyReminders()`, pre-existing endpoint, previously unused in any UI).
+The signed-in user's own pending reminders on this number's conversations
+(`listMyReminders(selectedNumberId)`, pre-existing endpoint, previously unused in any UI).
 
 ## Reports page
 
 Full-page version of what was previously an overlay: conversation totals, per-number
 and per-agent breakdowns, average first-response time, stage distribution, template
-usage, lead conversion rate — all from `Phase14Api.getDashboardMetrics()`, which is
-now scoped to the numbers the signed-in user actually has access to (not org-wide —
+usage, lead conversion rate — all from `Phase14Api.getDashboardMetrics(selectedNumberId)`,
+scoped to the current number (and, within that, only numbers the signed-in user
+actually has access to — not org-wide —
 see `memory/DECISIONS.md` for the same-day reversal of the original Phase 14 decision).
 
 ## Admin-only pages (Templates, Quick Replies, Teams, Users, WhatsApp Numbers, Settings, Audit Log)

@@ -32,9 +32,11 @@ class Phase14Api {
     this.stages_ = new StageRepository();
   }
 
-  getDashboardMetrics() {
+  /** numberId is optional (2026-08-10, user-directed) — narrows every metric to one number (the workspace the user is currently inside), instead of aggregating across every number they can access. Still fully authorized: listMyNumbers() is filtered down to the requested id, so an inaccessible numberId just yields empty metrics rather than a bypass. */
+  getDashboardMetrics(numberId) {
     var actor = this.access_.require(Phase1Permissions.REPORTS_VIEW);
-    var numbers = this.phase5_.listMyNumbers(); // ADMIN: every number; else: only admin-granted numbers
+    var numbers = this.phase5_.listMyNumbers();
+    if (numberId) numbers = numbers.filter(function (n) { return n.id === numberId; });
     var numberIds = {};
     numbers.forEach(function (n) { numberIds[n.id] = true; });
 

@@ -113,6 +113,13 @@ assert.strictEqual(metrics.leadConversion.conversionRate, 50);
 email = 'admin@example.com';
 assert.strictEqual(phase14().getDashboardMetrics().conversations.total, 2);
 
+// numberId (2026-08-10, user-directed): narrows every metric to one number instead of
+// aggregating across every accessible number — matches the redesigned UI, which is now
+// always "inside" one number's workspace.
+assert.strictEqual(phase14().getDashboardMetrics(number.id).conversations.total, 2);
+assert.strictEqual(phase14().getDashboardMetrics(number.id).byNumber.length, 1);
+assert.strictEqual(phase14().getDashboardMetrics(otherNumber.id).conversations.total, 0, 'otherNumber has no conversations at all');
+
 // Scoping (2026-08-10, per explicit user decision): a SUPERVISOR only sees metrics for
 // numbers they're actually granted access to — otherSupervisor has REPORTS_VIEW but is
 // only granted otherNumber, which has zero conversations, so their dashboard is empty

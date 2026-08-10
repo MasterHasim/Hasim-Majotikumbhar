@@ -75,6 +75,20 @@ const myReminders = phase9().listMyReminders();
 assert.strictEqual(myReminders.length, 1);
 assert.strictEqual(myReminders[0].id, secondReminder.id);
 
+// numberId (2026-08-10, user-directed): scopes to reminders on that one number's
+// conversations, so switching between numbers in the UI doesn't blend reminders.
+const otherNumber = new NumberRepository().create({ id: 'number_2', displayName: 'Sales 2', phoneNumber: '079-2', provider: 'exotel', providerAccountId: '', wabaId: '', providerNumberId: '', active: true, createdAt: '', updatedAt: '' });
+email = 'admin@example.com';
+phase1().grantNumberAccess({ userId: agent.id, numberId: otherNumber.id });
+email = 'agent@example.com';
+const otherConversation = new ConversationRepository().create({ id: 'conversation_2', customerId: customer.id, numberId: otherNumber.id, assignedUserId: agent.id, status: 'OPEN', needsResponse: true, lastMessageAt: '', createdAt: '', updatedAt: '' });
+const otherNumberReminder = phase9().createReminder(otherConversation.id, 'Reminder on the other number', '2026-08-17T10:00:00.000Z');
+assert.strictEqual(phase9().listMyReminders(number.id).length, 1);
+assert.strictEqual(phase9().listMyReminders(number.id)[0].id, secondReminder.id);
+assert.strictEqual(phase9().listMyReminders(otherNumber.id).length, 1);
+assert.strictEqual(phase9().listMyReminders(otherNumber.id)[0].id, otherNumberReminder.id);
+assert.strictEqual(phase9().listMyReminders().length, 2, 'no numberId still returns everything');
+
 // Snooze: excludes the conversation from Phase 5's active list until it expires.
 assert.strictEqual(phase5().listConversations(number.id).length, 1);
 const future = new Date(Date.now() + 3600000).toISOString();

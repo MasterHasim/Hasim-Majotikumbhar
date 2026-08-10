@@ -123,6 +123,16 @@ assert.strictEqual(agentCustomers[0].id, customer.id, 'agent has a conversation 
 email = 'admin@example.com';
 assert.strictEqual(phase8().listCustomers().length, 2);
 
+// numberId (2026-08-10, user-directed): scopes the directory to customers with at
+// least one conversation on that number, so switching numbers in the UI doesn't blend
+// customers from unrelated brands/numbers together.
+const otherNumber = new NumberRepository().create({ id: 'number_2', displayName: 'Sales 2', phoneNumber: '079-2', provider: 'exotel', providerAccountId: '', wabaId: '', providerNumberId: '', active: true, createdAt: '', updatedAt: '' });
+new ConversationRepository().create({ id: 'conversation_2', customerId: otherCustomer.id, numberId: otherNumber.id, assignedUserId: '', status: 'OPEN', needsResponse: false, lastMessageAt: '', createdAt: '', updatedAt: '' });
+assert.strictEqual(phase8().listCustomers(number.id).length, 1);
+assert.strictEqual(phase8().listCustomers(number.id)[0].id, customer.id);
+assert.strictEqual(phase8().listCustomers(otherNumber.id).length, 1);
+assert.strictEqual(phase8().listCustomers(otherNumber.id)[0].id, otherCustomer.id);
+
 // updateCustomer: same relationship gate, phone is not an editable field (it's the ingestion match key).
 email = 'agent@example.com';
 const updated = phase8().updateCustomer(customer.id, { name: 'Test Customer Updated', company: 'Acme' });

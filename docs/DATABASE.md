@@ -310,3 +310,24 @@ as-is by the new chat panel design.
 `doGet` (`src/Phase5Endpoints.gs`) no longer branches on `?page=admin` — it always
 serves `frontend/Index.html`, since there is only one app now.  `doGetAdmin()`
 (`src/Phase12Endpoints.gs`) was removed along with `frontend/Admin.html`.
+
+# Number-scoping reversal (2026-08-10, same day, user-directed)
+
+No new entities. The unified-app redesign above originally dropped the number-picker
+landing screen (reasoning: `searchConversations` already aggregates across every
+accessible number). The user reversed this same day — "not everything mixed" — so the
+landing screen is back as the mandatory entry point, and three endpoints gained an
+optional `numberId` parameter to keep the whole workspace scoped to it once picked:
+
+- `Phase14Api.getDashboardMetrics(numberId)` — narrows `listMyNumbers()` down to the
+  one requested id before computing every metric. An inaccessible `numberId` yields
+  empty metrics (filtered list is empty), not a bypass.
+- `Phase8Api.listCustomers(numberId)` — narrows the directory to customers with at
+  least one conversation on that number.
+- `Phase9Api.listMyReminders(numberId)` — narrows to reminders on that number's
+  conversations, joined through `Conversations`.
+
+All three default to their original (unscoped, aggregate) behavior when `numberId` is
+omitted — nothing about the underlying authorization changed, only what gets asked for.
+`Phase13Api.searchConversations` didn't need a change; it already accepted an optional
+`numberId` filter from Phase 13, the client just always supplies it now.

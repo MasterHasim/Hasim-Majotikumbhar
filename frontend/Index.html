@@ -15,12 +15,32 @@
     a { color: inherit; }
     button, select, input, textarea { font-family: inherit; }
 
-    #app { display: flex; height: 100vh; }
+    #app { display: none; height: 100vh; }
+    #app.visible { display: flex; }
+
+    /* ---- Landing screen: pick a number first ---- */
+    #landingScreen { max-width: 1040px; margin: 0 auto; padding: 48px 28px; }
+    .landing-header { margin-bottom: 28px; display: flex; align-items: center; gap: 12px; }
+    .landing-header .logo { width: 36px; height: 36px; border-radius: 9px; background: var(--accent); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 17px; flex-shrink: 0; }
+    .landing-header h1 { font-size: 20px; margin: 0 0 3px; }
+    .landing-header .subtitle { color: var(--text-secondary); font-size: 13px; }
+    .number-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
+    .number-card { position: relative; background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; cursor: pointer; transition: box-shadow .15s ease, transform .15s ease, border-color .15s ease; }
+    .number-card:hover { box-shadow: 0 4px 14px rgba(15,42,32,.12); transform: translateY(-2px); border-color: var(--accent); }
+    .number-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .number-card .name { font-size: 16px; font-weight: 700; padding-right: 26px; }
+    .number-card .phone { color: var(--text-secondary); font-size: 13px; margin-top: 5px; font-variant-numeric: tabular-nums; }
+    .number-card .badge { position: absolute; top: 16px; right: 16px; }
 
     /* ---- Sidebar ---- */
     #sidebar { width: 232px; flex-shrink: 0; background: var(--sidebar-bg); color: var(--sidebar-text); display: flex; flex-direction: column; }
     .brand { display: flex; align-items: center; gap: 10px; padding: 18px 18px 14px; font-size: 16px; font-weight: 700; color: #fff; }
     .brand .logo { width: 30px; height: 30px; border-radius: 8px; background: var(--sidebar-active); display: flex; align-items: center; justify-content: center; font-size: 15px; }
+    .current-number-pill { margin: 0 12px 12px; padding: 10px 12px; background: var(--sidebar-hover); border-radius: 8px; cursor: pointer; color: #fff; }
+    .current-number-pill:hover { background: var(--sidebar-active); }
+    .current-number-pill .cn-name { font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .current-number-pill .cn-phone { font-size: 11px; opacity: .75; font-variant-numeric: tabular-nums; }
+    .current-number-pill .cn-switch { font-size: 10px; opacity: .75; margin-top: 4px; }
     #navList { flex: 1; overflow-y: auto; padding: 6px 10px; }
     .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; cursor: pointer; font-size: 13px; margin-bottom: 2px; color: var(--sidebar-text); }
     .nav-item:hover { background: var(--sidebar-hover); }
@@ -164,9 +184,25 @@
   </style>
 </head>
 <body>
+  <div id="landingScreen">
+    <div class="landing-header">
+      <span class="logo">💬</span>
+      <div>
+        <h1>Select a number</h1>
+        <div class="subtitle">Choose which WhatsApp number to work in.</div>
+      </div>
+    </div>
+    <div id="numberCards" class="number-cards"><div class="empty">Loading…</div></div>
+  </div>
+
   <div id="app">
     <div id="sidebar">
       <div class="brand"><span class="logo">💬</span> WhatsApp Panel</div>
+      <div class="current-number-pill" onclick="showLanding()" title="Switch number">
+        <div class="cn-name" id="sidebarNumberName">—</div>
+        <div class="cn-phone" id="sidebarNumberPhone"></div>
+        <div class="cn-switch">⇄ Switch number</div>
+      </div>
       <div id="navList"></div>
       <div class="sidebar-footer">
         <div class="avatar-circle" id="sidebarAvatar">?</div>
@@ -382,6 +418,8 @@
     // ============================================================================
     var currentUser = null;
     var selectedConversationId = null;
+    var selectedNumberId = null;
+    var cachedLandingNumbers = null;
     var currentConversations = [];
     var cachedStages = null, cachedTemplates = null, cachedQuickReplies = null;
     var cachedUsers = [], cachedRoles = [], cachedTeams = [];
@@ -399,6 +437,54 @@
     }
     function setError(id, error) { var el = document.getElementById(id); if (el) el.textContent = error ? (error.message || String(error)) : ''; }
     function roleLabel(key) { return { ADMIN: 'Administrator', SUPERVISOR: 'Supervisor', SITE_MANAGER: 'Site Manager', AGENT: 'Agent', VIEWER: 'Viewer' }[key] || key; }
+
+    // ============================================================================
+    // Landing screen: pick a number first (2026-08-10, user-directed) — everything
+    // past this point (Dashboard/Inbox/Customers/etc.) operates on exactly one
+    // number at a time, chosen here, so nothing blends data across numbers that may
+    // represent entirely different brands/business units.
+    // ============================================================================
+    function loadLandingNumbers() {
+      google.script.run.withSuccessHandler(renderLandingNumberCards).withFailureHandler(renderError('numberCards')).listMyNumbers();
+    }
+    function renderLandingNumberCards(numbers) {
+      cachedLandingNumbers = numbers;
+      var container = document.getElementById('numberCards');
+      if (!numbers.length) { container.innerHTML = '<div class="empty">No numbers assigned</div>'; return; }
+      container.innerHTML = numbers.map(function (number) {
+        return '<div class="number-card" tabindex="0" onclick="enterWorkspace(\'' + number.id + '\')" onkeydown="if(event.key===\'Enter\')enterWorkspace(\'' + number.id + '\');">' +
+          '<div class="name">' + escapeHtml(number.displayName) + '<span class="badge" id="needsResponseBadge-' + escapeHtml(number.id) + '" style="display:none;"></span></div>' +
+          '<div class="phone">' + escapeHtml(number.phoneNumber) + '</div></div>';
+      }).join('');
+      google.script.run.withSuccessHandler(function (counts) {
+        Object.keys(counts).forEach(function (numberId) {
+          var badge = document.getElementById('needsResponseBadge-' + numberId);
+          if (!badge) return;
+          if (counts[numberId] > 0) { badge.textContent = counts[numberId]; badge.style.display = ''; } else { badge.style.display = 'none'; }
+        });
+      }).withFailureHandler(function () {}).getNeedsResponseCounts();
+    }
+    function enterWorkspace(numberId) {
+      var number = (cachedLandingNumbers || []).filter(function (n) { return n.id === numberId; })[0];
+      selectedNumberId = numberId;
+      selectedConversationId = null;
+      document.getElementById('sidebarNumberName').textContent = number ? number.displayName : '';
+      document.getElementById('sidebarNumberPhone').textContent = number ? number.phoneNumber : '';
+      document.getElementById('landingScreen').style.display = 'none';
+      document.getElementById('app').classList.add('visible');
+      renderSidebarNav();
+      loadAvailability();
+      refreshBadges();
+      showPage('dashboard');
+    }
+    function showLanding() {
+      document.getElementById('app').classList.remove('visible');
+      document.getElementById('landingScreen').style.display = 'block';
+      selectedNumberId = null;
+      selectedConversationId = null;
+      window.__splitEl = null; // force a fresh split (and a fresh number-filter, if it ever comes back) next time a number is entered
+      loadLandingNumbers();
+    }
 
     // ============================================================================
     // Sidebar / navigation
@@ -488,7 +574,7 @@
             '<strong>' + escapeHtml(c.customerName || c.customerPhone) + '</strong><br><span style="color:#5f6368;">' + escapeHtml(c.numberDisplayName || '') + '</span></div>';
         }).join('') || '<div class="empty">Nothing needs a response right now.</div>';
       }).withFailureHandler(function () { document.getElementById('notifList').innerHTML = '<div class="empty">Could not load.</div>'; })
-        .searchConversations({ needsResponse: true });
+        .searchConversations({ needsResponse: true, numberId: selectedNumberId });
     }
     function closeNotifications() { document.getElementById('notifPanel').classList.remove('open'); }
 
@@ -498,7 +584,7 @@
         navBadges.unassigned = metrics.conversations.unassigned;
         document.getElementById('notifDot').style.display = metrics.conversations.needsResponse > 0 ? 'block' : 'none';
         renderSidebarNav();
-      }).withFailureHandler(function () {}).getDashboardMetrics();
+      }).withFailureHandler(function () {}).getDashboardMetrics(selectedNumberId);
     }
 
     // ============================================================================
@@ -516,7 +602,6 @@
           '<div class="col-header">Conversations</div>' +
           '<div class="list-toolbar">' +
             '<input type="text" placeholder="Search name, phone, message…" class="js-search">' +
-            '<select class="js-number-filter"><option value="">All numbers</option></select>' +
           '</div>' +
           '<div class="js-conv-list empty">Loading…</div>' +
         '</div>' +
@@ -532,10 +617,6 @@
       var root = wrapper.firstElementChild;
       window.__splitEl = root;
       root.querySelector('.js-search').addEventListener('input', function () { loadConvList(window.__currentBaseFilters); });
-      root.querySelector('.js-number-filter').addEventListener('change', function () { loadConvList(window.__currentBaseFilters); });
-      google.script.run.withSuccessHandler(function (numbers) {
-        root.querySelector('.js-number-filter').innerHTML = '<option value="">All numbers</option>' + numbers.map(function (n) { return '<option value="' + n.id + '">' + escapeHtml(n.displayName) + '</option>'; }).join('');
-      }).withFailureHandler(function () {}).listMyNumbers();
       return root;
     }
 
@@ -550,16 +631,17 @@
       loadConvList(baseFilters);
     }
 
+    // Every list here is already scoped to selectedNumberId — the whole workspace
+    // operates inside one number at a time (chosen on the landing screen), so there's
+    // no separate per-list number filter to layer on top anymore.
     function loadConvList(baseFilters) {
       var root = window.__splitEl;
-      if (!root) return;
+      if (!root || !selectedNumberId) return;
       var listEl = root.querySelector('.js-conv-list');
       listEl.innerHTML = '<div class="empty">Loading…</div>';
-      var filters = Object.assign({}, baseFilters);
+      var filters = Object.assign({ numberId: selectedNumberId }, baseFilters);
       var query = root.querySelector('.js-search').value.trim();
-      var numberId = root.querySelector('.js-number-filter').value;
       if (query) filters.query = query;
-      if (numberId) filters.numberId = numberId;
       google.script.run.withSuccessHandler(function (conversations) {
         currentConversations = conversations;
         listEl.innerHTML = conversations.map(convItemHtml).join('') || '<div class="empty">No conversations</div>';
@@ -853,7 +935,7 @@
           return '<div class="note-item" style="cursor:pointer;" onclick="openConversationFromAnywhere(\'' + c.id + '\')">' +
             escapeHtml(c.numberDisplayName || '') + '<div class="note-meta">' + escapeHtml(c.status) + ' • ' + escapeHtml((c.lastMessageAt || '').slice(0, 10)) + '</div></div>';
         }).join('') || '<div class="empty">No other conversations</div>';
-      }).withFailureHandler(function () {}).searchConversations({ customerId: customerId, status: 'ANY' });
+      }).withFailureHandler(function () {}).searchConversations({ customerId: customerId, numberId: selectedNumberId, status: 'ANY' });
     }
 
     function renderNotesSection(remarks) {
@@ -931,12 +1013,12 @@
           return '<div class="kpi-card"><div class="kpi-icon" style="background:' + k.bg + '; color:' + k.color + ';">' + k.icon + '</div>' +
             '<div><div class="kpi-label">' + k.label + '</div><div class="kpi-value">' + k.value + '</div></div></div>';
         }).join('');
-      }).withFailureHandler(function () { document.getElementById('kpiRow').innerHTML = ''; }).getDashboardMetrics();
+      }).withFailureHandler(function () { document.getElementById('kpiRow').innerHTML = ''; }).getDashboardMetrics(selectedNumberId);
       renderInboxSplit('dashboardSplit', {});
     }
 
     // ============================================================================
-    // Reminders page (personal)
+    // Reminders page (personal, scoped to the current number)
     // ============================================================================
     function loadReminders() {
       google.script.run.withSuccessHandler(function (reminders) {
@@ -945,14 +1027,14 @@
           return '<div class="card" style="max-width:600px;"><strong>' + escapeHtml(r.text) + '</strong><div style="color:var(--text-secondary); font-size:12px; margin-top:4px;">Due ' + escapeHtml((r.dueAt || '').replace('T', ' ').slice(0, 16)) +
             ' • <a style="cursor:pointer; color:var(--accent);" onclick="completeMyReminder(\'' + r.id + '\')">Mark done</a></div></div>';
         }).join('') || '<div class="empty">No pending reminders.</div>';
-      }).withFailureHandler(function (error) { document.getElementById('remindersList').innerHTML = '<div class="empty">Error: ' + escapeHtml(error && error.message) + '</div>'; }).listMyReminders();
+      }).withFailureHandler(function (error) { document.getElementById('remindersList').innerHTML = '<div class="empty">Error: ' + escapeHtml(error && error.message) + '</div>'; }).listMyReminders(selectedNumberId);
     }
     function completeMyReminder(id) {
       google.script.run.withSuccessHandler(loadReminders).withFailureHandler(function (error) { alert('Could not update: ' + (error && error.message)); }).updateReminderStatus(id, 'COMPLETED');
     }
 
     // ============================================================================
-    // Customers directory
+    // Customers directory (scoped to the current number)
     // ============================================================================
     function loadCustomers() {
       google.script.run.withSuccessHandler(function (customers) {
@@ -960,23 +1042,23 @@
           return '<tr><td>' + escapeHtml(c.name || '—') + '</td><td>' + escapeHtml(c.phone) + '</td><td>' + escapeHtml(c.company || '—') + '</td><td>' + escapeHtml(c.source || '—') + '</td>' +
             '<td><button class="btn" onclick="openCustomerFromDirectory(\'' + c.id + '\')">View conversations</button></td></tr>';
         }).join('') || '<tr><td colspan="5" class="empty">No customers yet</td></tr>';
-      }).withFailureHandler(function (error) { document.getElementById('customersTable').querySelector('tbody').innerHTML = '<tr><td colspan="5" class="empty">Error: ' + escapeHtml(error && error.message) + '</td></tr>'; }).listCustomers();
+      }).withFailureHandler(function (error) { document.getElementById('customersTable').querySelector('tbody').innerHTML = '<tr><td colspan="5" class="empty">Error: ' + escapeHtml(error && error.message) + '</td></tr>'; }).listCustomers(selectedNumberId);
     }
     function openCustomerFromDirectory(customerId) {
       google.script.run.withSuccessHandler(function (conversations) {
-        if (!conversations.length) { alert('This customer has no conversations yet.'); return; }
+        if (!conversations.length) { alert('This customer has no conversations on this number.'); return; }
         showPage('allConversations');
         openConversationFromAnywhere(conversations[0].id);
-      }).withFailureHandler(function (error) { alert('Could not load conversations: ' + (error && error.message)); }).searchConversations({ customerId: customerId, status: 'ANY' });
+      }).withFailureHandler(function (error) { alert('Could not load conversations: ' + (error && error.message)); }).searchConversations({ customerId: customerId, numberId: selectedNumberId, status: 'ANY' });
     }
 
     // ============================================================================
-    // Reports page (adapted from the old overlay)
+    // Reports page (adapted from the old overlay, scoped to the current number)
     // ============================================================================
     function loadReports() {
       google.script.run.withSuccessHandler(renderReportsBody).withFailureHandler(function (error) {
         document.getElementById('reportsBody').innerHTML = '<div class="empty">Could not load reports: ' + escapeHtml(error && error.message) + '</div>';
-      }).getDashboardMetrics();
+      }).getDashboardMetrics(selectedNumberId);
     }
     function renderReportsBody(metrics) {
       var c = metrics.conversations;
@@ -1340,10 +1422,7 @@
       document.getElementById('sidebarAvatar').textContent = initials(me.displayName);
       document.getElementById('sidebarName').textContent = me.displayName;
       document.getElementById('sidebarRole').textContent = me.roleKeys.map(roleLabel).join(', ');
-      renderSidebarNav();
-      loadAvailability();
-      refreshBadges();
-      showPage('dashboard');
+      loadLandingNumbers(); // land on the number picker first — everything else waits for enterWorkspace()
     }).withFailureHandler(function (error) {
       document.body.innerHTML = '<div style="padding:40px; font-family:Arial, sans-serif;">Could not verify identity: ' + escapeHtml(error && error.message) + '</div>';
     }).whoAmI();

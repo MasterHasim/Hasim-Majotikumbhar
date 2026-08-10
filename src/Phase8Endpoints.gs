@@ -8,5 +8,5 @@ function setCustomerStage(customerId, stageId) { return phase8Api_().setCustomer
 function getCustomerStage(customerId) { return phase8Api_().getCustomerStage(customerId); }
 function addRemark(conversationId, text) { return phase8Api_().addRemark(conversationId, text); }
 function listRemarks(conversationId) { return phase8Api_().listRemarks(conversationId); }
-function listCustomers() { return phase8Api_().listCustomers(); }
+function listCustomers(numberId) { return phase8Api_().listCustomers(numberId); }
 function updateCustomer(customerId, patch) { return phase8Api_().updateCustomer(customerId, patch); }

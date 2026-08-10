@@ -42,11 +42,18 @@ class Phase9Api {
       .sort(function (a, b) { return (a.dueAt || '').localeCompare(b.dueAt || ''); });
   }
 
-  /** Pending reminders owned by the signed-in user, across all their conversations — a simple personal follow-up list. */
-  listMyReminders() {
+  /** Pending reminders owned by the signed-in user — a simple personal follow-up list. numberId is optional (2026-08-10, user-directed) — narrows to reminders on conversations for that one number, joined through Conversations, so the list matches whichever number's workspace the user is currently in rather than blending every number's reminders together. */
+  listMyReminders(numberId) {
     var actor = this.access_.currentUser();
-    return this.reminders_.list().filter(function (reminder) { return reminder.ownerUserId === actor.id && reminder.status === 'PENDING'; })
-      .sort(function (a, b) { return (a.dueAt || '').localeCompare(b.dueAt || ''); });
+    var self = this;
+    var reminders = this.reminders_.list().filter(function (reminder) { return reminder.ownerUserId === actor.id && reminder.status === 'PENDING'; });
+    if (numberId) {
+      reminders = reminders.filter(function (reminder) {
+        var conversation = self.conversations_.get(reminder.conversationId);
+        return conversation && conversation.numberId === numberId;
+      });
+    }
+    return reminders.sort(function (a, b) { return (a.dueAt || '').localeCompare(b.dueAt || ''); });
   }
 
   snoozeConversation(conversationId, until) {
