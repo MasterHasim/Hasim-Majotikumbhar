@@ -273,15 +273,34 @@
           <div class="card">
             <h2 class="section-title" style="margin-top:0;">Create draft</h2>
             <div class="form-row">
+              <button class="btn" onclick="fillTemplateExample('utility')">Use Utility example</button>
+              <button class="btn" onclick="fillTemplateExample('marketing')">Use Marketing example</button>
+            </div>
+            <div class="form-row">
               <input id="tplName" placeholder="name (snake_case)">
-              <input id="tplLanguage" placeholder="language (e.g. en)" style="width:100px;">
-              <input id="tplCategory" placeholder="category (e.g. UTILITY)" style="width:130px;">
+              <select id="tplLanguage" style="width:150px;">
+                <option value="en_US">English (US)</option>
+                <option value="en">English</option>
+                <option value="hi">Hindi</option>
+                <option value="gu">Gujarati</option>
+                <option value="mr">Marathi</option>
+                <option value="pa">Punjabi</option>
+                <option value="bn">Bengali</option>
+                <option value="ta">Tamil</option>
+                <option value="te">Telugu</option>
+              </select>
+              <select id="tplCategory" style="width:150px;">
+                <option value="UTILITY">Utility</option>
+                <option value="MARKETING">Marketing</option>
+                <option value="AUTHENTICATION">Authentication</option>
+              </select>
             </div>
             <div class="form-row">
               <input id="tplBody" placeholder="Body text, use {{1}} {{2}} for variables" style="width:420px;">
               <button class="btn primary" onclick="submitCreateTemplateDraft()">Save draft</button>
             </div>
             <div class="form-error" id="tplError"></div>
+            <div style="color:var(--text-secondary); font-size:11px; margin-top:6px;">Category/language options are WhatsApp's current standard set — not yet verified against your specific Exotel/WABA setup, same as the rest of the template send path.</div>
           </div>
           <div class="form-row">
             <input id="syncWabaId" placeholder="wabaId to sync from provider">
@@ -1154,6 +1173,18 @@
           return '<tr><td>' + escapeHtml(t.name) + '</td><td>' + escapeHtml(t.language) + '</td><td>' + escapeHtml(t.category) + '</td><td><span class="pill">' + escapeHtml(t.status) + '</span></td><td>' + actions + '</td></tr>';
         }).join('') || '<tr><td colspan="5" class="empty">No templates yet</td></tr>';
       }).withFailureHandler(function (error) { setError('tplError', error); }).listTemplates();
+    }
+    var TEMPLATE_EXAMPLES = {
+      utility: { name: 'order_update', category: 'UTILITY', language: 'en_US', body: 'Hi {{1}}, your order #{{2}} has been shipped and should arrive by {{3}}. Reply to this message if you have any questions.' },
+      marketing: { name: 'seasonal_offer', category: 'MARKETING', language: 'en_US', body: 'Hi {{1}}, we have a special offer just for you — get {{2}} off your next order until {{3}}. Reply STOP to opt out of future offers.' }
+    };
+    function fillTemplateExample(kind) {
+      var example = TEMPLATE_EXAMPLES[kind];
+      if (!example) return;
+      document.getElementById('tplName').value = example.name;
+      document.getElementById('tplLanguage').value = example.language;
+      document.getElementById('tplCategory').value = example.category;
+      document.getElementById('tplBody').value = example.body;
     }
     function submitCreateTemplateDraft() {
       var name = document.getElementById('tplName').value.trim();

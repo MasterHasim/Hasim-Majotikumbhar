@@ -101,21 +101,15 @@ class Phase6Api {
     mimeType = Phase1Validation.requiredString(mimeType, 'mimeType');
     var bytes = Utilities.base64Decode(base64Data);
     var blob = Utilities.newBlob(bytes, mimeType, filename);
-    var file = this.mediaFolder_().createFile(blob);
+    // DriveApp.createFile() (a genuinely NEW file) is covered by the drive.file
+    // scope, but DriveApp.createFolder()/getFolderById() are not — Apps Script
+    // requires the full https://www.googleapis.com/auth/drive scope for folder
+    // operations even under the "restricted" drive.file model. A dedicated media
+    // folder isn't worth forcing every user through a fresh, broader OAuth consent
+    // screen for, so files land directly in Drive root instead.
+    var file = DriveApp.createFile(blob);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
     return { url: 'https://drive.google.com/uc?export=download&id=' + file.getId(), fileId: file.getId() };
-  }
-  // Folder ID is cached in a Script Property rather than found by name search —
-  // under the drive.file OAuth scope (per-file access only), DriveApp can reliably
-  // re-access a folder this app already created by ID, but a name search isn't
-  // guaranteed to surface it the same way a broader Drive scope would.
-  mediaFolder_() {
-    var props = PropertiesService.getScriptProperties();
-    var folderId = props.getProperty('MEDIA_FOLDER_ID');
-    if (folderId) { try { return DriveApp.getFolderById(folderId); } catch (ignored) {} }
-    var folder = DriveApp.createFolder('WhatsApp Panel Media');
-    props.setProperty('MEDIA_FOLDER_ID', folder.getId());
-    return folder;
   }
 
   /**
