@@ -445,7 +445,9 @@
     // represent entirely different brands/business units.
     // ============================================================================
     function loadLandingNumbers() {
-      google.script.run.withSuccessHandler(renderLandingNumberCards).withFailureHandler(renderError('numberCards')).listMyNumbers();
+      google.script.run.withSuccessHandler(renderLandingNumberCards).withFailureHandler(function (error) {
+        document.getElementById('numberCards').innerHTML = '<div class="empty">Error: ' + escapeHtml(error && error.message) + '</div>';
+      }).listMyNumbers();
     }
     function renderLandingNumberCards(numbers) {
       cachedLandingNumbers = numbers;
