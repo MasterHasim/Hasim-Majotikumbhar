@@ -26,21 +26,22 @@ var Phase2Spreadsheet = {
   }
 };
 
-// Two read-cache layers, both keyed by collection name, both invalidated on every
-// write to that collection:
-// 1. Phase2SheetCache_ — in-process, per-execution dedup (see below).
-// 2. CacheService.getScriptCache() — a real cross-request, cross-USER cache built
-//    into Apps Script (free, up to 6h TTL). Without this, every agent's browser hits
-//    Sheets independently even for data that barely changes (Numbers, Templates,
-//    Quick Replies, and — under concurrent use — Conversations/Customers too), so
-//    two agents working at the same time get zero benefit from each other's reads.
-//    This is the next real lever once the in-memory layer alone wasn't enough.
-//    Wrapped in try/catch everywhere: CacheService values are capped (~100KB), and if
-//    a table ever grows past that or CacheService is unavailable for any reason, we
-//    silently fall back to a normal Sheets read rather than failing the request.
+// Request-scoped read cache, shared by collection name across every SheetRepository
+// instance. Bounded by a short TTL (rather than trusted to live only for one
+// execution) because Apps Script's V8 runtime can reuse global state across separate
+// invocations of a warm container. Every write invalidates its collection's entry
+// immediately, so a read-after-write within the same request never sees stale data.
+//
+// A second, cross-request layer (CacheService.getScriptCache()) was tried and
+// reverted the same day (2026-08-10): the user reported a sent reply not showing up
+// in the thread even though the customer received it on WhatsApp — a classic
+// read-after-write staleness symptom, and CacheService's cross-execution consistency
+// on rapid remove()-then-read() isn't something either of us could verify live. Not
+// worth the risk on message/conversation data. If cross-request caching is revisited,
+// scope it to genuinely rarely-written reference data only (Numbers, Templates,
+// Quick Replies) and never to Messages/Conversations. See memory/DECISIONS.md.
 var Phase2SheetCache_ = {};
 var PHASE2_SHEET_CACHE_TTL_MS = 3000;
-var PHASE2_SCRIPT_CACHE_TTL_SECONDS = 30;
 
 class SheetRepository {
   constructor(collectionName, columns) {
@@ -111,8 +112,6 @@ class SheetRepository {
     Phase2Spreadsheet.requireSpreadsheetId_(); // cheap Property read — validated even on a cache hit, so a config error is never masked by stale cache
     var cached = Phase2SheetCache_[this.collectionName_];
     if (cached && (Date.now() - cached.ts) < PHASE2_SHEET_CACHE_TTL_MS) return cached.rows;
-    var fromScriptCache = this.readScriptCache_();
-    if (fromScriptCache) { Phase2SheetCache_[this.collectionName_] = { rows: fromScriptCache, ts: Date.now() }; return fromScriptCache; }
     return this.readAll_(this.sheet_());
   }
   readAll_(sheet) {
@@ -127,21 +126,7 @@ class SheetRepository {
       rows.push({ rowIndex: r + 1, record: record });
     }
     Phase2SheetCache_[this.collectionName_] = { rows: rows, ts: Date.now() };
-    this.writeScriptCache_(rows);
     return rows;
-  }
-  cacheKey_() { return 'phase2sheet:' + this.collectionName_; }
-  readScriptCache_() {
-    try {
-      var raw = CacheService.getScriptCache().get(this.cacheKey_());
-      return raw ? JSON.parse(raw) : null;
-    } catch (ignored) { return null; }
-  }
-  writeScriptCache_(rows) {
-    try { CacheService.getScriptCache().put(this.cacheKey_(), JSON.stringify(rows), PHASE2_SCRIPT_CACHE_TTL_SECONDS); } catch (ignored) {}
-  }
-  invalidateScriptCache_() {
-    try { CacheService.getScriptCache().remove(this.cacheKey_()); } catch (ignored) {}
   }
   findRow_(id) {
     var rows = this.rows_();
@@ -172,7 +157,6 @@ class SheetRepository {
       var rows = this.readAll_(sheet);
       var result = mutator(sheet, rows);
       delete Phase2SheetCache_[this.collectionName_];
-      this.invalidateScriptCache_();
       return result;
     } finally { lock.releaseLock(); }
   }
