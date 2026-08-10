@@ -122,3 +122,14 @@ admin-configurable stage definitions; `Phase8DefaultStages`
 roadmap's suggested initial set (New, Contacted, Interested, Quotation Sent,
 Negotiation, Won, Lost), seeded via `seedDefaultLeadStages()` and freely editable by an
 admin afterward. `Remarks` (Phase 2, unused until now) is now written via `addRemark`.
+
+# Phase 9 data contracts
+
+`Reminders` (Phase 2, unused until now) is now written via `createReminder`/
+`updateReminderStatus`. One new entity: `Conversation_Snooze`
+(`ConversationSnoozeRepository`, `conversationId, snoozedUntil, snoozedByUserId,
+createdAt`) — its own tab for the same reason as Phase 8's `Customer_Stage`
+(`Conversations` already has real live data). Snooze auto-expires by comparison
+(`isConversationSnoozed_`, `src/Phase9Domain.gs`) — once `snoozedUntil` is in the past
+the conversation is active again on the next read, no scheduled job needed. One record
+per conversation (`replace`-upserted).

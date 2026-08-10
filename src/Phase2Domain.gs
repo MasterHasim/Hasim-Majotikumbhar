@@ -25,5 +25,8 @@ var Phase2Schemas = {
   // SheetRepository doesn't do safe header migration (a new column added to an
   // existing schema would misalign already-written rows, since appendRow_/writeRow_
   // build values positionally from this array). See memory/DECISIONS.md.
-  Customer_Stage: ['customerId', 'stageId', 'setByUserId', 'updatedAt']
+  Customer_Stage: ['customerId', 'stageId', 'setByUserId', 'updatedAt'],
+  // Phase 9: snooze state, same rationale as Customer_Stage — its own tab rather than
+  // new columns on the already-live Conversations tab.
+  Conversation_Snooze: ['conversationId', 'snoozedUntil', 'snoozedByUserId', 'createdAt']
 };

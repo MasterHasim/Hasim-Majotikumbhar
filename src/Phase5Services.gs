@@ -45,6 +45,7 @@ class Phase5Api {
     var teamId = this.access_.resolveTeamIdForNumber(numberId);
     var self = this;
     return this.conversations_.list().filter(function (conversation) { return conversation.numberId === numberId; })
+      .filter(function (conversation) { return !isConversationSnoozed_(conversation.id); }) // Phase 9: snoozed conversations temporarily leave the active list
       .filter(function (conversation) {
         try {
           self.access_.requireConversationOperation('view', { numberId: numberId, teamId: teamId, assignedUserId: conversation.assignedUserId });

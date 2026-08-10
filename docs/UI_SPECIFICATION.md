@@ -57,11 +57,21 @@ remarks access (e.g. VIEWER — has neither `REMARKS_VIEW` nor `REMARKS_MANAGE`)
 panel just hides itself rather than showing an error, since that's an expected,
 role-based absence, not a failure.
 
+## Phase 9: reminders & snooze
+
+A blue-tinted reminders mini-panel (`#remindersPane`, same hide-on-denied pattern as
+remarks) lists pending reminders with a "Done" button (`updateReminderStatus` →
+`COMPLETED`) and an add form (text + `datetime-local` input → `createReminder`). A
+"Snooze…"/"Un-snooze" button in the detail header (`#snoozeBtn`) calls
+`getSnoozeStatus` first to decide which action applies; snoozing prompts for a number
+of hours and calls `snoozeConversation`, which also reloads the conversation list so
+the now-hidden conversation disappears immediately. A yellow banner
+(`#snoozeBanner`) shows "Snoozed until …" when applicable.
+
 ## Deliberately not yet in the UI
 
-No reminder panel (Phase 9 — the entity exists in storage from Phase 2 but has no
-service layer yet). No round-robin assignment UI (Phase 7's engine runs automatically
-on ingestion; manual reassignment exists at the API level but the UI control is
+No round-robin assignment UI (Phase 7's engine runs automatically on ingestion;
+manual reassignment exists at the API level but the UI control is
 deferred to Phase 12, which needs a properly role-scoped user-listing endpoint anyway).
 
 ## Testing note

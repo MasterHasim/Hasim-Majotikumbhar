@@ -39,6 +39,16 @@
     .remark-add { display: flex; gap: 6px; margin-top: 6px; }
     .remark-add input { flex: 1; padding: 5px 8px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; }
     .remark-add button { padding: 0 12px; border: none; border-radius: 4px; background: #5f6368; color: #fff; cursor: pointer; font-size: 12px; }
+    .reminders { background: #e8f0fe; border-bottom: 1px solid #e0e0e0; padding: 10px 16px; }
+    .reminder { font-size: 13px; margin-bottom: 6px; display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+    .reminder .reminder-due { color: #5f6368; font-size: 11px; }
+    .reminder button { border: none; background: none; color: #1a73e8; cursor: pointer; font-size: 11px; padding: 0; }
+    .reminder-add { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+    .reminder-add input[type="text"] { flex: 1; min-width: 120px; padding: 5px 8px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; }
+    .reminder-add input[type="datetime-local"] { padding: 4px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; }
+    .reminder-add button { padding: 0 12px; border: none; border-radius: 4px; background: #1a73e8; color: #fff; cursor: pointer; font-size: 12px; }
+    .snooze-btn { margin-top: 6px; margin-left: 8px; padding: 4px 10px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; background: #fff; cursor: pointer; }
+    .snooze-banner { background: #fef7e0; padding: 6px 16px; font-size: 12px; color: #7a5900; }
   </style>
 </head>
 <body>
@@ -135,8 +145,11 @@
         ' • Assigned: ' + escapeHtml(detail.conversation.assignedUserId || 'Unassigned') +
         ' • Status: ' + escapeHtml(detail.conversation.status) + '</div>' +
         '<select class="stage-select" id="stageSelect" onchange="changeStage()"><option value="">Stage: (loading…)</option></select>' +
+        '<button class="snooze-btn" id="snoozeBtn" onclick="toggleSnooze()">Snooze…</button>' +
         '</div>' +
+        '<div id="snoozeBanner"></div>' +
         '<div class="remarks" id="remarksPane"><div class="remarks-title">Internal remarks (never sent to WhatsApp)</div><div class="empty">Loading…</div></div>' +
+        '<div class="reminders" id="remindersPane"><div class="remarks-title">Reminders</div><div class="empty">Loading…</div></div>' +
         '<div class="messages" id="messagesList">' + (messagesHtml || '<div class="empty">No messages yet</div>') + '</div>' +
         '<div class="compose-error" id="composeError"></div>' +
         '<div class="compose">' +
@@ -149,6 +162,75 @@
 
       loadStageControl();
       loadRemarks();
+      loadReminders();
+      loadSnoozeStatus();
+    }
+
+    function loadSnoozeStatus() {
+      google.script.run.withSuccessHandler(renderSnoozeStatus).withFailureHandler(function () {}).getSnoozeStatus(selectedConversationId);
+    }
+
+    function renderSnoozeStatus(status) {
+      var banner = document.getElementById('snoozeBanner');
+      var btn = document.getElementById('snoozeBtn');
+      if (!banner || !btn) return;
+      if (status && status.snoozed) {
+        banner.innerHTML = '<div class="snooze-banner">Snoozed until ' + escapeHtml(status.snoozedUntil) + '</div>';
+        btn.textContent = 'Un-snooze';
+      } else {
+        banner.innerHTML = '';
+        btn.textContent = 'Snooze…';
+      }
+    }
+
+    function toggleSnooze() {
+      google.script.run.withSuccessHandler(function (status) {
+        if (status && status.snoozed) { loadSnoozeStatus(); return; }
+        // Currently not snoozed (or was just un-snoozed) — ask how long to snooze for.
+        var hours = prompt('Snooze this conversation for how many hours?', '4');
+        if (!hours) return;
+        var until = new Date(Date.now() + Number(hours) * 3600000).toISOString();
+        google.script.run.withSuccessHandler(function () { loadSnoozeStatus(); loadConversations(); })
+          .withFailureHandler(function (error) { alert('Could not snooze: ' + (error && error.message)); })
+          .snoozeConversation(selectedConversationId, until);
+      }).withFailureHandler(function () {}).getSnoozeStatus(selectedConversationId);
+    }
+
+    function loadReminders() {
+      google.script.run.withSuccessHandler(renderReminders).withFailureHandler(function () {
+        var pane = document.getElementById('remindersPane');
+        if (pane) pane.style.display = 'none';
+      }).listReminders(selectedConversationId);
+    }
+
+    function renderReminders(reminders) {
+      var pane = document.getElementById('remindersPane');
+      if (!pane) return;
+      var pending = reminders.filter(function (r) { return r.status === 'PENDING'; });
+      var listHtml = pending.map(function (reminder) {
+        return '<div class="reminder"><span>' + escapeHtml(reminder.text) + '<div class="reminder-due">Due ' + escapeHtml(reminder.dueAt) + '</div></span>' +
+          '<button onclick="completeReminder(\'' + reminder.id + '\')">Done</button></div>';
+      }).join('') || '<div class="empty">No pending reminders</div>';
+      pane.innerHTML = '<div class="remarks-title">Reminders</div>' + listHtml +
+        '<div class="reminder-add"><input type="text" id="reminderText" placeholder="Reminder text…">' +
+        '<input type="datetime-local" id="reminderDue">' +
+        '<button onclick="addCurrentReminder()">Add</button></div>';
+    }
+
+    function addCurrentReminder() {
+      var textInput = document.getElementById('reminderText');
+      var dueInput = document.getElementById('reminderDue');
+      var text = textInput.value.trim();
+      if (!text || !dueInput.value) return;
+      var dueAt = new Date(dueInput.value).toISOString();
+      google.script.run.withSuccessHandler(function () { textInput.value = ''; dueInput.value = ''; loadReminders(); })
+        .withFailureHandler(function (error) { alert('Could not add reminder: ' + (error && error.message)); })
+        .createReminder(selectedConversationId, text, dueAt);
+    }
+
+    function completeReminder(reminderId) {
+      google.script.run.withSuccessHandler(loadReminders).withFailureHandler(function (error) { alert('Could not update reminder: ' + (error && error.message)); })
+        .updateReminderStatus(reminderId, 'COMPLETED');
     }
 
     function loadStageControl() {
