@@ -8,6 +8,7 @@ function listRoles() { return phase1Api_().listRoles(); }
 function createTeam(input) { return phase1Api_().createTeam(input); }
 function updateTeam(id, patch) { return phase1Api_().updateTeam(id, patch); }
 function listTeams() { return phase1Api_().listTeams(); }
+function listTeamMembers(teamId) { return phase1Api_().listTeamMembers(teamId); }
 function addTeamMember(input) { return phase1Api_().addTeamMember(input); }
 function updateTeamMember(id, patch) { return phase1Api_().updateTeamMember(id, patch); }
 function grantNumberAccess(input) { return phase1Api_().grantNumberAccess(input); }
@@ -20,3 +21,4 @@ function getAssignmentEligibility(userId, numberId) { return phase1Api_().getAss
 function setAssignmentEligibility(input) { return phase1Api_().setAssignmentEligibility(input); }
 function authorizeConversationOperation(action, context) { return phase1Api_().access_.requireConversationOperation(action, context); }
 function listAuditLog() { return phase1Api_().listAuditLog(); }
+function whoAmI() { return phase1Api_().whoAmI(); }

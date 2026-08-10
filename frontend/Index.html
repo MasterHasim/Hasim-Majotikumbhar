@@ -55,7 +55,7 @@
 <body>
   <div class="layout">
     <div class="pane" id="numbersPane">
-      <div class="pane-header">Numbers</div>
+      <div class="pane-header">Numbers <a id="adminLink" href="?page=admin" style="display:none; float:right; font-size:12px; font-weight:normal;">Admin Panel</a></div>
       <div id="numbersList"><div class="empty">Loading…</div></div>
     </div>
     <div class="pane" id="conversationsPane">
@@ -147,6 +147,7 @@
         ' • Status: ' + escapeHtml(detail.conversation.status) + '</div>' +
         '<select class="stage-select" id="stageSelect" onchange="changeStage()"><option value="">Stage: (loading…)</option></select>' +
         '<button class="snooze-btn" id="snoozeBtn" onclick="toggleSnooze()">Snooze…</button>' +
+        '<button class="snooze-btn" id="reassignBtn" onclick="toggleReassign()" style="display:none;">Reassign…</button>' +
         '</div>' +
         '<div id="snoozeBanner"></div>' +
         '<div class="remarks" id="remarksPane"><div class="remarks-title">Internal remarks (never sent to WhatsApp)</div><div class="empty">Loading…</div></div>' +
@@ -171,6 +172,34 @@
       loadSnoozeStatus();
       loadTemplateSelect();
       loadQuickReplySelect();
+      loadReassignControl(detail.conversation.numberId);
+    }
+
+    function loadReassignControl(numberId) {
+      google.script.run.withSuccessHandler(function (users) {
+        var btn = document.getElementById('reassignBtn');
+        if (!btn) return;
+        btn.style.display = '';
+        btn.dataset.users = JSON.stringify(users);
+      }).withFailureHandler(function () {
+        var btn = document.getElementById('reassignBtn');
+        if (btn) btn.style.display = 'none'; // no reassignment scope on this number — hide rather than show an error
+      }).listAssignableUsers(numberId);
+    }
+
+    function toggleReassign() {
+      var btn = document.getElementById('reassignBtn');
+      var users = JSON.parse(btn.dataset.users || '[]');
+      if (!users.length) { alert('No users available to reassign to.'); return; }
+      var names = users.map(function (u, i) { return (i + 1) + '. ' + u.displayName; }).join('\n');
+      var choice = prompt('Reassign to (enter number):\n' + names);
+      if (!choice) return;
+      var index = Number(choice) - 1;
+      var user = users[index];
+      if (!user) { alert('Invalid choice.'); return; }
+      google.script.run.withSuccessHandler(function () { loadDetail(); loadConversations(); })
+        .withFailureHandler(function (error) { alert('Could not reassign: ' + (error && error.message)); })
+        .reassignConversation(selectedConversationId, user.id);
     }
 
     function loadQuickReplySelect() {
@@ -388,6 +417,12 @@
     }
 
     loadNumbers();
+    google.script.run.withSuccessHandler(function (me) {
+      if (me.roleKeys.indexOf('ADMIN') !== -1) {
+        var link = document.getElementById('adminLink');
+        if (link) link.style.display = '';
+      }
+    }).withFailureHandler(function () {}).whoAmI();
   </script>
 </body>
 </html>

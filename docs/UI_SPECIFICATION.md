@@ -94,12 +94,49 @@ used for snooze duration), then calls `sendMediaReply`. This mirrors the "Send T
 button's pattern rather than adding a persistent form, since media sending is expected
 to be occasional, not the primary compose action.
 
+## Phase 12: reassignment & Admin Panel
+
+The reassignment UI deferred from Phase 7 is now in the inbox detail header: a
+"Reassign…" button (`#reassignBtn`) calls the new `Phase7Api.listAssignableUsers(numberId)`
+(`src/Phase7Services.gs`) — ADMIN gets every active user, SUPERVISOR/SITE_MANAGER get
+active members of the team that covers that number, anyone else gets `FORBIDDEN` and
+the button just hides (same hide-on-denied pattern as remarks/reminders). Picking a
+user (via a numbered `prompt()` list, consistent with this project's minimal-UI
+convention) calls `reassignConversation`.
+
+A separate page, `frontend/Admin.html`, served at `?page=admin` (routed in `doGet`,
+`src/Phase5Endpoints.gs`) is the roadmap's Admin Panel. It's client-side-gated by a new
+`whoAmI()` endpoint (`src/Phase1Services.gs` — returns the signed-in user's own id/role
+keys, never used as the actual authorization decision, only to decide what the UI shows)
+and linked from the main inbox header only when the signed-in user is ADMIN. Every
+section is real server-enforced ADMIN-only regardless of the client-side gate. Sections:
+
+- **Dashboard** — small landing counts (`getDashboardSummary`, `src/Phase12Services.gs`)
+  — numbers/users/open/unassigned/needs-response totals only, deliberately not
+  Phase 14's trend/response-time analytics, so this doesn't step on that future phase.
+- **Users / Teams / Numbers / Number Access / Audit Log** — thin UI over each entity's
+  own existing service layer (Phase 1 and Phase 3 — nothing new here except the new
+  `listTeamMembers(teamId)` endpoint the Teams section needed and didn't have before).
+- **Assignment Rules** — the one genuinely new backend piece: `Number_Assignment_Config`/
+  `Number_Assignment_Users` (Phase 2's schema) had no admin-facing CRUD at all before
+  now — only Phase 7's engine read them, only tests ever wrote them. `Phase12Api`
+  (`src/Phase12Services.gs`) adds `getNumberAssignmentConfig`/`setNumberAssignmentConfig`
+  (upsert) and `listAssignmentParticipants`/`addAssignmentParticipant`/
+  `updateAssignmentParticipant`, gated on `NUMBERS_ADMIN` (the same permission Phase 3's
+  number CRUD already uses).
+- **Lead Stages / Quick Replies / Templates** — thin UI over Phase 8/11/10's existing
+  service layers. Template authoring in the admin panel closes the gap Phase 10 left
+  open ("no template authoring UI... better suited to Phase 12's Admin Panel").
+
+Row-level edits throughout Admin.html use sequential `prompt()`/`confirm()` calls
+rather than inline edit forms, matching the project's established minimal-UI style
+(already used for snooze duration, media type/URL/caption) rather than building a
+heavier modal/dialog system for a low-traffic admin surface.
+
 ## Deliberately not yet in the UI
 
-No round-robin assignment UI (Phase 7's engine runs automatically on ingestion;
-manual reassignment exists at the API level but the UI control is
-deferred to Phase 12, which needs a properly role-scoped user-listing endpoint anyway).
-No template authoring UI (Phase 10 — see above).
+No template-usage analytics or dashboard trends (Phase 14). No notifications/search
+(Phase 13). No backup/export UI (Phase 15).
 
 ## Testing note
 

@@ -5,6 +5,7 @@ function listConversations(numberId) { return phase5Api_().listConversations(num
 function getConversationDetail(conversationId) { return phase5Api_().getConversationDetail(conversationId); }
 
 function doGet(e) {
+  if (e && e.parameter && e.parameter.page === 'admin') return doGetAdmin();
   return HtmlService.createTemplateFromFile('frontend/Index').evaluate()
     .setTitle('WhatsApp Panel')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');

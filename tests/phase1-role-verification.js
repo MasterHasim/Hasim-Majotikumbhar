@@ -33,6 +33,7 @@ const teamA = api().createTeam({ name: 'Team A', ownerUserId: managerA.id });
 const teamB = api().createTeam({ name: 'Team B', ownerUserId: managerB.id });
 [supervisor, agentA, agentB].forEach(user => api().addTeamMember({ teamId: teamA.id, userId: user.id, numberIds: ['number-a'] }));
 api().addTeamMember({ teamId: teamB.id, userId: managerB.id, numberIds: ['number-b'] });
+assert.strictEqual(api().listTeamMembers(teamA.id).length, 3);
 [supervisor, managerA, managerB, agentA, agentB, viewer].forEach(user => api().grantNumberAccess({ userId: user.id, numberId: user === managerB ? 'number-b' : 'number-a' }));
 
 // ADMIN global operations.

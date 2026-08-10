@@ -87,6 +87,10 @@ class Phase1Api {
       status: input.status || Phase1Constants.ACTIVE, numberIds: Phase1Validation.stringArray(input.numberIds || [], 'numberIds'), createdAt: now, updatedAt: now };
     this.repository_.create('teamMembers', record); this.audit_.write(actor.id, 'teamMember.created', 'teamMember', record.id, {}); return record;
   }
+  listTeamMembers(teamId) {
+    this.access_.requireTeamOperation(Phase1Permissions.TEAMS_CONTROL_OWN, teamId);
+    return this.repository_.list('teamMembers').filter(function (member) { return member.teamId === teamId; });
+  }
   updateTeamMember(id, patch) { var member = this.repository_.get('teamMembers', id); if (!member) throw new Phase1Error('NOT_FOUND', 'Team member was not found.'); var actor = this.access_.requireTeamOperation(Phase1Permissions.TEAMS_CONTROL_OWN, member.teamId), safePatch = this.validatePatch_('teamMembers', patch), record = this.repository_.update('teamMembers', id, safePatch); this.audit_.write(actor.id, 'teamMember.updated', 'teamMember', id, {}); return record; }
   grantNumberAccess(input) {
     var actor = this.access_.require(Phase1Permissions.NUMBERS_ADMIN), now = Phase1Ids.now(), numberId = Phase1Validation.requiredString(input.numberId, 'numberId');
@@ -115,6 +119,12 @@ class Phase1Api {
   setAssignmentEligibility(input) { var actor = this.access_.currentUser(); if (this.access_.hasRole(actor, Phase1Roles.ADMIN)) this.access_.require(Phase1Permissions.ELIGIBILITY_MANAGE_ALL); else this.access_.requireTeamOperation(Phase1Permissions.ELIGIBILITY_MANAGE_TEAM, input.teamId); var record = { id: input.userId + ':' + input.numberId, userId: Phase1Validation.requiredString(input.userId, 'userId'), numberId: Phase1Validation.requiredString(input.numberId, 'numberId'), teamId: Phase1Validation.requiredString(input.teamId, 'teamId'), eligible: input.eligible === true, updatedAt: Phase1Ids.now() }; this.repository_.replace('assignmentEligibility', record.id, record); this.audit_.write(actor.id, 'assignmentEligibility.set', 'assignmentEligibility', record.id, { eligible: record.eligible }); return record; }
   getAssignmentEligibility(userId, numberId) { var actor = this.access_.currentUser(); if (actor.id !== userId && !this.access_.hasRole(actor, Phase1Roles.ADMIN)) throw new Phase1Error('FORBIDDEN', 'Eligibility may only be viewed for the signed-in user.'); return this.eligibility_.evaluate(userId, numberId); }
   listAuditLog() { this.access_.require(Phase1Permissions.AUDIT_READ); return this.repository_.list('auditLog').sort(function (a, b) { return b.occurredAt.localeCompare(a.occurredAt); }); }
+  /** The signed-in user's own identity + role keys — used by the UI to decide what to show (e.g. the Admin Panel link), never as a server-side authorization decision itself. */
+  whoAmI() {
+    var actor = this.access_.currentUser();
+    var roleKeys = this.access_.rolesFor(actor).map(function (role) { return role.key; });
+    return { id: actor.id, email: actor.email, displayName: actor.displayName, roleKeys: roleKeys };
+  }
   updateEntity_(collection, id, patch, permission, action) {
     var actor = this.access_.require(permission); if (!patch || typeof patch !== 'object') throw new Phase1Error('VALIDATION_ERROR', 'patch is required.');
     var prior = this.repository_.get(collection, id); if (!prior) throw new Phase1Error('NOT_FOUND', collection + ' record was not found.');

@@ -170,3 +170,15 @@ is modeled on the WhatsApp Cloud API's inbound-media shape (`content.<type>.link
 `.url`) since no real inbound media webhook has ever been observed (only inbound text,
 confirmed 2026-08-10) — flagged clearly in code, to be corrected once a real media
 message arrives, same live-verify-and-fix pattern used throughout this project.
+
+# Phase 12 data contracts
+
+No new entities. `Number_Assignment_Config`/`Number_Assignment_Users` (Phase 2,
+defined but only ever written by Phase 7's engine or directly by tests until now) get
+their first admin-facing CRUD via `Phase12Api` (`src/Phase12Services.gs`) — gated on
+`NUMBERS_ADMIN`, the same permission Phase 3's `WhatsApp_Numbers` CRUD already uses.
+`setNumberAssignmentConfig` is an upsert keyed by `numberId` (create-if-missing,
+patch-if-present) rather than requiring the caller to know whether a config row already
+exists. `Users`/`Teams`/`Team_Members` (Phase 1) gained one new read endpoint,
+`listTeamMembers(teamId)`, that the Admin Panel's Teams section needed and nothing
+before it had exposed.

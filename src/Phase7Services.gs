@@ -58,6 +58,28 @@ class Phase7Api {
     return this.conversations_.get(conversationId);
   }
 
+  /**
+   * Phase 12: the properly role-scoped user list a "Reassign…" control needs, deferred
+   * from Phase 7 (see memory/DECISIONS.md) because Phase1Api.listUsers is ADMIN-only.
+   * ADMIN gets every active user; SUPERVISOR/SITE_MANAGER get active members of the
+   * team that covers numberId (same team-scope resolution requireConversationOperation
+   * uses); anyone else is denied.
+   */
+  listAssignableUsers(numberId) {
+    var actor = this.access_.currentUser();
+    if (this.access_.hasRole(actor, Phase1Roles.ADMIN)) {
+      return this.repository_.list('users').filter(function (user) { return user.status === Phase1Constants.ACTIVE; });
+    }
+    var teamId = this.access_.resolveTeamIdForNumber(numberId);
+    if (!teamId) this.access_.denied_(actor, 'number', numberId, 'NO_TEAM_SCOPE');
+    this.access_.requireTeamOperation(Phase1Permissions.CONVERSATIONS_REASSIGN_TEAM, teamId);
+    var repository = this.repository_;
+    var memberUserIds = repository.list('teamMembers').filter(function (member) {
+      return member.teamId === teamId && member.status === Phase1Constants.ACTIVE && (member.numberIds.length === 0 || member.numberIds.indexOf(numberId) !== -1);
+    }).map(function (member) { return member.userId; });
+    return memberUserIds.map(function (userId) { return repository.get('users', userId); }).filter(function (user) { return user && user.status === Phase1Constants.ACTIVE; });
+  }
+
   listAssignmentHistory(conversationId) {
     var conversation = this.conversations_.get(conversationId);
     if (!conversation) throw new Phase1Error('NOT_FOUND', 'Conversation was not found.');
