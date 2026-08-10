@@ -22,8 +22,8 @@
 | 7 | Assignment & Round-Robin Engine | ✅ Code done, Node-tested | Auto-assigns new leads on ingestion; no live send involved, so no user-dependent verification needed here |
 | 8 | CRM-lite: Customers, Stages, Remarks | ✅ Code done, Node-tested | Stage seed needs a one-time live run (see task list) |
 | 9 | Reminders, Snooze & Follow-up | ✅ Code done, Node-tested | |
-| 10 | WhatsApp Templates | ⬜ In progress (autonomous session) | |
-| 11 | Quick Replies & Media | ⬜ Not started yet | |
+| 10 | WhatsApp Templates | 🟡 Code done, Node-tested — live submit/send pending you | `createTemplate`/`sendTemplate` real-world side effects, deliberately not invoked live |
+| 11 | Quick Replies & Media | ⬜ In progress (autonomous session) | |
 | 12 | Admin Panel & Configuration | ⬜ Not started yet | |
 | 13 | Notifications, Search & Productivity | ⬜ Not started yet | |
 | 14 | Dashboard & Analytics | ⬜ Not started yet | |
@@ -37,6 +37,7 @@
 
 ## Recently shipped (brief — see `memory/CHANGELOG.md` for full detail)
 
+- **Phase 10**: Template draft → admin review → submit → sync workflow (`Phase10Api`), sending an approved template with variable substitution (`Phase6Api.sendTemplateReply`). `syncTemplatesFromProvider` reuses the already-live-confirmed `getTemplates()` call, but `submitTemplateForReview` (creates a real template on your WABA) and `sendTemplateReply` (a real send) are both held for you, same as Phase 6's plain-text sending. Template dropdown added to the compose row.
 - **Phase 9**: Reminders (create/complete/cancel, personal "my reminders" list) and snooze (hides a conversation from Phase 5's active list until it auto-expires — no scheduled job, just a timestamp check). Reminders + snooze UI added. Nothing here needed live/costly verification.
 - **Phase 8**: Lead stage definitions (admin-only, default 7-stage list ready to seed), per-customer current stage (its own new tab — `Customers` already has real data and `SheetRepository` can't safely migrate an existing schema, see `memory/DECISIONS.md`), internal remarks. Stage dropdown + remarks panel added to the UI. Nothing here needed live/costly verification.
 - **Phase 7**: `Phase7Api` round-robin engine — eligibility (active + numberAccess + assignmentEligibility + availability, all independent), rotation with self-healing pointer, returning-customer inheritance, fallback/unassigned queue, working hours, full assignment history. Wired into Phase 4's ingestion (new leads now auto-assign for real). Manual `reassignConversation` works at the API level; no UI control yet (deferred to Phase 12, needs a properly-scoped user list endpoint). Nothing here needed live/costly verification — it's pure internal logic, fully covered by `tests/phase7-assignment-verification.js`.
@@ -60,6 +61,7 @@
 1. **Live-verify Phase 6 sending** — reply to a real conversation in the UI, confirm the message actually arrives, check Exotel's real response shape with me so I can fix `extractOutboundProviderMessageId_` if the field name guess is wrong (same pattern as every other Exotel field-name fix this project has needed).
 2. **Round-robin won't actually assign anyone yet on your real numbers** — the engine (Phase 7) is done and tested, but no `Number_Assignment_Config`/`Number_Assignment_Users` records exist for your real 10 numbers (nobody's configured which agents participate). Until that's set up — either manually or once Phase 12's Admin Panel exists — real new leads will just land in the unassigned queue. Not urgent, just worth knowing.
 3. **Seed the default lead stages once** — run `seedDefaultLeadStages()` (e.g. via the Apps Script editor, same one-time-wrapper pattern used for Phase 1/3's live setup) before the stage dropdown in the UI will show anything.
-4. Fill in `Spreewalk - Raipur` / `ECHT Advisory` provider fields (optional).
-5. Remove the ngrok callback URL from Exotel (optional).
-6. *(This list will grow as I continue — check the bottom of this file for the latest.)*
+4. **Templates**: if you want to actually create/submit a real WhatsApp template, use `createDraftTemplate`/`updateDraftTemplate` then `submitTemplateForReview` (creates it on your real WABA, pending Meta review) — or run `syncTemplatesFromProvider(wabaId)` first to pull in templates that already exist on your account (e.g. the `otp_veri_code`/`otp` ones seen live in Phase 3) rather than recreating them.
+5. Fill in `Spreewalk - Raipur` / `ECHT Advisory` provider fields (optional).
+6. Remove the ngrok callback URL from Exotel (optional).
+7. *(This list will grow as I continue — check the bottom of this file for the latest.)*

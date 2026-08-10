@@ -68,11 +68,21 @@ of hours and calls `snoozeConversation`, which also reloads the conversation lis
 the now-hidden conversation disappears immediately. A yellow banner
 (`#snoozeBanner`) shows "Snoozed until …" when applicable.
 
+## Phase 10: send a template
+
+A `<select>` (`#templateSelect`) in the compose row lists `APPROVED` templates only
+(`listTemplates()`, filtered client-side). Selecting one and clicking "Send Template"
+prompts once per `{{n}}` placeholder found in the template's `BODY` component, then
+calls `sendTemplateReply`. No template-authoring UI (draft/submit/sync) — that's an
+admin-configuration workflow better suited to Phase 12's Admin Panel; `Phase10Api`'s
+draft/submit/sync methods exist and are tested at the API level.
+
 ## Deliberately not yet in the UI
 
 No round-robin assignment UI (Phase 7's engine runs automatically on ingestion;
 manual reassignment exists at the API level but the UI control is
 deferred to Phase 12, which needs a properly role-scoped user-listing endpoint anyway).
+No template authoring UI (Phase 10 — see above).
 
 ## Testing note
 

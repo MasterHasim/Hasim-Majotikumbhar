@@ -31,6 +31,7 @@
     .compose button { padding: 0 18px; border: none; border-radius: 4px; background: #1a73e8; color: #fff; cursor: pointer; }
     .compose button:disabled { background: #9aa0a6; cursor: default; }
     .compose-error { color: #d93025; font-size: 12px; padding: 0 16px 8px; }
+    .compose select { max-width: 140px; padding: 0 6px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; }
     .stage-select { margin-top: 6px; padding: 4px 6px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; }
     .remarks { background: #fff8e1; border-bottom: 1px solid #e0e0e0; padding: 10px 16px; }
     .remarks-title { font-weight: 600; font-size: 12px; color: #5f6368; margin-bottom: 6px; }
@@ -155,6 +156,8 @@
         '<div class="compose">' +
         '<textarea id="composeText" rows="2" placeholder="Type a reply…"></textarea>' +
         '<button id="composeSend" onclick="sendCurrentReply()">Send</button>' +
+        '<select id="templateSelect"><option value="">Template…</option></select>' +
+        '<button id="templateSend" onclick="sendCurrentTemplate()">Send Template</button>' +
         '</div>';
 
       var messagesList = document.getElementById('messagesList');
@@ -164,6 +167,40 @@
       loadRemarks();
       loadReminders();
       loadSnoozeStatus();
+      loadTemplateSelect();
+    }
+
+    function loadTemplateSelect() {
+      google.script.run.withSuccessHandler(function (templates) {
+        var select = document.getElementById('templateSelect');
+        if (!select) return;
+        var approved = templates.filter(function (t) { return t.status === 'APPROVED'; });
+        select.innerHTML = '<option value="">Template… (' + approved.length + ' approved)</option>' +
+          approved.map(function (t) { return '<option value="' + escapeHtml(t.id) + '">' + escapeHtml(t.name) + '</option>'; }).join('');
+        select.dataset.templates = JSON.stringify(approved);
+      }).withFailureHandler(function () {}).listTemplates();
+    }
+
+    function sendCurrentTemplate() {
+      var select = document.getElementById('templateSelect');
+      if (!select.value) return;
+      var templates = JSON.parse(select.dataset.templates || '[]');
+      var template = templates.filter(function (t) { return t.id === select.value; })[0];
+      var body = template && template.components && template.components.filter(function (c) { return c.type === 'BODY'; })[0];
+      var placeholders = body ? (body.text.match(/\{\{\d+\}\}/g) || []) : [];
+      var variables = {};
+      for (var i = 0; i < placeholders.length; i++) {
+        var index = placeholders[i].replace(/\D/g, '');
+        var value = prompt('Value for ' + placeholders[i] + ' in "' + template.name + '":');
+        if (value === null) return; // cancelled
+        variables[index] = value;
+      }
+      var button = document.getElementById('templateSend');
+      button.disabled = true;
+      google.script.run
+        .withSuccessHandler(function () { button.disabled = false; loadDetail(); loadConversations(); })
+        .withFailureHandler(function (error) { button.disabled = false; alert('Could not send template: ' + (error && error.message)); })
+        .sendTemplateReply(selectedConversationId, template.id, variables);
     }
 
     function loadSnoozeStatus() {

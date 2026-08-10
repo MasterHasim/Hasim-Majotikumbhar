@@ -133,3 +133,10 @@ createdAt`) — its own tab for the same reason as Phase 8's `Customer_Stage`
 (`isConversationSnoozed_`, `src/Phase9Domain.gs`) — once `snoozedUntil` is in the past
 the conversation is active again on the next read, no scheduled job needed. One record
 per conversation (`replace`-upserted).
+
+# Phase 10 data contracts
+
+No new entities — `WhatsApp_Templates` (Phase 2, unused until now) is now written via
+`createDraftTemplate`/`submitTemplateForReview`/`syncTemplatesFromProvider`, and read
+via `Phase6Api.sendTemplateReply`. See `docs/TEMPLATES.md` for the full workflow and
+what's still unverified live.

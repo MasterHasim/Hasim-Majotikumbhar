@@ -1,15 +1,15 @@
 /**
- * Phase 6 outbound: agent/admin replies to a conversation. Reuses
- * AccessControl.requireConversationOperation('reply', ...) — ADMIN globally, AGENT
- * only for conversations assigned to them (matches docs/REQUIREMENTS.md's permission
- * table; SUPERVISOR/SITE_MANAGER are not listed as reply-capable there).
+ * Phase 6 outbound: agent/admin replies to a conversation, as plain text or (Phase 10)
+ * an approved template. Reuses AccessControl.requireConversationOperation('reply', ...)
+ * — ADMIN globally, AGENT only for conversations assigned to them (matches
+ * docs/REQUIREMENTS.md's permission table; SUPERVISOR/SITE_MANAGER are not listed as
+ * reply-capable there).
  *
- * The "from" number passed to ExotelProvider.sendText is the E.164 phone number
- * (toE164_), not providerNumberId — Phase 4's live webhook testing found Exotel
- * identifies numbers by phone number, not the Meta "Phone Profile" ID captured in
- * Phase 3, and there is no reason to expect the send API to differ. UNVERIFIED
- * pending a live test (real cost/message — deliberately not run without the user
- * present, see memory/DECISIONS.md).
+ * The "from" number passed to ExotelProvider is the E.164 phone number (toE164_), not
+ * providerNumberId — Phase 4's live webhook testing found Exotel identifies numbers by
+ * phone number, not the Meta "Phone Profile" ID captured in Phase 3, and there is no
+ * reason to expect the send API to differ. UNVERIFIED pending a live test (real
+ * cost/message — deliberately not run without the user present, see memory/DECISIONS.md).
  */
 function toE164_(phoneNumber) {
   var raw = String(phoneNumber || '');
@@ -42,14 +42,33 @@ class Phase6Api {
     this.customers_ = new CustomerRepository();
     this.conversations_ = new ConversationRepository();
     this.messages_ = new MessageRepository();
+    this.templates_ = new TemplateRepository();
   }
 
   sendReply(conversationId, text) {
+    text = Phase1Validation.requiredString(text, 'text');
+    return this.sendOutbound_(conversationId, 'text', text, function (provider, number, customer) {
+      return provider.sendText(toE164_(number.phoneNumber), toE164_(customer.phone), text);
+    });
+  }
+
+  /** Phase 10: send an approved template with variables substituted into its components. UNVERIFIED — sendTemplate has never been called live, same as sendText. */
+  sendTemplateReply(conversationId, templateId, variables) {
+    var template = this.templates_.get(templateId);
+    if (!template) throw new Phase1Error('NOT_FOUND', 'Template was not found.');
+    if (template.status !== 'APPROVED') throw new Phase1Error('VALIDATION_ERROR', 'Only an APPROVED template can be sent.');
+    var components = substituteTemplateVariables_(template.components, variables || {});
+    var displayText = '[Template: ' + template.name + ']';
+    return this.sendOutbound_(conversationId, 'template', displayText, function (provider, number, customer) {
+      return provider.sendTemplate(toE164_(number.phoneNumber), toE164_(customer.phone), template.name, template.language, components);
+    });
+  }
+
+  sendOutbound_(conversationId, messageType, displayText, sendFn) {
     var conversation = this.conversations_.get(conversationId);
     if (!conversation) throw new Phase1Error('NOT_FOUND', 'Conversation was not found.');
     var teamId = this.access_.resolveTeamIdForNumber(conversation.numberId);
     var actor = this.access_.requireConversationOperation('reply', { numberId: conversation.numberId, teamId: teamId, assignedUserId: conversation.assignedUserId });
-    text = Phase1Validation.requiredString(text, 'text');
 
     var number = this.numbers_.get(conversation.numberId);
     var customer = this.customers_.get(conversation.customerId);
@@ -57,7 +76,7 @@ class Phase6Api {
 
     var providerMessageId = '', status = 'SENT';
     try {
-      var response = new ExotelProvider().sendText(toE164_(number.phoneNumber), toE164_(customer.phone), text);
+      var response = sendFn(new ExotelProvider(), number, customer);
       providerMessageId = extractOutboundProviderMessageId_(response) || '';
     } catch (sendError) {
       status = 'FAILED';
@@ -66,11 +85,24 @@ class Phase6Api {
     var now = Phase1Ids.now();
     var message = {
       id: Phase1Ids.create('message'), conversationId: conversationId, numberId: conversation.numberId, senderUserId: actor.id,
-      direction: 'OUTBOUND', messageType: 'text', messageText: text, providerMessageId: providerMessageId, status: status, timestamp: now
+      direction: 'OUTBOUND', messageType: messageType, messageText: displayText, providerMessageId: providerMessageId, status: status, timestamp: now
     };
     this.messages_.create(message);
     if (status === 'SENT') this.conversations_.update(conversationId, { needsResponse: false, lastMessageAt: now });
     this.audit_.write(actor.id, status === 'SENT' ? 'message.sent' : 'message.sendFailed', 'message', message.id, { conversationId: conversationId });
     return message;
   }
+}
+
+function substituteTemplateVariables_(components, variables) {
+  // UNVERIFIED — best-effort placeholder substitution ({{1}}, {{2}}, ... by position)
+  // matching Meta/WhatsApp template component conventions; not live-tested.
+  return (components || []).map(function (component) {
+    if (!component || component.type !== 'BODY' || typeof component.text !== 'string') return component;
+    var text = component.text.replace(/\{\{(\d+)\}\}/g, function (match, index) {
+      var value = variables[index];
+      return value !== undefined ? String(value) : match;
+    });
+    return Object.assign({}, component, { text: text });
+  });
 }
