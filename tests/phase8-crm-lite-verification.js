@@ -89,9 +89,16 @@ assert.strictEqual(phase8().getCustomerStage(customer.id).stageId, won.id);
 // AGENT cannot set the stage of a customer with no related conversation.
 forbidden(() => phase8().setCustomerStage(otherCustomer.id, won.id));
 
+// Regression: getCustomerStage used to have NO authorization check at all (any signed-in
+// account, even one with no Users record, could read any customer's stage). AGENT with
+// no relationship to otherCustomer must now be denied, same as the write path above.
+forbidden(() => phase8().getCustomerStage(otherCustomer.id));
+
 // ADMIN can set any customer's stage regardless of relationship.
 email = 'admin@example.com';
 assert.doesNotThrow(() => phase8().setCustomerStage(otherCustomer.id, won.id));
+// ADMIN can also read any customer's stage regardless of relationship.
+assert.strictEqual(phase8().getCustomerStage(otherCustomer.id).stageId, won.id);
 
 // Remarks: AGENT (assigned) can add; SUPERVISOR (view-only permission) cannot add but can list; VIEWER can neither add nor list.
 email = 'agent@example.com';

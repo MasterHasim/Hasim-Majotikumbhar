@@ -85,6 +85,10 @@ class Phase8Api {
   }
 
   getCustomerStage(customerId) {
+    var actor = this.access_.currentUser();
+    if (!this.access_.hasRole(actor, Phase1Roles.ADMIN) && !this.canSeeCustomer_(actor, customerId)) {
+      this.access_.denied_(actor, 'customer', customerId, 'NO_RELATED_CONVERSATION');
+    }
     return this.customerStages_.get(customerId);
   }
 
