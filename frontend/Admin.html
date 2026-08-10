@@ -46,6 +46,7 @@
       <a data-section="quickReplies" onclick="showSection('quickReplies')">Quick Replies</a>
       <a data-section="templates" onclick="showSection('templates')">Templates</a>
       <a data-section="auditLog" onclick="showSection('auditLog')">Audit Log</a>
+      <a data-section="backup" onclick="showSection('backup')">Backup</a>
     </div>
     <div class="content">
       <div id="accessError" class="error"></div>
@@ -188,6 +189,24 @@
         <h1>Audit Log</h1>
         <table id="auditLogTable"><thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Target</th></tr></thead><tbody></tbody></table>
       </div>
+
+      <div class="section" id="section-backup">
+        <h1>Backup</h1>
+        <div class="card">
+          <h2>Manual backup</h2>
+          <div class="form-row"><button onclick="submitBackupNow()">Back up now</button></div>
+          <div id="backupResult" class="empty"></div>
+        </div>
+        <div class="card">
+          <h2>Daily automatic backup</h2>
+          <div id="backupTriggerStatus" class="empty">Loading…</div>
+          <div class="form-row">
+            <button onclick="submitInstallTrigger()">Enable daily backups (2am IST)</button>
+            <button class="action-btn danger" onclick="submitRemoveTrigger()">Disable</button>
+          </div>
+          <div class="error" id="backupError"></div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -216,6 +235,7 @@
       if (name === 'quickReplies') loadQuickReplies();
       if (name === 'templates') loadTemplates();
       if (name === 'auditLog') loadAuditLog();
+      if (name === 'backup') loadBackupStatus();
     }
 
     // ---- Dashboard ----
@@ -561,6 +581,25 @@
           return '<tr><td>' + escapeHtml(e.occurredAt) + '</td><td>' + escapeHtml(e.actorUserId || 'system') + '</td><td>' + escapeHtml(e.action) + '</td><td>' + escapeHtml(e.targetType) + ':' + escapeHtml(e.targetId) + '</td></tr>';
         }).join('') || '<tr><td colspan="4" class="empty">No audit entries</td></tr>';
       }).withFailureHandler(function (error) { setError('accessError', error); }).listAuditLog();
+    }
+
+    // ---- Backup ----
+    function loadBackupStatus() {
+      google.script.run.withSuccessHandler(function (status) {
+        document.getElementById('backupTriggerStatus').textContent = status.installed ? 'Daily backups are enabled (runs ~2am Asia/Kolkata).' : 'Daily backups are not enabled.';
+      }).withFailureHandler(function (error) { setError('backupError', error); }).getBackupTriggerStatus();
+    }
+    function submitBackupNow() {
+      document.getElementById('backupResult').textContent = 'Backing up…';
+      google.script.run.withSuccessHandler(function (result) {
+        document.getElementById('backupResult').innerHTML = 'Created: ' + escapeHtml(result.name) + ' — <a href="' + escapeHtml(result.url) + '" target="_blank">open</a>';
+      }).withFailureHandler(function (error) { document.getElementById('backupResult').textContent = ''; alert('Backup failed: ' + (error && error.message)); }).backupNow();
+    }
+    function submitInstallTrigger() {
+      google.script.run.withSuccessHandler(loadBackupStatus).withFailureHandler(function (error) { setError('backupError', error); }).installDailyBackupTrigger();
+    }
+    function submitRemoveTrigger() {
+      google.script.run.withSuccessHandler(loadBackupStatus).withFailureHandler(function (error) { setError('backupError', error); }).removeDailyBackupTrigger();
     }
 
     google.script.run.withSuccessHandler(function (me) {

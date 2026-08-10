@@ -165,11 +165,19 @@ conversion rate — all from `Phase14Api.getDashboardMetrics()`
 `Admin.html`) since reports are a read-only, occasional lookup, not a distinct workflow
 surface.
 
+## Phase 15: Backup section (Admin Panel)
+
+A new "Backup" nav section in `frontend/Admin.html` — a "Back up now" button
+(`backupNow()`, shows the created copy's name + a link to open it in Drive) and an
+enable/disable control for the daily automatic backup trigger
+(`installDailyBackupTrigger()`/`removeDailyBackupTrigger()`, with current status shown
+via `getBackupTriggerStatus()`).
+
 ## Deliberately not yet in the UI
 
-No backup/export UI (Phase 15). No push/email notifications (Phase 13's own scoping
-decision — see above). No conversation close/resolve workflow (no phase has added
-one yet — Phase 14's "resolved" metric is honestly reported as always 0 until it does).
+No push/email notifications (Phase 13's own scoping decision — see above). No
+conversation close/resolve workflow (no phase has added one yet — Phase 14's
+"resolved" metric is honestly reported as always 0 until it does).
 
 ## Testing note
 

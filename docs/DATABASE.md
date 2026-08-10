@@ -205,3 +205,40 @@ written as anything but `'OPEN'` by any phase — no close/resolve workflow exis
 `"[Template: name]"` marker rather than a `templateId` column, since `Messages` already
 has real live data and gaining a new column isn't safe (the same constraint documented
 since Phase 8).
+
+# Phase 15 data contracts
+
+No new entities. Audit coverage: the roadmap's minimum audited-event list is already
+satisfied by every prior phase's own `audit_.write(...)` calls —
+
+| Roadmap event | Actual audit action(s) | Where |
+| --- | --- | --- |
+| LOGIN | `authentication.accepted` | `src/Phase1AccessControl.gs` |
+| LOGOUT | *(none — see below)* | — |
+| SEND_MESSAGE | `message.sent` / `message.sendFailed` / `message.ingested` | Phase 6 / Phase 4 |
+| ASSIGN_CONVERSATION / REASSIGN_CONVERSATION | `conversation.assigned` (reason: `round_robin`/`returning_customer`/`fallback`/`manual`) | Phase 7 |
+| CHANGE_STAGE | `customer.stageChanged` | Phase 8 |
+| ADD_REMARK | `remark.added` | Phase 8 |
+| ADD_REMINDER / COMPLETE_REMINDER | `reminder.created` / `reminder.statusChanged` | Phase 9 |
+| CREATE_TEMPLATE / UPDATE_TEMPLATE / SYNC_TEMPLATES | `template.draftCreated`/`.draftUpdated`/`.submitted` / `templates.synced` | Phase 10 |
+| CREATE_USER | `user.created` | Phase 1 |
+| DISABLE_USER | `user.updated` (generic — `updateEntity_` doesn't special-case a status change) | Phase 1 |
+| ASSIGN_NUMBER / REMOVE_NUMBER | `numberAccess.granted` / `numberAccess.revoked` | Phase 1 |
+
+There is no LOGOUT event: authentication is Google's own session cookie, not an
+app-level session the code controls, so there is nothing to log a logout against.
+
+Secrets hygiene: verified clean this phase (grepped all source for hardcoded
+key/token/secret-shaped literals — found none; every credential reads from Script
+Properties; `.gitignore` already excludes `.clasp.json`/`.clasprc.json`/credential
+files).
+
+Backup: `Phase15Api.backupNow()` (`src/Phase15Services.gs`, `SETTINGS_MANAGE`) makes a
+full timestamped copy of the application spreadsheet into Drive.
+`installDailyBackupTrigger()`/`removeDailyBackupTrigger()` manage a time-driven Apps
+Script trigger (`runScheduledBackup`, 2am Asia/Kolkata) that calls the same backup logic
+directly — bypassing `AccessControl` entirely, since a trigger has no Google Workspace
+identity to authenticate (same reasoning as Phase 4's webhook ingestion; see
+`memory/DECISIONS.md`). Requires two new OAuth scopes added to `appsscript.json`
+(`drive.file`, `script.scriptapp`) — a real manifest change that will trigger a fresh
+consent screen the next time it runs.
