@@ -1,3 +1,14 @@
+// Strips password fields (added 2026-08-10 for email/password login, see
+// PasswordAuthServices.gs) before any user record reaches the client — listUsers()/
+// updateUser() otherwise return the raw repository record, hash and salt included.
+function sanitizeUserRecord_(user) {
+  if (!user) return user;
+  var clean = Object.assign({}, user);
+  delete clean.passwordHash;
+  delete clean.passwordSalt;
+  return clean;
+}
+
 class AuditLogService {
   // `repository` (a PropertiesRepository) is accepted for constructor-compatibility
   // with every existing call site but is no longer where entries are stored — see
@@ -79,7 +90,7 @@ class Phase1Api {
     this.audit_.write(actor.id, 'user.created', 'user', record.id, { email: record.email }); return record;
   }
   updateUser(id, patch) { return this.updateEntity_('users', id, patch, Phase1Permissions.USERS_MANAGE, 'user.updated'); }
-  listUsers() { this.access_.require(Phase1Permissions.USERS_MANAGE); return this.repository_.list('users'); }
+  listUsers() { this.access_.require(Phase1Permissions.USERS_MANAGE); return this.repository_.list('users').map(sanitizeUserRecord_); }
   listRoles() { this.access_.require(Phase1Permissions.USERS_MANAGE); return this.repository_.list('roles'); }
   createTeam(input) {
     var actor = this.access_.require(Phase1Permissions.TEAMS_MANAGE_ALL), now = Phase1Ids.now(), ownerUserId = Phase1Validation.requiredString(input.ownerUserId, 'ownerUserId'), owner = this.repository_.get('users', ownerUserId);
@@ -147,7 +158,8 @@ class Phase1Api {
       var duplicateRole = this.repository_.findOne('roles', function (role) { return role.key === safePatch.key; });
       if (duplicateRole) throw new Phase1Error('CONFLICT', 'Role key already exists.');
     }
-    var record = this.repository_.update(collection, id, safePatch); this.audit_.write(actor.id, action, collection, id, {}); return record;
+    var record = this.repository_.update(collection, id, safePatch); this.audit_.write(actor.id, action, collection, id, {});
+    return collection === 'users' ? sanitizeUserRecord_(record) : record;
   }
   assertRoleIds_(roleIds) {
     var repository = this.repository_; roleIds.forEach(function (roleId) { if (!repository.get('roles', roleId)) throw new Phase1Error('NOT_FOUND', 'Role was not found: ' + roleId); });

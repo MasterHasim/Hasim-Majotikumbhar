@@ -194,9 +194,52 @@
     .settings-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
     .settings-pane { display: none; }
     .settings-pane.active { display: block; }
+
+    /* ---- Login / password reset (2026-08-10, alongside Google Sign-In) ---- */
+    #loginScreen, #resetPasswordScreen { max-width: 420px; margin: 80px auto; padding: 0 20px; }
+    .login-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; padding: 24px; }
+    .login-card input { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; margin-bottom: 8px; box-sizing: border-box; }
   </style>
 </head>
 <body>
+  <div id="loginScreen" style="display:none;">
+    <div class="login-card">
+      <div class="landing-header">
+        <span class="logo">💬</span>
+        <div>
+          <h1>Sign in</h1>
+          <div class="subtitle">Signed into your Google Workspace account? Reload the page. Otherwise, sign in below.</div>
+        </div>
+      </div>
+      <div class="form-error" id="loginError"></div>
+      <input type="email" id="loginEmail" placeholder="Email" autocomplete="username">
+      <input type="password" id="loginPassword" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')submitLogin();">
+      <div class="form-row">
+        <button class="btn primary" onclick="submitLogin()">Sign in</button>
+        <button class="btn" onclick="location.reload()">Retry Google Sign-In</button>
+      </div>
+      <div style="margin-top:8px;"><a href="#" onclick="toggleForgotPassword(); return false;" style="font-size:12px;">Forgot password?</a></div>
+      <div id="forgotPasswordBox" style="display:none; margin-top:14px; border-top:1px solid var(--border); padding-top:14px;">
+        <input type="email" id="forgotEmail" placeholder="Your email" autocomplete="username">
+        <div class="form-row"><button class="btn" onclick="submitForgotPassword()">Send reset link</button></div>
+        <div id="forgotPasswordMsg" style="font-size:12px; color:var(--text-secondary);"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="resetPasswordScreen" style="display:none;">
+    <div class="login-card">
+      <div class="landing-header">
+        <span class="logo">💬</span>
+        <div><h1>Set your password</h1><div class="subtitle">Choose a password to sign in with from now on.</div></div>
+      </div>
+      <div class="form-error" id="resetError"></div>
+      <input type="password" id="resetNewPassword" placeholder="New password (min 8 characters)" autocomplete="new-password">
+      <input type="password" id="resetNewPasswordConfirm" placeholder="Confirm password" autocomplete="new-password" onkeydown="if(event.key==='Enter')submitResetPassword();">
+      <div class="form-row"><button class="btn primary" onclick="submitResetPassword()">Set password</button></div>
+    </div>
+  </div>
+
   <div id="landingScreen">
     <div class="landing-header">
       <span class="logo">💬</span>
@@ -219,10 +262,11 @@
       <div id="navList"></div>
       <div class="sidebar-footer">
         <div class="avatar-circle" id="sidebarAvatar">?</div>
-        <div>
+        <div style="flex:1;">
           <div id="sidebarName" style="font-weight:700;">Loading…</div>
           <div id="sidebarRole" style="color:#7fa895; font-size:11px;"></div>
         </div>
+        <a href="#" onclick="doLogout(); return false;" title="Sign out" style="color:#7fa895; font-size:16px;">⎋</a>
       </div>
     </div>
 
@@ -453,6 +497,37 @@
     var selectedNumberId = null;
     var cachedLandingNumbers = null;
     var currentConversations = [];
+
+    // ============================================================================
+    // Email/password session (2026-08-10) — alongside Google Sign-In, not instead
+    // of it. Apps Script has no ambient session/cookie mechanism, so a password-
+    // authenticated client must pass its token explicitly on every server call.
+    // scriptRun() is a drop-in replacement for every `google.script.run` call site:
+    // with no token set (the normal case for Google-signed-in users) it IS
+    // google.script.run, completely unchanged; once sessionToken is set, it
+    // transparently routes every call through callApi(token, functionName, args)
+    // instead (see PasswordAuthEndpoints.gs) so the rest of this file never needs
+    // to know or care which auth path is active.
+    // ============================================================================
+    var sessionToken = localStorage.getItem('wapSessionToken') || null;
+    function scriptRun() {
+      if (!sessionToken) return google.script.run;
+      var success = null, failure = null;
+      var proxy = new Proxy({}, {
+        get: function (target, prop) {
+          if (prop === 'withSuccessHandler') return function (fn) { success = fn; return proxy; };
+          if (prop === 'withFailureHandler') return function (fn) { failure = fn; return proxy; };
+          return function () {
+            var args = Array.prototype.slice.call(arguments);
+            var call = google.script.run;
+            if (success) call = call.withSuccessHandler(success);
+            if (failure) call = call.withFailureHandler(failure);
+            call.callApi(sessionToken, prop, args);
+          };
+        }
+      });
+      return proxy;
+    }
     var cachedStages = null, cachedTemplates = null, cachedQuickReplies = null;
     var cachedUsers = [], cachedRoles = [], cachedTeams = [];
     var selectedTeamId = null;
@@ -477,7 +552,7 @@
     // represent entirely different brands/business units.
     // ============================================================================
     function loadLandingNumbers() {
-      google.script.run.withSuccessHandler(renderLandingNumberCards).withFailureHandler(function (error) {
+      scriptRun().withSuccessHandler(renderLandingNumberCards).withFailureHandler(function (error) {
         document.getElementById('numberCards').innerHTML = '<div class="empty">Error: ' + escapeHtml(error && error.message) + '</div>';
       }).listMyNumbers();
     }
@@ -490,7 +565,7 @@
           '<div class="name">' + escapeHtml(number.displayName) + '<span class="badge" id="needsResponseBadge-' + escapeHtml(number.id) + '" style="display:none;"></span></div>' +
           '<div class="phone">' + escapeHtml(number.phoneNumber) + '</div></div>';
       }).join('');
-      google.script.run.withSuccessHandler(function (counts) {
+      scriptRun().withSuccessHandler(function (counts) {
         Object.keys(counts).forEach(function (numberId) {
           var badge = document.getElementById('needsResponseBadge-' + numberId);
           if (!badge) return;
@@ -588,11 +663,11 @@
     // ============================================================================
     function changeAvailability() {
       var status = document.getElementById('availabilitySelect').value;
-      google.script.run.withFailureHandler(function (error) { alert('Could not update availability: ' + (error && error.message)); }).setAvailability(status);
+      scriptRun().withFailureHandler(function (error) { alert('Could not update availability: ' + (error && error.message)); }).setAvailability(status);
     }
     function loadAvailability() {
       if (!currentUser) return;
-      google.script.run.withSuccessHandler(function (record) {
+      scriptRun().withSuccessHandler(function (record) {
         if (record) document.getElementById('availabilitySelect').value = record.status;
       }).withFailureHandler(function () {}).getAvailability(currentUser.id);
     }
@@ -601,7 +676,7 @@
       var panel = document.getElementById('notifPanel');
       if (panel.classList.contains('open')) { closeNotifications(); return; }
       panel.classList.add('open');
-      google.script.run.withSuccessHandler(function (conversations) {
+      scriptRun().withSuccessHandler(function (conversations) {
         var list = document.getElementById('notifList');
         list.innerHTML = conversations.map(function (c) {
           return '<div class="dp-item" onclick="closeNotifications(); showPage(\'inbox\'); openConversationFromAnywhere(\'' + c.id + '\');">' +
@@ -613,7 +688,7 @@
     function closeNotifications() { document.getElementById('notifPanel').classList.remove('open'); }
 
     function refreshBadges() {
-      google.script.run.withSuccessHandler(function (metrics) {
+      scriptRun().withSuccessHandler(function (metrics) {
         navBadges.needsResponse = metrics.conversations.needsResponse;
         navBadges.unassigned = metrics.conversations.unassigned;
         document.getElementById('notifDot').style.display = metrics.conversations.needsResponse > 0 ? 'block' : 'none';
@@ -676,7 +751,7 @@
       var filters = Object.assign({ numberId: selectedNumberId }, baseFilters);
       var query = root.querySelector('.js-search').value.trim();
       if (query) filters.query = query;
-      google.script.run.withSuccessHandler(function (conversations) {
+      scriptRun().withSuccessHandler(function (conversations) {
         currentConversations = conversations;
         listEl.innerHTML = conversations.map(convItemHtml).join('') || '<div class="empty">No conversations</div>';
       }).withFailureHandler(function (error) { listEl.innerHTML = '<div class="empty">Error: ' + escapeHtml(error && error.message) + '</div>'; })
@@ -710,7 +785,7 @@
       var root = window.__splitEl;
       if (!root) return;
       root.querySelector('.js-chat').innerHTML = '<div class="empty">Loading…</div>';
-      google.script.run.withSuccessHandler(function (workspace) { renderWorkspace(root, workspace); })
+      scriptRun().withSuccessHandler(function (workspace) { renderWorkspace(root, workspace); })
         .withFailureHandler(function (error) { root.querySelector('.js-chat').innerHTML = '<div class="empty">Error: ' + escapeHtml(error && error.message) + '</div>'; })
         .getConversationWorkspace(selectedConversationId);
     }
@@ -824,7 +899,7 @@
     }
     function submitAssign(userId) {
       if (!userId) return;
-      google.script.run.withSuccessHandler(function () { loadWorkspace(); refreshActiveList(); })
+      scriptRun().withSuccessHandler(function () { loadWorkspace(); refreshActiveList(); })
         .withFailureHandler(function (error) { alert('Could not assign: ' + (error && error.message)); })
         .reassignConversation(selectedConversationId, userId);
     }
@@ -837,7 +912,7 @@
 
     function resolveCurrentConversation() {
       if (!confirm('Mark this conversation as resolved?')) return;
-      google.script.run.withSuccessHandler(function () { loadWorkspace(); refreshActiveList(); })
+      scriptRun().withSuccessHandler(function () { loadWorkspace(); refreshActiveList(); })
         .withFailureHandler(function (error) { alert('Could not resolve: ' + (error && error.message)); })
         .resolveConversation(selectedConversationId);
     }
@@ -850,23 +925,23 @@
       else { banner.innerHTML = ''; btn.textContent = 'Snooze…'; }
     }
     function toggleSnooze() {
-      google.script.run.withSuccessHandler(function (status) {
+      scriptRun().withSuccessHandler(function (status) {
         if (status && status.snoozed) {
-          google.script.run.withSuccessHandler(function () { loadWorkspace(); refreshActiveList(); })
+          scriptRun().withSuccessHandler(function () { loadWorkspace(); refreshActiveList(); })
             .withFailureHandler(function (error) { alert('Could not un-snooze: ' + (error && error.message)); }).unsnoozeConversation(selectedConversationId);
           return;
         }
         var hours = prompt('Snooze this conversation for how many hours?', '4');
         if (!hours) return;
         var until = new Date(Date.now() + Number(hours) * 3600000).toISOString();
-        google.script.run.withSuccessHandler(function () { loadWorkspace(); refreshActiveList(); })
+        scriptRun().withSuccessHandler(function () { loadWorkspace(); refreshActiveList(); })
           .withFailureHandler(function (error) { alert('Could not snooze: ' + (error && error.message)); }).snoozeConversation(selectedConversationId, until);
       }).withFailureHandler(function () {}).getSnoozeStatus(selectedConversationId);
     }
 
     function loadQuickReplySelect() {
       if (cachedQuickReplies) { populateQuickReplySelect(); return; }
-      google.script.run.withSuccessHandler(function (quickReplies) { cachedQuickReplies = quickReplies; populateQuickReplySelect(); }).withFailureHandler(function () {}).listQuickReplies();
+      scriptRun().withSuccessHandler(function (quickReplies) { cachedQuickReplies = quickReplies; populateQuickReplySelect(); }).withFailureHandler(function () {}).listQuickReplies();
     }
     function populateQuickReplySelect() {
       var select = document.getElementById('quickReplySelect');
@@ -882,7 +957,7 @@
     }
     function loadTemplateSelect() {
       if (cachedTemplates) { populateTemplateSelect(); return; }
-      google.script.run.withSuccessHandler(function (templates) { cachedTemplates = templates.filter(function (t) { return t.status === 'APPROVED'; }); populateTemplateSelect(); }).withFailureHandler(function () {}).listTemplates();
+      scriptRun().withSuccessHandler(function (templates) { cachedTemplates = templates.filter(function (t) { return t.status === 'APPROVED'; }); populateTemplateSelect(); }).withFailureHandler(function () {}).listTemplates();
     }
     function populateTemplateSelect() {
       var select = document.getElementById('templateSelect');
@@ -902,7 +977,7 @@
         if (value === null) return;
         variables[index] = value;
       }
-      google.script.run.withSuccessHandler(function () { loadWorkspace(); refreshActiveList(); })
+      scriptRun().withSuccessHandler(function () { loadWorkspace(); refreshActiveList(); })
         .withFailureHandler(function (error) { alert('Could not send template: ' + (error && error.message)); }).sendTemplateReply(selectedConversationId, template.id, variables);
     }
     var pendingMediaFile = null;
@@ -943,8 +1018,8 @@
       var caption = captionInput ? captionInput.value.trim() : '';
       var el = document.getElementById('pendingMedia');
       if (el) el.textContent = 'Uploading…';
-      google.script.run.withSuccessHandler(function (uploaded) {
-        google.script.run.withSuccessHandler(function () { pendingMediaFile = null; renderPendingMediaChip(); loadWorkspace(); refreshActiveList(); })
+      scriptRun().withSuccessHandler(function (uploaded) {
+        scriptRun().withSuccessHandler(function () { pendingMediaFile = null; renderPendingMediaChip(); loadWorkspace(); refreshActiveList(); })
           .withFailureHandler(function (error) { renderPendingMediaChip(); alert('Uploaded but could not send: ' + (error && error.message)); })
           .sendMediaReply(selectedConversationId, file.mediaType, uploaded.url, caption);
       }).withFailureHandler(function (error) { renderPendingMediaChip(); alert('Could not upload: ' + (error && error.message)); })
@@ -957,7 +1032,7 @@
       if (!text) return;
       button.disabled = true;
       setError('composeError', null);
-      google.script.run.withSuccessHandler(function () { textarea.value = ''; button.disabled = false; loadWorkspace(); refreshActiveList(); })
+      scriptRun().withSuccessHandler(function () { textarea.value = ''; button.disabled = false; loadWorkspace(); refreshActiveList(); })
         .withFailureHandler(function (error) { button.disabled = false; setError('composeError', error); }).sendReply(selectedConversationId, text);
     }
     function addCurrentNote() {
@@ -965,7 +1040,7 @@
       var text = textarea.value.trim();
       if (!text) return;
       textarea.disabled = true;
-      google.script.run.withSuccessHandler(function () { loadWorkspace(); })
+      scriptRun().withSuccessHandler(function () { loadWorkspace(); })
         .withFailureHandler(function (error) { textarea.disabled = false; alert('Could not add note: ' + (error && error.message)); }).addRemark(selectedConversationId, text);
     }
 
@@ -1004,7 +1079,7 @@
       if (email === null) return;
       var company = prompt('Company:', customer.company || '');
       if (company === null) return;
-      google.script.run.withSuccessHandler(function () { loadWorkspace(); })
+      scriptRun().withSuccessHandler(function () { loadWorkspace(); })
         .withFailureHandler(function (error) { alert('Could not update customer: ' + (error && error.message)); })
         .updateCustomer(customer.id, { name: name, email: email, company: company });
     }
@@ -1012,7 +1087,7 @@
     function loadPreviousConversations(customerId) {
       var section = document.getElementById('prevConvSection');
       if (!section || !customerId) return;
-      google.script.run.withSuccessHandler(function (conversations) {
+      scriptRun().withSuccessHandler(function (conversations) {
         var others = conversations.filter(function (c) { return c.id !== selectedConversationId; });
         section.querySelector('summary').textContent = 'Previous Conversations (' + others.length + ')';
         section.querySelector('.detail-section-body').innerHTML = others.map(function (c) {
@@ -1036,7 +1111,7 @@
     function loadRemindersSection() {
       var section = document.getElementById('remindersSection');
       if (!section) return;
-      google.script.run.withSuccessHandler(function (reminders) {
+      scriptRun().withSuccessHandler(function (reminders) {
         section.style.display = '';
         var pending = reminders.filter(function (r) { return r.status === 'PENDING'; });
         section.querySelector('summary').textContent = 'Reminders' + (pending.length ? ' (' + pending.length + ')' : '');
@@ -1055,15 +1130,15 @@
       var text = textInput.value.trim();
       if (!text || !dueInput.value) return;
       var dueAt = new Date(dueInput.value).toISOString();
-      google.script.run.withSuccessHandler(function () { loadRemindersSection(); })
+      scriptRun().withSuccessHandler(function () { loadRemindersSection(); })
         .withFailureHandler(function (error) { alert('Could not add reminder: ' + (error && error.message)); }).createReminder(selectedConversationId, text, dueAt);
     }
     function completeReminder(reminderId) {
-      google.script.run.withSuccessHandler(function () { loadRemindersSection(); }).withFailureHandler(function (error) { alert('Could not update reminder: ' + (error && error.message)); }).updateReminderStatus(reminderId, 'COMPLETED');
+      scriptRun().withSuccessHandler(function () { loadRemindersSection(); }).withFailureHandler(function (error) { alert('Could not update reminder: ' + (error && error.message)); }).updateReminderStatus(reminderId, 'COMPLETED');
     }
 
     function populateStageSelect(currentStage) {
-      if (!cachedStages) { google.script.run.withSuccessHandler(function (stages) { cachedStages = stages; populateStageSelect(currentStage); }).withFailureHandler(function () {}).listStages(); return; }
+      if (!cachedStages) { scriptRun().withSuccessHandler(function (stages) { cachedStages = stages; populateStageSelect(currentStage); }).withFailureHandler(function () {}).listStages(); return; }
       var select = document.getElementById('stageSelect');
       if (!select) return;
       var currentStageId = currentStage && currentStage.stageId;
@@ -1076,14 +1151,14 @@
       if (!select.value) return;
       var customer = (window.__currentWorkspace || {}).customer;
       if (!customer) return;
-      google.script.run.withFailureHandler(function (error) { alert('Could not change stage: ' + (error && error.message)); }).setCustomerStage(customer.id, select.value);
+      scriptRun().withFailureHandler(function (error) { alert('Could not change stage: ' + (error && error.message)); }).setCustomerStage(customer.id, select.value);
     }
 
     // ============================================================================
     // Dashboard KPIs
     // ============================================================================
     function loadDashboard() {
-      google.script.run.withSuccessHandler(function (metrics) {
+      scriptRun().withSuccessHandler(function (metrics) {
         window.__hasReportsAccess = true;
         renderSidebarNav();
         var kpis = [
@@ -1105,7 +1180,7 @@
     // Reminders page (personal, scoped to the current number)
     // ============================================================================
     function loadReminders() {
-      google.script.run.withSuccessHandler(function (reminders) {
+      scriptRun().withSuccessHandler(function (reminders) {
         var pending = reminders.filter(function (r) { return r.status === 'PENDING'; });
         document.getElementById('remindersList').innerHTML = pending.map(function (r) {
           return '<div class="card" style="max-width:600px;"><strong>' + escapeHtml(r.text) + '</strong><div style="color:var(--text-secondary); font-size:12px; margin-top:4px;">Due ' + escapeHtml((r.dueAt || '').replace('T', ' ').slice(0, 16)) +
@@ -1114,14 +1189,14 @@
       }).withFailureHandler(function (error) { document.getElementById('remindersList').innerHTML = '<div class="empty">Error: ' + escapeHtml(error && error.message) + '</div>'; }).listMyReminders(selectedNumberId);
     }
     function completeMyReminder(id) {
-      google.script.run.withSuccessHandler(loadReminders).withFailureHandler(function (error) { alert('Could not update: ' + (error && error.message)); }).updateReminderStatus(id, 'COMPLETED');
+      scriptRun().withSuccessHandler(loadReminders).withFailureHandler(function (error) { alert('Could not update: ' + (error && error.message)); }).updateReminderStatus(id, 'COMPLETED');
     }
 
     // ============================================================================
     // Customers directory (scoped to the current number)
     // ============================================================================
     function loadCustomers() {
-      google.script.run.withSuccessHandler(function (customers) {
+      scriptRun().withSuccessHandler(function (customers) {
         document.getElementById('customersTable').querySelector('tbody').innerHTML = customers.map(function (c) {
           return '<tr><td>' + escapeHtml(c.name || '—') + '</td><td>' + escapeHtml(c.phone) + '</td><td>' + escapeHtml(c.company || '—') + '</td><td>' + escapeHtml(c.source || '—') + '</td>' +
             '<td><button class="btn" onclick="openCustomerFromDirectory(\'' + c.id + '\')">View conversations</button></td></tr>';
@@ -1129,7 +1204,7 @@
       }).withFailureHandler(function (error) { document.getElementById('customersTable').querySelector('tbody').innerHTML = '<tr><td colspan="5" class="empty">Error: ' + escapeHtml(error && error.message) + '</td></tr>'; }).listCustomers(selectedNumberId);
     }
     function openCustomerFromDirectory(customerId) {
-      google.script.run.withSuccessHandler(function (conversations) {
+      scriptRun().withSuccessHandler(function (conversations) {
         if (!conversations.length) { alert('This customer has no conversations on this number.'); return; }
         showPage('allConversations');
         openConversationFromAnywhere(conversations[0].id);
@@ -1140,7 +1215,7 @@
     // Reports page (adapted from the old overlay, scoped to the current number)
     // ============================================================================
     function loadReports() {
-      google.script.run.withSuccessHandler(renderReportsBody).withFailureHandler(function (error) {
+      scriptRun().withSuccessHandler(renderReportsBody).withFailureHandler(function (error) {
         document.getElementById('reportsBody').innerHTML = '<div class="empty">Could not load reports: ' + escapeHtml(error && error.message) + '</div>';
       }).getDashboardMetrics(selectedNumberId);
     }
@@ -1167,7 +1242,7 @@
     // Templates page (ported from Admin.html)
     // ============================================================================
     function loadTemplates() {
-      google.script.run.withSuccessHandler(function (templates) {
+      scriptRun().withSuccessHandler(function (templates) {
         document.getElementById('templatesTable').querySelector('tbody').innerHTML = templates.map(function (t) {
           var actions = t.status === 'LOCAL_DRAFT' ? '<button class="btn" onclick="submitTemplateForReviewAction(\'' + t.id + '\')">Submit for review</button>' : '';
           return '<tr><td>' + escapeHtml(t.name) + '</td><td>' + escapeHtml(t.language) + '</td><td>' + escapeHtml(t.category) + '</td><td><span class="pill">' + escapeHtml(t.status) + '</span></td><td>' + actions + '</td></tr>';
@@ -1192,28 +1267,28 @@
       var category = document.getElementById('tplCategory').value.trim();
       var body = document.getElementById('tplBody').value.trim();
       if (!name || !language || !category || !body) return;
-      google.script.run.withSuccessHandler(function () {
+      scriptRun().withSuccessHandler(function () {
         document.getElementById('tplName').value = ''; document.getElementById('tplBody').value = ''; setError('tplError', null); loadTemplates();
       }).withFailureHandler(function (error) { setError('tplError', error); }).createDraftTemplate({ name: name, language: language, category: category, components: [{ type: 'BODY', text: body }] });
     }
     function submitTemplateForReviewAction(id) {
       var wabaId = prompt('wabaId to submit this template under:', '');
       if (!wabaId) return;
-      google.script.run.withSuccessHandler(function () {
-        google.script.run.withSuccessHandler(loadTemplates).withFailureHandler(function (error) { alert('Could not submit: ' + (error && error.message)); }).submitTemplateForReview(id);
+      scriptRun().withSuccessHandler(function () {
+        scriptRun().withSuccessHandler(loadTemplates).withFailureHandler(function (error) { alert('Could not submit: ' + (error && error.message)); }).submitTemplateForReview(id);
       }).withFailureHandler(function (error) { alert('Could not set wabaId: ' + (error && error.message)); }).updateDraftTemplate(id, { wabaId: wabaId });
     }
     function submitSyncTemplates() {
       var wabaId = document.getElementById('syncWabaId').value.trim();
       if (!wabaId) return;
-      google.script.run.withSuccessHandler(loadTemplates).withFailureHandler(function (error) { alert('Could not sync: ' + (error && error.message)); }).syncTemplatesFromProvider(wabaId);
+      scriptRun().withSuccessHandler(loadTemplates).withFailureHandler(function (error) { alert('Could not sync: ' + (error && error.message)); }).syncTemplatesFromProvider(wabaId);
     }
 
     // ============================================================================
     // Quick Replies page
     // ============================================================================
     function loadQuickRepliesPage() {
-      google.script.run.withSuccessHandler(function (list) {
+      scriptRun().withSuccessHandler(function (list) {
         document.getElementById('quickRepliesTable').querySelector('tbody').innerHTML = list.map(function (q) {
           return '<tr><td>' + escapeHtml(q.shortcut) + '</td><td>' + escapeHtml(q.text) + '</td><td><span class="pill">' + (q.active !== false ? 'active' : 'inactive') + '</span></td>' +
             '<td><button class="btn" onclick="editQuickReply(\'' + q.id + '\', \'' + escapeHtml(q.text).replace(/'/g, "\\'") + '\')">Edit</button></td></tr>';
@@ -1224,7 +1299,7 @@
       var shortcut = document.getElementById('qrShortcut').value.trim();
       var text = document.getElementById('qrText').value.trim();
       if (!shortcut || !text) return;
-      google.script.run.withSuccessHandler(function () {
+      scriptRun().withSuccessHandler(function () {
         document.getElementById('qrShortcut').value = ''; document.getElementById('qrText').value = ''; setError('qrError', null); loadQuickRepliesPage(); cachedQuickReplies = null;
       }).withFailureHandler(function (error) { setError('qrError', error); }).createQuickReply({ shortcut: shortcut, text: text });
     }
@@ -1232,15 +1307,15 @@
       var text = prompt('Text:', currentText);
       if (text === null) return;
       var active = confirm('Keep this quick reply active? OK = active, Cancel = inactive');
-      google.script.run.withSuccessHandler(function () { loadQuickRepliesPage(); cachedQuickReplies = null; }).withFailureHandler(function (error) { alert('Could not update: ' + (error && error.message)); }).updateQuickReply(id, { text: text, active: active });
+      scriptRun().withSuccessHandler(function () { loadQuickRepliesPage(); cachedQuickReplies = null; }).withFailureHandler(function (error) { alert('Could not update: ' + (error && error.message)); }).updateQuickReply(id, { text: text, active: active });
     }
 
     // ============================================================================
     // Teams page
     // ============================================================================
     function loadTeams() {
-      google.script.run.withSuccessHandler(function (users) { cachedUsers = users; }).withFailureHandler(function () {}).listUsers();
-      google.script.run.withSuccessHandler(function (teams) {
+      scriptRun().withSuccessHandler(function (users) { cachedUsers = users; }).withFailureHandler(function () {}).listUsers();
+      scriptRun().withSuccessHandler(function (teams) {
         cachedTeams = teams;
         var ownerName = function (id) { var u = cachedUsers.find(function (x) { return x.id === id; }); return u ? u.displayName : id; };
         document.getElementById('teamsTable').querySelector('tbody').innerHTML = teams.map(function (t) {
@@ -1255,7 +1330,7 @@
       var name = document.getElementById('teamName').value.trim();
       var ownerUserId = document.getElementById('teamOwner').value;
       if (!name || !ownerUserId) return;
-      google.script.run.withSuccessHandler(function () { document.getElementById('teamName').value = ''; setError('teamError', null); loadTeams(); }).withFailureHandler(function (error) { setError('teamError', error); }).createTeam({ name: name, ownerUserId: ownerUserId });
+      scriptRun().withSuccessHandler(function () { document.getElementById('teamName').value = ''; setError('teamError', null); loadTeams(); }).withFailureHandler(function (error) { setError('teamError', error); }).createTeam({ name: name, ownerUserId: ownerUserId });
     }
     function selectTeam(teamId) {
       selectedTeamId = teamId;
@@ -1265,7 +1340,7 @@
       loadTeamMembers();
     }
     function loadTeamMembers() {
-      google.script.run.withSuccessHandler(function (members) {
+      scriptRun().withSuccessHandler(function (members) {
         var userName = function (id) { var u = cachedUsers.find(function (x) { return x.id === id; }); return u ? u.displayName : id; };
         document.getElementById('teamMembersTable').querySelector('tbody').innerHTML = members.map(function (m) {
           return '<tr><td>' + escapeHtml(userName(m.userId)) + '</td><td><span class="pill">' + escapeHtml(m.status) + '</span></td><td>' + escapeHtml((m.numberIds || []).join(', ')) + '</td>' +
@@ -1278,7 +1353,7 @@
       var numberIdsRaw = document.getElementById('memberNumberIds').value.trim();
       var numberIds = numberIdsRaw ? numberIdsRaw.split(',').map(function (s) { return s.trim(); }).filter(Boolean) : [];
       if (!userId || !selectedTeamId) return;
-      google.script.run.withSuccessHandler(function () { document.getElementById('memberNumberIds').value = ''; setError('teamMemberError', null); loadTeamMembers(); }).withFailureHandler(function (error) { setError('teamMemberError', error); }).addTeamMember({ teamId: selectedTeamId, userId: userId, numberIds: numberIds });
+      scriptRun().withSuccessHandler(function () { document.getElementById('memberNumberIds').value = ''; setError('teamMemberError', null); loadTeamMembers(); }).withFailureHandler(function (error) { setError('teamMemberError', error); }).addTeamMember({ teamId: selectedTeamId, userId: userId, numberIds: numberIds });
     }
     function editTeamMember(id) {
       var status = prompt('Status (active/inactive):', 'active');
@@ -1286,23 +1361,24 @@
       var numberIdsRaw = prompt('numberIds (comma-separated, blank = all team numbers):', '');
       var patch = { status: status };
       if (numberIdsRaw !== null) patch.numberIds = numberIdsRaw ? numberIdsRaw.split(',').map(function (s) { return s.trim(); }).filter(Boolean) : [];
-      google.script.run.withSuccessHandler(loadTeamMembers).withFailureHandler(function (error) { alert('Could not update member: ' + (error && error.message)); }).updateTeamMember(id, patch);
+      scriptRun().withSuccessHandler(loadTeamMembers).withFailureHandler(function (error) { alert('Could not update member: ' + (error && error.message)); }).updateTeamMember(id, patch);
     }
 
     // ============================================================================
     // Users page
     // ============================================================================
     function loadUsers() {
-      google.script.run.withSuccessHandler(function (roles) {
+      scriptRun().withSuccessHandler(function (roles) {
         cachedRoles = roles;
         document.getElementById('userRole').innerHTML = roles.map(function (r) { return '<option value="' + r.id + '">' + escapeHtml(r.name) + '</option>'; }).join('');
       }).withFailureHandler(function (error) { setError('userError', error); }).listRoles();
-      google.script.run.withSuccessHandler(function (users) {
+      scriptRun().withSuccessHandler(function (users) {
         cachedUsers = users;
         var roleName = function (id) { var r = cachedRoles.find(function (x) { return x.id === id; }); return r ? r.name : id; };
         document.getElementById('usersTable').querySelector('tbody').innerHTML = users.map(function (u) {
           return '<tr><td>' + escapeHtml(u.email) + '</td><td>' + escapeHtml(u.displayName) + '</td><td><span class="pill">' + escapeHtml(u.status) + '</span></td>' +
-            '<td>' + u.roleIds.map(roleName).join(', ') + '</td><td><button class="btn" onclick="editUser(\'' + u.id + '\')">Edit</button></td></tr>';
+            '<td>' + u.roleIds.map(roleName).join(', ') + '</td><td><button class="btn" onclick="editUser(\'' + u.id + '\')">Edit</button> ' +
+            '<button class="btn" onclick="submitSendPasswordSetupLink(\'' + u.id + '\')" title="Emails a link to set/reset their password">Send setup link</button></td></tr>';
         }).join('') || '<tr><td colspan="5" class="empty">No users</td></tr>';
       }).withFailureHandler(function (error) { setError('userError', error); }).listUsers();
     }
@@ -1311,7 +1387,7 @@
       var displayName = document.getElementById('userDisplayName').value.trim();
       var roleId = document.getElementById('userRole').value;
       if (!email || !displayName || !roleId) return;
-      google.script.run.withSuccessHandler(function () { document.getElementById('userEmail').value = ''; document.getElementById('userDisplayName').value = ''; setError('userError', null); loadUsers(); })
+      scriptRun().withSuccessHandler(function () { document.getElementById('userEmail').value = ''; document.getElementById('userDisplayName').value = ''; setError('userError', null); loadUsers(); })
         .withFailureHandler(function (error) { setError('userError', error); }).createUser({ email: email, displayName: displayName, roleIds: [roleId] });
     }
     function editUser(id) {
@@ -1326,7 +1402,11 @@
         if (!role) { alert('Unknown role key'); return; }
         patch.roleIds = [role.id];
       }
-      google.script.run.withSuccessHandler(loadUsers).withFailureHandler(function (error) { alert('Could not update user: ' + (error && error.message)); }).updateUser(id, patch);
+      scriptRun().withSuccessHandler(loadUsers).withFailureHandler(function (error) { alert('Could not update user: ' + (error && error.message)); }).updateUser(id, patch);
+    }
+    function submitSendPasswordSetupLink(id) {
+      scriptRun().withSuccessHandler(function () { alert('Setup link emailed.'); })
+        .withFailureHandler(function (error) { alert('Could not send setup link: ' + (error && error.message)); }).sendPasswordSetupLink(id);
     }
 
     // ============================================================================
@@ -1334,7 +1414,7 @@
     // ============================================================================
     var cachedNumbersAdmin = [];
     function loadNumbers() {
-      google.script.run.withSuccessHandler(function (numbers) {
+      scriptRun().withSuccessHandler(function (numbers) {
         cachedNumbersAdmin = numbers;
         document.getElementById('numbersTable').querySelector('tbody').innerHTML = numbers.map(function (n) {
           return '<tr><td>' + escapeHtml(n.displayName) + '</td><td>' + escapeHtml(n.phoneNumber) + '</td><td>' + escapeHtml(n.providerAccountId) + '</td><td>' + escapeHtml(n.wabaId) + '</td>' +
@@ -1346,7 +1426,7 @@
       var displayName = document.getElementById('numberDisplayName').value.trim();
       var phoneNumber = document.getElementById('numberPhone').value.trim();
       if (!displayName || !phoneNumber) return;
-      google.script.run.withSuccessHandler(function () { document.getElementById('numberDisplayName').value = ''; document.getElementById('numberPhone').value = ''; setError('numberError', null); loadNumbers(); })
+      scriptRun().withSuccessHandler(function () { document.getElementById('numberDisplayName').value = ''; document.getElementById('numberPhone').value = ''; setError('numberError', null); loadNumbers(); })
         .withFailureHandler(function (error) { setError('numberError', error); }).createNumber({ displayName: displayName, phoneNumber: phoneNumber, provider: 'exotel' });
     }
     function editNumber(id) {
@@ -1359,7 +1439,7 @@
       var providerNumberId = prompt('providerNumberId:', number.providerNumberId || '');
       if (providerNumberId === null) return;
       var active = confirm('Keep this number active? OK = active, Cancel = inactive');
-      google.script.run.withSuccessHandler(loadNumbers).withFailureHandler(function (error) { alert('Could not update number: ' + (error && error.message)); })
+      scriptRun().withSuccessHandler(loadNumbers).withFailureHandler(function (error) { alert('Could not update number: ' + (error && error.message)); })
         .updateNumber(id, { providerAccountId: providerAccountId, wabaId: wabaId, providerNumberId: providerNumberId, active: active });
     }
 
@@ -1379,9 +1459,9 @@
 
     var cachedNumberAccessGrants = null;
     function loadNumberAccess() {
-      google.script.run.withSuccessHandler(function (users) { cachedUsers = users; document.getElementById('accessUser').innerHTML = users.map(function (u) { return '<option value="' + u.id + '">' + escapeHtml(u.displayName) + '</option>'; }).join(''); }).withFailureHandler(function () {}).listUsers();
-      google.script.run.withSuccessHandler(function (numbers) { cachedNumbersAdmin = numbers; document.getElementById('accessNumber').innerHTML = numbers.map(function (n) { return '<option value="' + n.id + '">' + escapeHtml(n.displayName) + '</option>'; }).join(''); renderNumberAccessTable(); }).withFailureHandler(function () {}).listNumbers();
-      google.script.run.withSuccessHandler(function (grants) { cachedNumberAccessGrants = grants; renderNumberAccessTable(); }).withFailureHandler(function (error) { setError('accessErrorMsg', error); }).listNumberAccess();
+      scriptRun().withSuccessHandler(function (users) { cachedUsers = users; document.getElementById('accessUser').innerHTML = users.map(function (u) { return '<option value="' + u.id + '">' + escapeHtml(u.displayName) + '</option>'; }).join(''); }).withFailureHandler(function () {}).listUsers();
+      scriptRun().withSuccessHandler(function (numbers) { cachedNumbersAdmin = numbers; document.getElementById('accessNumber').innerHTML = numbers.map(function (n) { return '<option value="' + n.id + '">' + escapeHtml(n.displayName) + '</option>'; }).join(''); renderNumberAccessTable(); }).withFailureHandler(function () {}).listNumbers();
+      scriptRun().withSuccessHandler(function (grants) { cachedNumberAccessGrants = grants; renderNumberAccessTable(); }).withFailureHandler(function (error) { setError('accessErrorMsg', error); }).listNumberAccess();
     }
     function renderNumberAccessTable() {
       if (!cachedNumberAccessGrants || !cachedNumbersAdmin.length) return;
@@ -1396,25 +1476,25 @@
       var userId = document.getElementById('accessUser').value;
       var numberId = document.getElementById('accessNumber').value;
       if (!userId || !numberId) return;
-      google.script.run.withSuccessHandler(function () { setError('accessErrorMsg', null); loadNumberAccess(); }).withFailureHandler(function (error) { setError('accessErrorMsg', error); }).grantNumberAccess({ userId: userId, numberId: numberId });
+      scriptRun().withSuccessHandler(function () { setError('accessErrorMsg', null); loadNumberAccess(); }).withFailureHandler(function (error) { setError('accessErrorMsg', error); }).grantNumberAccess({ userId: userId, numberId: numberId });
     }
     function submitRevokeAccess(id) {
-      google.script.run.withSuccessHandler(loadNumberAccess).withFailureHandler(function (error) { alert('Could not revoke: ' + (error && error.message)); }).revokeNumberAccess(id);
+      scriptRun().withSuccessHandler(loadNumberAccess).withFailureHandler(function (error) { alert('Could not revoke: ' + (error && error.message)); }).revokeNumberAccess(id);
     }
 
     function loadAssignmentRulesSection() {
-      google.script.run.withSuccessHandler(function (numbers) {
+      scriptRun().withSuccessHandler(function (numbers) {
         cachedNumbersAdmin = numbers;
         document.getElementById('ruleNumberSelect').innerHTML = '<option value="">Select a number…</option>' + numbers.map(function (n) { return '<option value="' + n.id + '">' + escapeHtml(n.displayName) + '</option>'; }).join('');
       }).withFailureHandler(function (error) { setError('accessErrorMsg', error); }).listNumbers();
-      google.script.run.withSuccessHandler(function (users) { cachedUsers = users; }).withFailureHandler(function () {}).listUsers();
+      scriptRun().withSuccessHandler(function (users) { cachedUsers = users; }).withFailureHandler(function () {}).listUsers();
     }
     function loadAssignmentRules() {
       var numberId = document.getElementById('ruleNumberSelect').value;
       var body = document.getElementById('assignmentRulesBody');
       if (!numberId) { body.innerHTML = '<div class="empty">Select a number</div>'; return; }
       body.innerHTML = '<div class="empty">Loading…</div>';
-      google.script.run.withSuccessHandler(function (config) { renderAssignmentConfig(numberId, config); })
+      scriptRun().withSuccessHandler(function (config) { renderAssignmentConfig(numberId, config); })
         .withFailureHandler(function (error) { body.innerHTML = '<div class="form-error">' + escapeHtml(error && error.message) + '</div>'; }).getNumberAssignmentConfig(numberId);
     }
     function renderAssignmentConfig(numberId, config) {
@@ -1437,10 +1517,10 @@
     }
     function submitAssignmentConfig(numberId) {
       var patch = { roundRobinEnabled: document.getElementById('rrEnabled').checked, fallbackUserId: document.getElementById('rrFallback').value, workingHoursStart: document.getElementById('rrStart').value.trim(), workingHoursEnd: document.getElementById('rrEnd').value.trim() };
-      google.script.run.withSuccessHandler(function () { setError('assignConfigError', null); loadAssignmentRules(); }).withFailureHandler(function (error) { setError('assignConfigError', error); }).setNumberAssignmentConfig(numberId, patch);
+      scriptRun().withSuccessHandler(function () { setError('assignConfigError', null); loadAssignmentRules(); }).withFailureHandler(function (error) { setError('assignConfigError', error); }).setNumberAssignmentConfig(numberId, patch);
     }
     function loadParticipants(numberId) {
-      google.script.run.withSuccessHandler(function (participants) {
+      scriptRun().withSuccessHandler(function (participants) {
         var userName = function (id) { var u = cachedUsers.find(function (x) { return x.id === id; }); return u ? u.displayName : id; };
         document.getElementById('participantsTable').querySelector('tbody').innerHTML = participants.map(function (p) {
           return '<tr><td>' + p.sequenceOrder + '</td><td>' + escapeHtml(userName(p.userId)) + '</td><td><span class="pill">' + (p.active ? 'active' : 'inactive') + '</span></td>' +
@@ -1452,14 +1532,14 @@
       var userId = document.getElementById('participantUser').value;
       var order = Number(document.getElementById('participantOrder').value) || 1;
       if (!userId) return;
-      google.script.run.withSuccessHandler(function () { setError('participantError', null); loadParticipants(numberId); }).withFailureHandler(function (error) { setError('participantError', error); }).addAssignmentParticipant(numberId, userId, order);
+      scriptRun().withSuccessHandler(function () { setError('participantError', null); loadParticipants(numberId); }).withFailureHandler(function (error) { setError('participantError', error); }).addAssignmentParticipant(numberId, userId, order);
     }
     function toggleParticipant(id, active, numberId) {
-      google.script.run.withSuccessHandler(function () { loadParticipants(numberId); }).withFailureHandler(function (error) { alert('Could not update participant: ' + (error && error.message)); }).updateAssignmentParticipant(id, { active: active });
+      scriptRun().withSuccessHandler(function () { loadParticipants(numberId); }).withFailureHandler(function (error) { alert('Could not update participant: ' + (error && error.message)); }).updateAssignmentParticipant(id, { active: active });
     }
 
     function loadStages() {
-      google.script.run.withSuccessHandler(function (stages) {
+      scriptRun().withSuccessHandler(function (stages) {
         document.getElementById('stagesTable').querySelector('tbody').innerHTML = stages.map(function (s) {
           return '<tr><td>' + s.sequenceOrder + '</td><td>' + escapeHtml(s.key) + '</td><td>' + escapeHtml(s.name) + '</td><td><span class="pill">' + (s.active ? 'active' : 'inactive') + '</span></td>' +
             '<td><button class="btn" onclick="editStage(\'' + s.id + '\', \'' + escapeHtml(s.name).replace(/'/g, "\\'") + '\', ' + s.sequenceOrder + ', ' + s.active + ')">Edit</button></td></tr>';
@@ -1467,14 +1547,14 @@
       }).withFailureHandler(function (error) { setError('stageError', error); }).listStages();
     }
     function submitSeedStages() {
-      google.script.run.withSuccessHandler(function () { loadStages(); cachedStages = null; }).withFailureHandler(function (error) { alert('Could not seed: ' + (error && error.message)); }).seedDefaultLeadStages();
+      scriptRun().withSuccessHandler(function () { loadStages(); cachedStages = null; }).withFailureHandler(function (error) { alert('Could not seed: ' + (error && error.message)); }).seedDefaultLeadStages();
     }
     function submitCreateStage() {
       var key = document.getElementById('stageKey').value.trim();
       var name = document.getElementById('stageName').value.trim();
       var order = Number(document.getElementById('stageOrder').value) || undefined;
       if (!key || !name) return;
-      google.script.run.withSuccessHandler(function () {
+      scriptRun().withSuccessHandler(function () {
         document.getElementById('stageKey').value = ''; document.getElementById('stageName').value = ''; document.getElementById('stageOrder').value = ''; setError('stageError', null); loadStages(); cachedStages = null;
       }).withFailureHandler(function (error) { setError('stageError', error); }).createStage({ key: key, name: name, sequenceOrder: order });
     }
@@ -1484,26 +1564,26 @@
       var order = prompt('Sequence order:', currentOrder);
       if (order === null) return;
       var active = confirm('Keep this stage active? OK = active, Cancel = inactive');
-      google.script.run.withSuccessHandler(function () { loadStages(); cachedStages = null; }).withFailureHandler(function (error) { alert('Could not update stage: ' + (error && error.message)); }).updateStage(id, { name: name, sequenceOrder: Number(order), active: active });
+      scriptRun().withSuccessHandler(function () { loadStages(); cachedStages = null; }).withFailureHandler(function (error) { alert('Could not update stage: ' + (error && error.message)); }).updateStage(id, { name: name, sequenceOrder: Number(order), active: active });
     }
 
     function loadBackupStatus() {
-      google.script.run.withSuccessHandler(function (status) { document.getElementById('backupTriggerStatus').textContent = status.installed ? 'Daily backups are enabled (runs ~2am Asia/Kolkata).' : 'Daily backups are not enabled.'; })
+      scriptRun().withSuccessHandler(function (status) { document.getElementById('backupTriggerStatus').textContent = status.installed ? 'Daily backups are enabled (runs ~2am Asia/Kolkata).' : 'Daily backups are not enabled.'; })
         .withFailureHandler(function (error) { setError('backupError', error); }).getBackupTriggerStatus();
     }
     function submitBackupNow() {
       document.getElementById('backupResult').textContent = 'Backing up…';
-      google.script.run.withSuccessHandler(function (result) { document.getElementById('backupResult').innerHTML = 'Created: ' + escapeHtml(result.name) + ' — <a href="' + escapeHtml(result.url) + '" target="_blank">open</a>'; })
+      scriptRun().withSuccessHandler(function (result) { document.getElementById('backupResult').innerHTML = 'Created: ' + escapeHtml(result.name) + ' — <a href="' + escapeHtml(result.url) + '" target="_blank">open</a>'; })
         .withFailureHandler(function (error) { document.getElementById('backupResult').textContent = ''; alert('Backup failed: ' + (error && error.message)); }).backupNow();
     }
-    function submitInstallTrigger() { google.script.run.withSuccessHandler(loadBackupStatus).withFailureHandler(function (error) { setError('backupError', error); }).installDailyBackupTrigger(); }
-    function submitRemoveTrigger() { google.script.run.withSuccessHandler(loadBackupStatus).withFailureHandler(function (error) { setError('backupError', error); }).removeDailyBackupTrigger(); }
+    function submitInstallTrigger() { scriptRun().withSuccessHandler(loadBackupStatus).withFailureHandler(function (error) { setError('backupError', error); }).installDailyBackupTrigger(); }
+    function submitRemoveTrigger() { scriptRun().withSuccessHandler(loadBackupStatus).withFailureHandler(function (error) { setError('backupError', error); }).removeDailyBackupTrigger(); }
 
     // ============================================================================
     // Audit Log page
     // ============================================================================
     function loadAuditLog() {
-      google.script.run.withSuccessHandler(function (entries) {
+      scriptRun().withSuccessHandler(function (entries) {
         document.getElementById('auditLogTable').querySelector('tbody').innerHTML = entries.slice(0, 200).map(function (e) {
           return '<tr><td>' + escapeHtml(e.occurredAt) + '</td><td>' + escapeHtml(e.actorUserId || 'system') + '</td><td>' + escapeHtml(e.action) + '</td><td>' + escapeHtml(e.targetType) + ':' + escapeHtml(e.targetId) + '</td></tr>';
         }).join('') || '<tr><td colspan="4" class="empty">No audit entries</td></tr>';
@@ -1511,17 +1591,85 @@
     }
 
     // ============================================================================
+    // Login / password reset
+    // ============================================================================
+    function showLoginScreen(error) {
+      document.getElementById('landingScreen').style.display = 'none';
+      document.getElementById('resetPasswordScreen').style.display = 'none';
+      document.getElementById('loginScreen').style.display = 'block';
+      if (error) setError('loginError', error);
+    }
+    function toggleForgotPassword() {
+      var box = document.getElementById('forgotPasswordBox');
+      box.style.display = box.style.display === 'none' ? 'block' : 'none';
+    }
+    function submitLogin() {
+      var email = document.getElementById('loginEmail').value.trim();
+      var password = document.getElementById('loginPassword').value;
+      if (!email || !password) return;
+      setError('loginError', null);
+      google.script.run.withSuccessHandler(function (result) {
+        sessionToken = result.token;
+        localStorage.setItem('wapSessionToken', sessionToken);
+        bootIdentity();
+      }).withFailureHandler(function (error) { setError('loginError', error); }).login(email, password);
+    }
+    function submitForgotPassword() {
+      var email = document.getElementById('forgotEmail').value.trim();
+      if (!email) return;
+      var msg = document.getElementById('forgotPasswordMsg');
+      msg.textContent = 'Sending…';
+      google.script.run.withSuccessHandler(function () {
+        msg.textContent = 'If that email has an account, a reset link has been sent.';
+      }).withFailureHandler(function (error) { msg.textContent = error && error.message; }).requestPasswordReset(email);
+    }
+    function showResetPasswordScreen(resetToken) {
+      document.getElementById('landingScreen').style.display = 'none';
+      document.getElementById('loginScreen').style.display = 'none';
+      document.getElementById('resetPasswordScreen').style.display = 'block';
+      window.__pendingResetToken = resetToken;
+    }
+    function submitResetPassword() {
+      var pw = document.getElementById('resetNewPassword').value;
+      var confirm = document.getElementById('resetNewPasswordConfirm').value;
+      setError('resetError', null);
+      if (pw.length < 8) { setError('resetError', { message: 'Password must be at least 8 characters.' }); return; }
+      if (pw !== confirm) { setError('resetError', { message: 'Passwords do not match.' }); return; }
+      google.script.run.withSuccessHandler(function () {
+        history.replaceState(null, '', location.pathname); // drop ?resetToken= from the URL
+        showLoginScreen({ message: 'Password set — sign in below.' });
+      }).withFailureHandler(function (error) { setError('resetError', error); }).resetPassword(window.__pendingResetToken, pw);
+    }
+    function doLogout() {
+      var token = sessionToken;
+      sessionToken = null;
+      localStorage.removeItem('wapSessionToken');
+      if (token) google.script.run.logout(token);
+      location.reload();
+    }
+
+    // ============================================================================
     // Boot
     // ============================================================================
-    google.script.run.withSuccessHandler(function (me) {
-      currentUser = me;
-      document.getElementById('sidebarAvatar').textContent = initials(me.displayName);
-      document.getElementById('sidebarName').textContent = me.displayName;
-      document.getElementById('sidebarRole').textContent = me.roleKeys.map(roleLabel).join(', ');
-      loadLandingNumbers(); // land on the number picker first — everything else waits for enterWorkspace()
-    }).withFailureHandler(function (error) {
-      document.body.innerHTML = '<div style="padding:40px; font-family:Arial, sans-serif;">Could not verify identity: ' + escapeHtml(error && error.message) + '</div>';
-    }).whoAmI();
+    var resetTokenFromUrl = new URLSearchParams(location.search).get('resetToken');
+    if (resetTokenFromUrl) {
+      showResetPasswordScreen(resetTokenFromUrl);
+    } else {
+      bootIdentity();
+    }
+    function bootIdentity() {
+      scriptRun().withSuccessHandler(function (me) {
+        currentUser = me;
+        document.getElementById('loginScreen').style.display = 'none';
+        document.getElementById('sidebarAvatar').textContent = initials(me.displayName);
+        document.getElementById('sidebarName').textContent = me.displayName;
+        document.getElementById('sidebarRole').textContent = me.roleKeys.map(roleLabel).join(', ');
+        loadLandingNumbers(); // land on the number picker first — everything else waits for enterWorkspace()
+      }).withFailureHandler(function (error) {
+        if (sessionToken) { sessionToken = null; localStorage.removeItem('wapSessionToken'); }
+        showLoginScreen(error);
+      }).whoAmI();
+    }
   </script>
 </body>
 </html>

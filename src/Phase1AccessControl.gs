@@ -1,8 +1,18 @@
+// Set for the duration of one callApi() dispatch (see PasswordAuthEndpoints.gs) when
+// the caller authenticated via email/password instead of Google Sign-In. Checked
+// first so AuthService.currentIdentity() never has to know which auth path was used
+// — everything downstream (AccessControl.currentUser() etc.) keeps working on a
+// plain email string exactly as before, unmodified.
+var SessionIdentity_ = { email: null };
+function setSessionIdentity_(email) { SessionIdentity_.email = email; }
+function clearSessionIdentity_() { SessionIdentity_.email = null; }
+
 class AuthService {
   constructor(auditLog) { this.auditLog_ = auditLog; }
   currentIdentity() {
+    if (SessionIdentity_.email) return { email: SessionIdentity_.email };
     var email = Session.getActiveUser().getEmail();
-    if (!email) { if (this.auditLog_) try { this.auditLog_.write(null, 'authentication.denied', 'identity', 'anonymous', { reason: 'NO_GOOGLE_WORKSPACE_IDENTITY' }); } catch (ignored) {} throw new Phase1Error('UNAUTHENTICATED', 'A Google Workspace identity is required.'); }
+    if (!email) { if (this.auditLog_) try { this.auditLog_.write(null, 'authentication.denied', 'identity', 'anonymous', { reason: 'NO_IDENTITY' }); } catch (ignored) {} throw new Phase1Error('UNAUTHENTICATED', 'Sign in with Google or your email/password to continue.'); }
     return { email: email.toLowerCase() };
   }
 }
