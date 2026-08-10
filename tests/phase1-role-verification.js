@@ -4,13 +4,34 @@ const path = require('path');
 const vm = require('vm');
 const assert = require('assert');
 
-const store = { 'wap.phase1.bootstrapAdminEmail': 'admin@example.com' };
+const store = { 'wap.phase1.bootstrapAdminEmail': 'admin@example.com', SPREADSHEET_ID: 'mock-spreadsheet-id' };
 let email = 'admin@example.com';
 global.Utilities = { getUuid: (() => { let n = 0; return () => String(++n); })() };
 global.PropertiesService = { getScriptProperties: () => ({ getProperty: key => store[key] || null, setProperty: (key, value) => { store[key] = value; } }) };
 global.LockService = { getScriptLock: () => ({ waitLock: () => {}, releaseLock: () => {} }) };
 global.Session = { getActiveUser: () => ({ getEmail: () => email }) };
-['Phase1Domain.gs', 'Phase1Repository.gs', 'Phase1AccessControl.gs', 'Phase1Services.gs', 'Phase1Endpoints.gs'].forEach(file => vm.runInThisContext(fs.readFileSync(path.join(__dirname, '..', 'src', file), 'utf8'), { filename: file }));
+
+// AuditLogService (Phase1Services.gs) now writes to AuditLogRepository (Phase 2's
+// Sheets-backed SheetRepository) instead of PropertiesRepository, so this test needs
+// every src file loaded (not just the Phase1*.gs ones) plus a SpreadsheetApp mock.
+function makeSheet() {
+  let rows = [];
+  return {
+    appendRow: values => { rows.push(values.slice()); },
+    getDataRange: () => ({ getValues: () => rows.map(row => row.slice()) }),
+    getRange: (rowIndex) => ({ setValues: values => { rows[rowIndex - 1] = values[0].slice(); }, setNumberFormat: () => {} }),
+    getMaxRows: () => 1000,
+    getLastRow: () => rows.length,
+    deleteRow: rowIndex => { rows.splice(rowIndex - 1, 1); }
+  };
+}
+const sheetsByName = {};
+global.SpreadsheetApp = { openById: () => ({ getSheetByName: name => sheetsByName[name] || null, insertSheet: name => { const sheet = makeSheet(); sheetsByName[name] = sheet; return sheet; } }) };
+
+const srcDir = path.join(__dirname, '..', 'src');
+fs.readdirSync(srcDir).filter(file => file.endsWith('.gs')).sort().forEach(file => {
+  vm.runInThisContext(fs.readFileSync(path.join(srcDir, file), 'utf8'), { filename: file });
+});
 
 const api = () => new Phase1Api();
 const forbidden = fn => assert.throws(fn, error => error && error.code === 'FORBIDDEN');

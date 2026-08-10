@@ -1,9 +1,19 @@
 class AuditLogService {
-  constructor(repository) { this.repository_ = repository; }
+  // `repository` (a PropertiesRepository) is accepted for constructor-compatibility
+  // with every existing call site but is no longer where entries are stored — see
+  // AuditLogRepository / Phase2Domain.gs for why (Properties storage quota).
+  constructor(repository) { this.repository_ = repository; this.auditRepository_ = new AuditLogRepository(); }
   write(actorUserId, action, targetType, targetId, metadata) {
     var now = Phase1Ids.now();
-    return this.repository_.create('auditLog', { id: Phase1Ids.create('audit'), occurredAt: now, actorUserId: actorUserId,
-      action: action, targetType: targetType, targetId: targetId, metadata: metadata || {} });
+    return this.auditRepository_.create({ id: Phase1Ids.create('audit'), occurredAt: now, actorUserId: actorUserId,
+      action: action, targetType: targetType, targetId: targetId, metadata: JSON.stringify(metadata || {}) });
+  }
+  list() {
+    return this.auditRepository_.list().map(function (entry) {
+      var metadata = {};
+      try { metadata = JSON.parse(entry.metadata || '{}'); } catch (ignored) {}
+      return Object.assign({}, entry, { metadata: metadata });
+    });
   }
 }
 
@@ -118,7 +128,7 @@ class Phase1Api {
   getAvailability(userId) { var actor = this.access_.currentUser(); if (actor.id !== userId) this.access_.require(Phase1Permissions.AVAILABILITY_MANAGE_ALL); return this.repository_.get('availability', userId); }
   setAssignmentEligibility(input) { var actor = this.access_.currentUser(); if (this.access_.hasRole(actor, Phase1Roles.ADMIN)) this.access_.require(Phase1Permissions.ELIGIBILITY_MANAGE_ALL); else this.access_.requireTeamOperation(Phase1Permissions.ELIGIBILITY_MANAGE_TEAM, input.teamId); var record = { id: input.userId + ':' + input.numberId, userId: Phase1Validation.requiredString(input.userId, 'userId'), numberId: Phase1Validation.requiredString(input.numberId, 'numberId'), teamId: Phase1Validation.requiredString(input.teamId, 'teamId'), eligible: input.eligible === true, updatedAt: Phase1Ids.now() }; this.repository_.replace('assignmentEligibility', record.id, record); this.audit_.write(actor.id, 'assignmentEligibility.set', 'assignmentEligibility', record.id, { eligible: record.eligible }); return record; }
   getAssignmentEligibility(userId, numberId) { var actor = this.access_.currentUser(); if (actor.id !== userId && !this.access_.hasRole(actor, Phase1Roles.ADMIN)) throw new Phase1Error('FORBIDDEN', 'Eligibility may only be viewed for the signed-in user.'); return this.eligibility_.evaluate(userId, numberId); }
-  listAuditLog() { this.access_.require(Phase1Permissions.AUDIT_READ); return this.repository_.list('auditLog').sort(function (a, b) { return b.occurredAt.localeCompare(a.occurredAt); }); }
+  listAuditLog() { this.access_.require(Phase1Permissions.AUDIT_READ); return this.audit_.list().sort(function (a, b) { return b.occurredAt.localeCompare(a.occurredAt); }); }
   /** The signed-in user's own identity + role keys — used by the UI to decide what to show (e.g. the Admin Panel link), never as a server-side authorization decision itself. */
   whoAmI() {
     var actor = this.access_.currentUser();

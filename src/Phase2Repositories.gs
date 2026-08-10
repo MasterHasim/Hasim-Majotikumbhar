@@ -66,3 +66,7 @@ class ConversationSnoozeRepository extends SheetRepository {
 class MessageMediaRepository extends SheetRepository {
   constructor() { super('Message_Media', Phase2Schemas.Message_Media); }
 }
+
+class AuditLogRepository extends SheetRepository {
+  constructor() { super('Audit_Log', Phase2Schemas.Audit_Log); }
+}

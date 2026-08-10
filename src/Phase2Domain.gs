@@ -3,9 +3,16 @@
  * Reuses Phase1Error / Phase1Ids / Phase1Validation from Phase1Domain.gs — those are
  * already generic, not Phase-1-specific, so they are not duplicated here.
  *
- * Users, Teams, Team_Members, User_Number_Access, and Audit_Log remain on Phase 1's
+ * Users, Teams, Team_Members, and User_Number_Access remain on Phase 1's
  * PropertiesRepository by deliberate decision (see memory/DECISIONS.md) and have no
  * entry below.
+ *
+ * Audit_Log moved off PropertiesRepository on 2026-08-10: it was originally kept there
+ * as "low volume", but after a month of real daily use its single JSON-blob Property
+ * value exceeded Apps Script's per-value storage quota, which started throwing
+ * "exceeded the property storage quota" on every write that audit-logs unwrapped
+ * (e.g. Phase8Api.addRemark). Sheets rows don't have that ceiling. metadata is stored
+ * JSON-stringified since Sheets cells are flat. See memory/DECISIONS.md.
  */
 var Phase2Schemas = {
   WhatsApp_Numbers: ['displayName', 'phoneNumber', 'provider', 'providerAccountId', 'wabaId', 'providerNumberId', 'active', 'createdAt', 'updatedAt'],
@@ -31,5 +38,6 @@ var Phase2Schemas = {
   Conversation_Snooze: ['conversationId', 'snoozedUntil', 'snoozedByUserId', 'createdAt'],
   // Phase 11: media attached to a message. Its own tab, same rationale — Messages
   // already has real live data and has no mediaUrl column.
-  Message_Media: ['messageId', 'mediaType', 'mediaUrl', 'caption']
+  Message_Media: ['messageId', 'mediaType', 'mediaUrl', 'caption'],
+  Audit_Log: ['occurredAt', 'actorUserId', 'action', 'targetType', 'targetId', 'metadata']
 };
