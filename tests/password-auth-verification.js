@@ -111,4 +111,24 @@ email = 'admin@example.com';
 const users = phase1().listUsers();
 users.forEach(u => { assert.strictEqual(u.passwordHash, undefined); assert.strictEqual(u.passwordSalt, undefined); });
 
+// Temporary passwords (no email needed): admin generates one, the user must change
+// it before doing anything else — enforced server-side, not just hidden client-side.
+const newbie = phase1().createUser({ email: 'newbie@example.com', displayName: 'Newbie', roleIds: [roleId('AGENT')] });
+const temp = auth().setTemporaryPassword(newbie.id);
+assert.strictEqual(temp.temporaryPassword.length, 10);
+assert.ok(!/[0O1lI]/.test(temp.temporaryPassword)); // no ambiguous characters
+
+const newbieLogin = auth().login('newbie@example.com', temp.temporaryPassword);
+assert.strictEqual(newbieLogin.user.mustChangePassword, true);
+assert.throws(() => callApi(newbieLogin.token, 'listUsers', []), error => error.code === 'FORBIDDEN');
+assert.strictEqual(callApi(newbieLogin.token, 'whoAmI', []).mustChangePassword, true);
+assert.throws(() => callApi(newbieLogin.token, 'changePassword', ['wrong-temp-password', 'brand-new-password']), error => error.code === 'UNAUTHENTICATED');
+
+callApi(newbieLogin.token, 'changePassword', [temp.temporaryPassword, 'brand-new-password']);
+assert.strictEqual(callApi(newbieLogin.token, 'whoAmI', []).mustChangePassword, false);
+assert.deepStrictEqual(callApi(newbieLogin.token, 'listMyNumbers', []), []); // unblocked now (AGENT has no USERS_MANAGE, so use an endpoint it can actually call)
+
+assert.throws(() => auth().login('newbie@example.com', temp.temporaryPassword), error => error.code === 'UNAUTHENTICATED');
+assert.strictEqual(auth().login('newbie@example.com', 'brand-new-password').user.mustChangePassword, false);
+
 console.log('Password auth verification: PASS');

@@ -58,7 +58,7 @@ class PasswordAuthApi {
     return { ok: true };
   }
 
-  /** Admin-triggered equivalent of "forgot password" — the flow for first-time password setup too, same token mechanism. */
+  /** Admin-triggered equivalent of "forgot password" — the flow for first-time password setup too, same token mechanism. Needs email delivery to work. */
   sendPasswordSetupLink(userId) {
     var access = new AccessControl(this.repository_, new AuthService(this.audit_), this.audit_);
     var actor = access.require(Phase1Permissions.USERS_MANAGE);
@@ -67,6 +67,41 @@ class PasswordAuthApi {
     var token = this.createResetToken_(user.id);
     this.sendResetEmail_(user, token);
     this.audit_.write(actor.id, 'passwordAuth.setupLinkSent', 'user', user.id, {});
+    return { ok: true };
+  }
+
+  /**
+   * Alternative to sendPasswordSetupLink that needs no email delivery at all — for
+   * users on a domain/email where the reset email can't be verified to arrive (see
+   * memory/DECISIONS.md, 2026-08-10). Returns the plaintext temporary password once,
+   * to the admin, who shares it however they like; it is never stored in plaintext
+   * or retrievable again. mustChangePassword forces a change before the user can use
+   * the app (enforced both at login and on every subsequent whoAmI() check, so it
+   * can't be bypassed by staying signed in past the login moment).
+   */
+  setTemporaryPassword(userId) {
+    var access = new AccessControl(this.repository_, new AuthService(this.audit_), this.audit_);
+    var actor = access.require(Phase1Permissions.USERS_MANAGE);
+    var user = this.repository_.get('users', userId);
+    if (!user) throw new Phase1Error('NOT_FOUND', 'User was not found.');
+    var temporaryPassword = generateTemporaryPassword_();
+    var salt = generateSalt_();
+    this.repository_.update('users', user.id, { passwordSalt: salt, passwordHash: hashPassword_(temporaryPassword, salt), mustChangePassword: true });
+    this.audit_.write(actor.id, 'passwordAuth.temporaryPasswordSet', 'user', user.id, {});
+    return { temporaryPassword: temporaryPassword };
+  }
+
+  /** Called while already signed in (via callApi, so AccessControl.currentUser() resolves the caller from the session). */
+  changePassword(currentPassword, newPassword) {
+    var access = new AccessControl(this.repository_, new AuthService(this.audit_), this.audit_);
+    var actor = access.currentUser();
+    currentPassword = Phase1Validation.requiredString(currentPassword, 'currentPassword');
+    newPassword = Phase1Validation.requiredString(newPassword, 'newPassword');
+    if (newPassword.length < 8) throw new Phase1Error('VALIDATION_ERROR', 'Password must be at least 8 characters.');
+    if (!verifyPassword_(currentPassword, actor.passwordSalt, actor.passwordHash)) throw new Phase1Error('UNAUTHENTICATED', 'Current password is incorrect.');
+    var salt = generateSalt_();
+    this.repository_.update('users', actor.id, { passwordSalt: salt, passwordHash: hashPassword_(newPassword, salt), mustChangePassword: false });
+    this.audit_.write(actor.id, 'passwordAuth.passwordChanged', 'user', actor.id, {});
     return { ok: true };
   }
 
@@ -80,13 +115,13 @@ class PasswordAuthApi {
     var user = this.repository_.get('users', reset.userId);
     if (!user) throw new Phase1Error('NOT_FOUND', 'User was not found.');
     var salt = generateSalt_();
-    this.repository_.update('users', user.id, { passwordSalt: salt, passwordHash: hashPassword_(newPassword, salt) });
+    this.repository_.update('users', user.id, { passwordSalt: salt, passwordHash: hashPassword_(newPassword, salt), mustChangePassword: false });
     try { this.repository_.remove('passwordResets', token); } catch (ignored) {}
     this.audit_.write(user.id, 'passwordAuth.passwordSet', 'user', user.id, {});
     return { ok: true };
   }
 
-  publicUser_(user) { return { id: user.id, email: user.email, displayName: user.displayName, roleIds: user.roleIds, status: user.status }; }
+  publicUser_(user) { return { id: user.id, email: user.email, displayName: user.displayName, roleIds: user.roleIds, status: user.status, mustChangePassword: !!user.mustChangePassword }; }
 
   createSession_(userId) {
     this.pruneSessions_();

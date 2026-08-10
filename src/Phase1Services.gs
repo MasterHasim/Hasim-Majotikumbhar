@@ -144,7 +144,9 @@ class Phase1Api {
   whoAmI() {
     var actor = this.access_.currentUser();
     var roleKeys = this.access_.rolesFor(actor).map(function (role) { return role.key; });
-    return { id: actor.id, email: actor.email, displayName: actor.displayName, roleKeys: roleKeys };
+    // Checked again here (not just at login) so a forced password change can't be
+    // skipped by staying signed in past the login moment — see PasswordAuthServices.gs.
+    return { id: actor.id, email: actor.email, displayName: actor.displayName, roleKeys: roleKeys, mustChangePassword: !!actor.mustChangePassword };
   }
   updateEntity_(collection, id, patch, permission, action) {
     var actor = this.access_.require(permission); if (!patch || typeof patch !== 'object') throw new Phase1Error('VALIDATION_ERROR', 'patch is required.');

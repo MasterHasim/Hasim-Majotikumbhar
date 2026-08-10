@@ -245,6 +245,20 @@
     </div>
   </div>
 
+  <div id="changePasswordScreen" style="display:none;">
+    <div class="login-card">
+      <div class="landing-header">
+        <span class="logo">💬</span>
+        <div><h1>Change your password</h1><div class="subtitle">You're signed in with a temporary password — set your own before continuing.</div></div>
+      </div>
+      <div class="form-error" id="changePasswordError"></div>
+      <input type="password" id="changePasswordCurrent" placeholder="Temporary password" autocomplete="current-password">
+      <input type="password" id="changePasswordNew" placeholder="New password (min 8 characters)" autocomplete="new-password">
+      <input type="password" id="changePasswordConfirm" placeholder="Confirm new password" autocomplete="new-password" onkeydown="if(event.key==='Enter')submitChangePassword();">
+      <div class="form-row"><button class="btn primary" onclick="submitChangePassword()">Set password</button></div>
+    </div>
+  </div>
+
   <div id="landingScreen">
     <div class="landing-header">
       <span class="logo">💬</span>
@@ -1383,7 +1397,8 @@
         document.getElementById('usersTable').querySelector('tbody').innerHTML = users.map(function (u) {
           return '<tr><td>' + escapeHtml(u.email) + '</td><td>' + escapeHtml(u.displayName) + '</td><td><span class="pill">' + escapeHtml(u.status) + '</span></td>' +
             '<td>' + u.roleIds.map(roleName).join(', ') + '</td><td><button class="btn" onclick="editUser(\'' + u.id + '\')">Edit</button> ' +
-            '<button class="btn" onclick="submitSendPasswordSetupLink(\'' + u.id + '\')" title="Emails a link to set/reset their password">Send setup link</button></td></tr>';
+            '<button class="btn" onclick="submitSendPasswordSetupLink(\'' + u.id + '\')" title="Emails a link to set/reset their password">Send setup link</button> ' +
+            '<button class="btn" onclick="submitSetTemporaryPassword(\'' + u.id + '\')" title="No email needed — shows a temporary password you share directly; they must change it on first login">Generate temp password</button></td></tr>';
         }).join('') || '<tr><td colspan="5" class="empty">No users</td></tr>';
       }).withFailureHandler(function (error) { setError('userError', error); }).listUsers();
     }
@@ -1412,6 +1427,11 @@
     function submitSendPasswordSetupLink(id) {
       scriptRun().withSuccessHandler(function () { alert('Setup link emailed.'); })
         .withFailureHandler(function (error) { alert('Could not send setup link: ' + (error && error.message)); }).sendPasswordSetupLink(id);
+    }
+    function submitSetTemporaryPassword(id) {
+      scriptRun().withSuccessHandler(function (result) {
+        alert('Temporary password: ' + result.temporaryPassword + '\n\nShare this with them directly — it will not be shown again. They must change it the first time they sign in.');
+      }).withFailureHandler(function (error) { alert('Could not generate a temporary password: ' + (error && error.message)); }).setTemporaryPassword(id);
     }
 
     // ============================================================================
@@ -1601,8 +1621,25 @@
     function showLoginScreen(error) {
       document.getElementById('landingScreen').style.display = 'none';
       document.getElementById('resetPasswordScreen').style.display = 'none';
+      document.getElementById('changePasswordScreen').style.display = 'none';
       document.getElementById('loginScreen').style.display = 'block';
       if (error) setError('loginError', error);
+    }
+    function showChangePasswordScreen() {
+      document.getElementById('landingScreen').style.display = 'none';
+      document.getElementById('loginScreen').style.display = 'none';
+      document.getElementById('resetPasswordScreen').style.display = 'none';
+      document.getElementById('changePasswordScreen').style.display = 'block';
+    }
+    function submitChangePassword() {
+      var current = document.getElementById('changePasswordCurrent').value;
+      var pw = document.getElementById('changePasswordNew').value;
+      var confirm = document.getElementById('changePasswordConfirm').value;
+      setError('changePasswordError', null);
+      if (pw.length < 8) { setError('changePasswordError', { message: 'Password must be at least 8 characters.' }); return; }
+      if (pw !== confirm) { setError('changePasswordError', { message: 'Passwords do not match.' }); return; }
+      scriptRun().withSuccessHandler(function () { bootIdentity(); })
+        .withFailureHandler(function (error) { setError('changePasswordError', error); }).changePassword(current, pw);
     }
     function toggleForgotPassword() {
       var box = document.getElementById('forgotPasswordBox');
@@ -1664,6 +1701,7 @@
     }
     function bootIdentity() {
       scriptRun().withSuccessHandler(function (me) {
+        if (me.mustChangePassword) { showChangePasswordScreen(); return; }
         currentUser = me;
         document.getElementById('loginScreen').style.display = 'none';
         document.getElementById('sidebarAvatar').textContent = initials(me.displayName);

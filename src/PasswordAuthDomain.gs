@@ -30,3 +30,14 @@ function hashPassword_(password, salt) {
 function verifyPassword_(password, salt, expectedHash) {
   return !!expectedHash && hashPassword_(password, salt) === expectedHash;
 }
+// No ambiguous characters (0/O, 1/l/I) — this gets read aloud or retyped by hand.
+// Derived from two UUIDs' hex digits rather than Math.random() for better entropy.
+function generateTemporaryPassword_() {
+  var alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+  var raw = (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g, '');
+  var password = '';
+  for (var i = 0; i < 10; i++) {
+    password += alphabet.charAt(parseInt(raw.substr(i * 2, 2), 16) % alphabet.length);
+  }
+  return password;
+}
