@@ -5,9 +5,8 @@
 
 ## Action needed from you right now
 
+- **The panel has been fully rebuilt** to match the reference CRM mockup you shared — dark-green sidebar (Dashboard/Inbox/All Conversations/Unassigned/Reminders/Customers/Reports + admin sections), KPI dashboard, redesigned chat with an inline Assign dropdown and Reply/Note tabs, and a Customer Details panel (Previous Conversations, Notes, Reminders). The separate Admin Panel page is gone — everything is one app now. **Please click through this thoroughly** — it's the biggest UI change yet, and while I reviewed the code carefully (and caught/fixed one real bug — see `memory/DECISIONS.md` — before shipping), I have no way to actually click through Apps Script's rendered output myself.
 - **Media sending is still broken** — still waiting on diagnostics from you. Check Apps Script → Executions for the `sendMediaReply` call and tell me whether it errors, hangs, or sends-but-never-arrives (or share the raw request/response).
-- **Inbox polish is live** — based on the workspace screenshot you shared: conversation list now shows customer names, replies show who sent them, media messages render as actual images/links instead of `"[Media: image]"` text, and Remarks/Reminders are now collapsible (below the compose box, so the chat + reply box are always visible without scrolling). Please click through and confirm it looks right.
-- Landing screen (previous round) confirmed working by you already.
 - See the **full wake-up task list** at the bottom of this file for everything else queued up.
 
 ## Phase status
@@ -39,6 +38,7 @@
 
 ## Recently shipped (brief — see `memory/CHANGELOG.md` for full detail)
 
+- **Unified sidebar-nav redesign**: the whole panel now matches the reference CRM mockup you shared — one app, dark-green sidebar navigation (Dashboard, Inbox, All Conversations, Unassigned, Reminders, Customers, Reports, plus the former Admin Panel sections), a real KPI dashboard, a redesigned chat panel (inline Assign dropdown, Reply/Note tabs, sender names, inline media), and a Customer Details side panel (edit contact info, Previous Conversations, Notes, Reminders). No more separate `?page=admin` — that page is retired. New: an Availability dropdown in the top bar (this already existed on the backend since Phase 1 but was never wired to any UI until now) and a notification bell. KPI cards show real counts only, not fake "vs yesterday" trends, per your own call. This was almost entirely a frontend rewrite — all 20 backend tests still pass.
 - **Inbox polish**: fixed four real gaps from your workspace screenshot — conversation list shows customer names now (was showing "OPEN"), replies show who sent them ("Rahul replied," per the original spec, previously invisible), media messages show an actual image/link instead of placeholder text, and Remarks/Reminders are now collapsible sections below the compose box instead of always-expanded panels pushing the chat thread out of view.
 - **Number/org-select landing screen**: the Web App now opens on a card grid — one card per number you can access, with a needs-response badge — matching the Superfone screenshot you shared. Click a card to enter that number's inbox (Conversations + Detail, same as before); "← Switch number" in the header takes you back to the grid. The old always-visible Numbers list pane is gone — you pick once, up front.
 - **Chatbot/webhook incident (resolved)**: the chatbot on 079-485-02810 was intercepting messages for every number because Exotel routes webhooks per-account, not truly per-number — confirmed our own code was untouched all day, so it wasn't a regression from anything I did. Fixed by you re-adding our webhook URL to that same slot.
@@ -73,11 +73,11 @@
 
 ### Open
 
-1. **Media sending is broken — I need diagnostics.** Open Apps Script → Executions, find the `sendMediaReply` call, and share the raw request/response (or describe exactly what happens: error, hang, or silent no-arrival).
-2. **Click through the inbox polish** — customer names in the conversation list, sender names on replies, media rendering, collapsible remarks/reminders — confirm it all looks/feels right on a real conversation.
+1. **Click through the whole redesigned panel, thoroughly.** This is the biggest single UI change so far — sidebar nav, Dashboard KPIs, Inbox/All Conversations/Unassigned, Reminders, Customers, Reports, and every former Admin Panel section (Templates, Quick Replies, Teams, Users, WhatsApp Numbers, Settings, Audit Log). Everything was ported from working code and reviewed carefully, but I have no way to actually render/click Apps Script's output myself — please exercise it for real before trusting it day-to-day.
+2. **Media sending is broken — I need diagnostics.** Open Apps Script → Executions, find the `sendMediaReply` call, and share the raw request/response (or describe exactly what happens: error, hang, or silent no-arrival).
 3. **Live-verify Phase 6 `sendText`** — reply to a real conversation, confirm it arrives, check Exotel's real response shape with me so I can fix `extractOutboundProviderMessageId_` if needed.
-4. Create at least one quick reply — Admin Panel → Quick Replies — so the compose box's dropdown has something in it.
-5. Fill in `Spreewalk - Raipur` / `ECHT Advisory` provider fields — Admin Panel → Numbers → Edit (optional).
+4. Create at least one quick reply — Settings-adjacent Quick Replies page — so the compose box's dropdown has something in it.
+5. Fill in `Spreewalk - Raipur` / `ECHT Advisory` provider fields — WhatsApp Numbers page → Edit (optional).
 6. Remove the ngrok callback URL from Exotel (optional).
 7. **Read `docs/ZOHO_PHASE_2.md` and answer its 5 open questions** whenever you're ready to think about Zoho.
 

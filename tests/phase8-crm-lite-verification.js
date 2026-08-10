@@ -114,4 +114,23 @@ email = 'viewer@example.com';
 forbidden(() => phase8().addRemark(conversation.id, 'Trying to add one'));
 forbidden(() => phase8().listRemarks(conversation.id));
 
+// Customer directory (2026-08-10): ADMIN sees every customer; AGENT sees only customers they have a related conversation with.
+email = 'agent@example.com';
+const agentCustomers = phase8().listCustomers();
+assert.strictEqual(agentCustomers.length, 1);
+assert.strictEqual(agentCustomers[0].id, customer.id, 'agent has a conversation with customer but not otherCustomer at this point in the test');
+
+email = 'admin@example.com';
+assert.strictEqual(phase8().listCustomers().length, 2);
+
+// updateCustomer: same relationship gate, phone is not an editable field (it's the ingestion match key).
+email = 'agent@example.com';
+const updated = phase8().updateCustomer(customer.id, { name: 'Test Customer Updated', company: 'Acme' });
+assert.strictEqual(updated.name, 'Test Customer Updated');
+assert.strictEqual(updated.company, 'Acme');
+assert.throws(() => phase8().updateCustomer(customer.id, { phone: '+910000000000' }), error => error.code === 'VALIDATION_ERROR');
+forbidden(() => phase8().updateCustomer(otherCustomer.id, { name: 'Should not work' }));
+email = 'admin@example.com';
+assert.doesNotThrow(() => phase8().updateCustomer(otherCustomer.id, { name: 'Admin can edit anyone' }));
+
 console.log('Phase 8 CRM-lite verification: PASS');

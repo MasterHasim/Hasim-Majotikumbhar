@@ -4,7 +4,10 @@
  * Most of the roadmap's Admin Panel sections (Users, Teams, WhatsApp Numbers, Number
  * Access, Lead Stages, Quick Replies, Templates, Audit Logs) already have a full
  * authorized service layer from their own phase (Phase 1/3/8/10/11) — Phase 12 gives
- * them a UI (frontend/Admin.html), not new endpoints.
+ * them a UI, not new endpoints. That UI originally lived in its own page
+ * (frontend/Admin.html, at `?page=admin`); as of 2026-08-10 it was folded into the
+ * single unified app (frontend/Index.html) as sidebar sections — see
+ * memory/DECISIONS.md.
  *
  * The one genuinely new backend gap: Number_Assignment_Config /
  * Number_Assignment_Users (Phase 2's schema) had no admin-facing CRUD at all — only

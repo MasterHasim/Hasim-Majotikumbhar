@@ -278,3 +278,35 @@ per-field authorization denials into `null`/`[]` rather than failing the whole c
 conversation in the UI was firing 8 separate `google.script.run` round-trips — each a
 full Apps Script execution with real cold-start latency — which was the actual
 reported cause of "slow transitions," not rendering. See `memory/DECISIONS.md`.
+
+# Unified-app redesign (2026-08-10, user-directed)
+
+No new entities. Backend additions to support the new unified sidebar app
+(`frontend/Index.html`, replacing the separate `frontend/Admin.html`):
+
+- **`Phase8Api.listCustomers()`** — the Customers directory page. ADMIN sees every
+  customer; anyone else sees only customers they have at least one viewable
+  conversation with (`canSeeCustomer_`, the same relationship gate `setCustomerStage`/
+  `getCustomerStage` already used).
+- **`Phase8Api.updateCustomer(customerId, patch)`** — edits `name`/`email`/`company`
+  only. `phone` is deliberately not editable here — it's the identity Phase 4's
+  ingestion matches inbound messages against, so changing it through this endpoint
+  would risk silently splitting a customer's message history across two records.
+- **`Phase13Api.searchConversations`** gained a `customerId` filter and a
+  `status: 'ANY'` bypass (skips the OPEN-only default entirely) — both needed for the
+  Customer Details panel's "Previous Conversations" list, which should show a
+  customer's full history including resolved conversations, not just their currently
+  active ones.
+- **`Phase14Api.getDashboardMetrics()`** gained `totalCustomers` (distinct customers
+  across the scoped conversation set, reusing the `customerIds` map already computed
+  for stage distribution/lead conversion) and `assignedToMe` (the signed-in user's own
+  open-conversation count) for the new Dashboard KPI cards.
+
+`WorkspaceApi.getConversationWorkspace` also gained `assignedUserName` (resolved from
+`Conversations.assignedUserId`) and, per message, `senderName` and `media` — these
+were actually added in the earlier "inbox polish" round (see above) and are reused
+as-is by the new chat panel design.
+
+`doGet` (`src/Phase5Endpoints.gs`) no longer branches on `?page=admin` — it always
+serves `frontend/Index.html`, since there is only one app now.  `doGetAdmin()`
+(`src/Phase12Endpoints.gs`) was removed along with `frontend/Admin.html`.

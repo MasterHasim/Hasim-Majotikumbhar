@@ -3,427 +3,763 @@
 <head>
   <base target="_top">
   <style>
+    :root {
+      --sidebar-bg: #0f2a20; --sidebar-hover: #163b2c; --sidebar-active: #1f7a53; --sidebar-text: #c9dbd2; --sidebar-text-active: #ffffff;
+      --accent: #1f7a53; --accent-dark: #17603f; --accent-light: #e6f4ec;
+      --text: #202124; --text-secondary: #5f6368; --border: #e5e7eb; --bg: #f7f8fa; --card-bg: #ffffff;
+      --danger: #d93025; --danger-light: #fce8e6; --warning: #b7791f;
+    }
     * { box-sizing: border-box; }
     html, body { height: 100%; }
-    body { margin: 0; font-family: Arial, Helvetica, sans-serif; font-size: 14px; color: #202124; }
+    body { margin: 0; font-family: Arial, Helvetica, sans-serif; font-size: 14px; color: var(--text); background: var(--bg); }
+    a { color: inherit; }
+    button, select, input, textarea { font-family: inherit; }
 
-    #landingScreen { max-width: 1040px; margin: 0 auto; padding: 40px 28px; }
-    .landing-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 28px; flex-wrap: wrap; gap: 8px; }
-    .landing-header h1 { font-size: 22px; margin: 0; }
-    .landing-header .subtitle { color: #5f6368; font-size: 13px; margin-top: 4px; }
-    .landing-links a { margin-left: 16px; font-size: 13px; color: #1a73e8; text-decoration: none; cursor: pointer; }
-    .landing-links a:hover { text-decoration: underline; }
-    .number-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
-    .number-card { position: relative; background: #fff; border: 1px solid #e3e5e8; border-radius: 10px; padding: 18px 20px; cursor: pointer; transition: box-shadow .15s ease, transform .15s ease, border-color .15s ease; }
-    .number-card:hover { box-shadow: 0 4px 14px rgba(32, 33, 36, .08); transform: translateY(-2px); border-color: #c9cdd3; }
-    .number-card:focus-visible { outline: 2px solid #1a73e8; outline-offset: 2px; }
-    .number-card .name { font-size: 16px; font-weight: 700; padding-right: 26px; }
-    .number-card .phone { color: #5f6368; font-size: 13px; margin-top: 5px; font-variant-numeric: tabular-nums; }
-    .number-card .badge { position: absolute; top: 16px; right: 16px; }
+    #app { display: flex; height: 100vh; }
 
-    #workspaceScreen { display: none; flex-direction: column; height: 100vh; }
-    .workspace-header { flex-shrink: 0; padding: 10px 16px; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; gap: 14px; }
-    .workspace-header .back-link { color: #1a73e8; font-size: 13px; text-decoration: none; cursor: pointer; white-space: nowrap; }
-    .workspace-header .back-link:hover { text-decoration: underline; }
-    .workspace-header .current-number { font-weight: 700; }
-    .workspace-header .current-phone { color: #5f6368; font-size: 12px; font-variant-numeric: tabular-nums; }
+    /* ---- Sidebar ---- */
+    #sidebar { width: 232px; flex-shrink: 0; background: var(--sidebar-bg); color: var(--sidebar-text); display: flex; flex-direction: column; }
+    .brand { display: flex; align-items: center; gap: 10px; padding: 18px 18px 14px; font-size: 16px; font-weight: 700; color: #fff; }
+    .brand .logo { width: 30px; height: 30px; border-radius: 8px; background: var(--sidebar-active); display: flex; align-items: center; justify-content: center; font-size: 15px; }
+    #navList { flex: 1; overflow-y: auto; padding: 6px 10px; }
+    .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; cursor: pointer; font-size: 13px; margin-bottom: 2px; color: var(--sidebar-text); }
+    .nav-item:hover { background: var(--sidebar-hover); }
+    .nav-item.active { background: var(--sidebar-active); color: var(--sidebar-text-active); font-weight: 600; }
+    .nav-item .nav-icon { width: 18px; text-align: center; font-size: 14px; }
+    .nav-item .nav-label { flex: 1; }
+    .nav-item .nav-badge { background: rgba(255,255,255,.18); color: #fff; font-size: 11px; padding: 1px 7px; border-radius: 9px; }
+    .nav-item.active .nav-badge { background: rgba(255,255,255,.3); }
+    .nav-section-label { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: #7fa895; padding: 14px 12px 4px; }
+    .sidebar-footer { padding: 12px 16px; border-top: 1px solid rgba(255,255,255,.08); display: flex; align-items: center; gap: 8px; font-size: 12px; }
+    .avatar-circle { width: 28px; height: 28px; border-radius: 50%; background: var(--sidebar-active); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; flex-shrink: 0; }
 
-    .layout { display: grid; grid-template-columns: 320px 1fr; flex: 1; min-height: 0; }
-    .pane { overflow-y: auto; border-right: 1px solid #e0e0e0; }
-    .pane:last-child { border-right: none; }
-    #detailPane { display: flex; flex-direction: column; overflow: hidden; }
-    .pane-header { padding: 12px 14px; font-weight: bold; border-bottom: 1px solid #e0e0e0; position: sticky; top: 0; background: #fff; }
-    .list-item { padding: 10px 14px; cursor: pointer; border-bottom: 1px solid #f1f1f1; }
-    .list-item:hover { background: #f5f5f5; }
-    .list-item.active { background: #e8f0fe; }
-    .list-item .title { font-weight: 600; }
-    .list-item .subtitle { color: #5f6368; font-size: 12px; margin-top: 2px; }
-    .empty { padding: 16px; color: #5f6368; }
-    .detail-header { padding: 12px 16px; border-bottom: 1px solid #e0e0e0; }
-    .detail-header h2 { margin: 0 0 6px; font-size: 16px; }
-    .detail-header .meta { color: #5f6368; font-size: 12px; margin-bottom: 8px; }
-    .detail-header .pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; background: #f1f3f4; color: #3c4043; margin-right: 4px; }
-    .detail-header .pill.status-OPEN { background: #e6f4ea; color: #1e7e34; }
-    .detail-header .pill.status-CLOSED { background: #f1f3f4; color: #5f6368; }
-    .detail-header .actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-    .messages { flex: 1; overflow-y: auto; padding: 16px; }
-    .message { max-width: 70%; margin-bottom: 10px; padding: 8px 12px; border-radius: 10px; }
-    .message.INBOUND { background: #fff; border: 1px solid #e0e0e0; margin-right: auto; border-bottom-left-radius: 2px; }
+    /* ---- Top bar + main ---- */
+    #mainArea { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+    #topBar { flex-shrink: 0; height: 56px; background: var(--card-bg); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 20px; gap: 14px; }
+    #pageTitle { font-size: 17px; font-weight: 700; flex: 1; }
+    #availabilitySelect { padding: 5px 10px; border-radius: 16px; border: 1px solid var(--border); font-size: 12px; background: var(--accent-light); color: var(--accent-dark); font-weight: 600; }
+    .icon-btn { position: relative; width: 34px; height: 34px; border-radius: 50%; border: none; background: transparent; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; }
+    .icon-btn:hover { background: var(--bg); }
+    .icon-btn .dot { position: absolute; top: 4px; right: 5px; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); display: none; }
+    #topBarUser { display: flex; align-items: center; gap: 8px; }
+    #topBarUser .name { font-size: 12px; font-weight: 700; }
+    #topBarUser .role { font-size: 11px; color: var(--text-secondary); }
+    .dropdown-panel { position: absolute; top: 52px; right: 20px; width: 320px; max-height: 400px; overflow-y: auto; background: #fff; border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.12); z-index: 30; display: none; }
+    .dropdown-panel.open { display: block; }
+    .dropdown-panel .dp-header { padding: 10px 14px; font-weight: 700; font-size: 13px; border-bottom: 1px solid var(--border); }
+    .dropdown-panel .dp-item { padding: 10px 14px; border-bottom: 1px solid #f1f1f1; cursor: pointer; font-size: 13px; }
+    .dropdown-panel .dp-item:hover { background: var(--bg); }
+
+    #pageContent { flex: 1; overflow-y: auto; padding: 20px; }
+    .page { display: none; }
+    .page.active { display: block; }
+
+    /* ---- KPI cards ---- */
+    .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; margin-bottom: 20px; }
+    .kpi-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; display: flex; align-items: center; gap: 12px; }
+    .kpi-card .kpi-icon { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 17px; flex-shrink: 0; }
+    .kpi-card .kpi-label { color: var(--text-secondary); font-size: 12px; }
+    .kpi-card .kpi-value { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+    /* ---- Conversations + chat split ---- */
+    .split { display: grid; grid-template-columns: 320px 1fr 300px; gap: 0; background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; height: calc(100vh - 160px); }
+    .split.no-detail { grid-template-columns: 320px 1fr; }
+    .col { overflow-y: auto; border-right: 1px solid var(--border); }
+    .col:last-child { border-right: none; }
+    .col-header { padding: 12px 14px; font-weight: 700; font-size: 13px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--card-bg); z-index: 1; }
+    .list-toolbar { padding: 8px 10px; border-bottom: 1px solid var(--border); }
+    .list-toolbar input[type="text"] { width: 100%; padding: 6px 8px; font-size: 12px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 6px; }
+    .list-toolbar select { width: 100%; padding: 5px 6px; font-size: 12px; border: 1px solid var(--border); border-radius: 6px; }
+    .conv-item { padding: 10px 14px; cursor: pointer; border-bottom: 1px solid #f2f3f4; display: flex; gap: 10px; align-items: flex-start; }
+    .conv-item:hover { background: var(--bg); }
+    .conv-item.active { background: var(--accent-light); }
+    .conv-item .conv-main { flex: 1; min-width: 0; }
+    .conv-item .conv-title-row { display: flex; justify-content: space-between; gap: 6px; }
+    .conv-item .conv-name { font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .conv-item .conv-time { font-size: 11px; color: var(--text-secondary); white-space: nowrap; }
+    .conv-item .conv-preview { font-size: 12px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .status-tag { display: inline-block; padding: 1px 7px; border-radius: 9px; font-size: 10px; font-weight: 700; margin-top: 3px; }
+    .status-tag.needs { background: var(--danger-light); color: var(--danger); }
+    .status-tag.unassigned { background: #fff4e0; color: var(--warning); }
+    .status-tag.closed { background: #f1f3f4; color: var(--text-secondary); }
+    .empty { padding: 16px; color: var(--text-secondary); font-size: 13px; }
+
+    /* ---- Chat ---- */
+    #chatCol { display: flex; flex-direction: column; overflow: hidden; }
+    .chat-header { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+    .chat-header .chat-title-row { display: flex; align-items: center; gap: 8px; }
+    .chat-header h2 { margin: 0; font-size: 15px; }
+    .chat-header .meta { color: var(--text-secondary); font-size: 12px; margin-top: 3px; }
+    .pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; background: #f1f3f4; color: #3c4043; margin-right: 4px; }
+    .pill.status-OPEN { background: #e6f4ea; color: #1e7e34; }
+    .pill.status-CLOSED { background: #f1f3f4; color: #5f6368; }
+    .chat-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; }
+    .btn { padding: 5px 12px; font-size: 12px; border: 1px solid var(--border); border-radius: 6px; background: #fff; cursor: pointer; }
+    .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .btn.danger { background: #fff; border-color: var(--danger); color: var(--danger); }
+    select.btn { -webkit-appearance: none; appearance: none; }
+    .date-divider { text-align: center; margin: 12px 0; }
+    .date-divider span { background: var(--bg); color: var(--text-secondary); font-size: 11px; padding: 2px 10px; border-radius: 10px; }
+    .messages { flex: 1; overflow-y: auto; padding: 16px; background: #faf9f6; }
+    .message { max-width: 68%; margin-bottom: 10px; padding: 8px 12px; border-radius: 10px; }
+    .message.INBOUND { background: #fff; border: 1px solid var(--border); margin-right: auto; border-bottom-left-radius: 2px; }
     .message.OUTBOUND { background: #d9fdd3; margin-left: auto; border-bottom-right-radius: 2px; }
-    .message.FAILED { background: #fce8e6; border: 1px solid #f28b82; }
-    .message .sender { font-size: 11px; font-weight: 700; color: #1a73e8; margin-bottom: 2px; }
+    .message.FAILED { background: var(--danger-light); border: 1px solid #f28b82; }
+    .message .sender { font-size: 11px; font-weight: 700; color: var(--accent-dark); margin-bottom: 2px; }
     .message .text { white-space: pre-wrap; }
-    .message .time { color: #5f6368; font-size: 11px; margin-top: 4px; }
+    .message .time { color: var(--text-secondary); font-size: 11px; margin-top: 4px; }
     .message .media-image { max-width: 100%; border-radius: 6px; display: block; margin-bottom: 6px; cursor: pointer; }
     .message .media-link { display: flex; align-items: center; gap: 6px; padding: 6px 8px; margin-bottom: 6px; background: rgba(0,0,0,.04); border-radius: 6px; color: inherit; text-decoration: none; font-size: 12px; }
-    .message .media-link .media-icon { font-size: 16px; }
-    .compose { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid #e0e0e0; }
-    .compose textarea { flex: 1; resize: none; padding: 8px; font-family: inherit; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; }
-    .compose button { padding: 0 18px; border: none; border-radius: 4px; background: #1a73e8; color: #fff; cursor: pointer; }
-    .compose button:disabled { background: #9aa0a6; cursor: default; }
-    .compose-error { color: #d93025; font-size: 12px; padding: 0 16px 8px; }
-    .compose select { max-width: 140px; padding: 0 6px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; }
-    .stage-select { padding: 4px 6px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; }
-    .side-panel { border-top: 1px solid #e0e0e0; flex-shrink: 0; }
-    .side-panel summary { list-style: none; cursor: pointer; padding: 8px 16px; font-weight: 600; font-size: 12px; color: #5f6368; display: flex; align-items: center; justify-content: space-between; }
-    .side-panel summary::-webkit-details-marker { display: none; }
-    .side-panel summary::after { content: '▸'; transition: transform .15s ease; color: #9aa0a6; }
-    .side-panel[open] summary::after { transform: rotate(90deg); }
-    .side-panel.remarks[open] { background: #fffdf5; }
-    .side-panel.reminders[open] { background: #f6f9fe; }
-    .side-panel-body { padding: 0 16px 12px; }
-    .remark { font-size: 13px; margin-bottom: 6px; }
-    .remark .remark-meta { color: #5f6368; font-size: 11px; }
-    .remark-add { display: flex; gap: 6px; margin-top: 6px; }
-    .remark-add input { flex: 1; padding: 5px 8px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; }
-    .remark-add button { padding: 0 12px; border: none; border-radius: 4px; background: #5f6368; color: #fff; cursor: pointer; font-size: 12px; }
-    .reminder { font-size: 13px; margin-bottom: 6px; display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
-    .reminder .reminder-due { color: #5f6368; font-size: 11px; }
-    .reminder button { border: none; background: none; color: #1a73e8; cursor: pointer; font-size: 11px; padding: 0; }
-    .reminder-add { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
-    .reminder-add input[type="text"] { flex: 1; min-width: 120px; padding: 5px 8px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; }
-    .reminder-add input[type="datetime-local"] { padding: 4px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; }
-    .reminder-add button { padding: 0 12px; border: none; border-radius: 4px; background: #1a73e8; color: #fff; cursor: pointer; font-size: 12px; }
-    .action-btn { padding: 4px 10px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; background: #fff; cursor: pointer; }
-    .action-btn.primary { background: #1a73e8; border-color: #1a73e8; color: #fff; }
-    .snooze-banner { background: #fef7e0; padding: 6px 16px; font-size: 12px; color: #7a5900; }
-    .badge { display: inline-block; min-width: 16px; padding: 0 5px; border-radius: 9px; background: #d93025; color: #fff; font-size: 10px; text-align: center; margin-left: 6px; }
-    .filter-bar { padding: 8px 10px; border-bottom: 1px solid #e0e0e0; }
-    .filter-bar input[type="text"] { width: 100%; padding: 5px 8px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 6px; }
-    .filter-bar .filter-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; font-size: 11px; }
-    .filter-bar label { display: flex; align-items: center; gap: 3px; }
-    .filter-bar button { padding: 2px 8px; font-size: 11px; border: 1px solid #ccc; border-radius: 4px; background: #fff; cursor: pointer; }
-    #reportsOverlay { display: none; position: fixed; inset: 0; background: #fff; z-index: 10; overflow-y: auto; padding: 20px 28px; }
-    #reportsOverlay table { border-collapse: collapse; width: 100%; max-width: 720px; margin-bottom: 18px; font-size: 13px; }
-    #reportsOverlay th, #reportsOverlay td { border-bottom: 1px solid #eee; padding: 6px 8px; text-align: left; }
-    #reportsOverlay th { color: #5f6368; }
-    #reportsOverlay h2 { font-size: 14px; margin: 18px 0 8px; }
+    .compose-tabs { display: flex; gap: 4px; padding: 8px 16px 0; border-top: 1px solid var(--border); }
+    .compose-tab { padding: 6px 14px; font-size: 12px; font-weight: 600; cursor: pointer; color: var(--text-secondary); border-bottom: 2px solid transparent; }
+    .compose-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .compose-body { padding: 10px 16px 14px; }
+    .compose-error { color: var(--danger); font-size: 12px; padding: 0 16px 6px; }
+    .compose-row { display: flex; gap: 8px; }
+    .compose-row textarea { flex: 1; resize: none; padding: 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; }
+    .compose-row button.send { padding: 0 18px; border: none; border-radius: 6px; background: var(--accent); color: #fff; cursor: pointer; }
+    .compose-row button.send:disabled { background: #9aa0a6; cursor: default; }
+    .compose-toolbar { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+    .compose-toolbar select, .compose-toolbar button { padding: 4px 8px; font-size: 12px; border: 1px solid var(--border); border-radius: 6px; background: #fff; cursor: pointer; }
+    .compose-toolbar select { max-width: 130px; }
+
+    /* ---- Customer details panel ---- */
+    #detailCol { display: flex; flex-direction: column; }
+    .cust-header { padding: 18px 16px; text-align: center; border-bottom: 1px solid var(--border); }
+    .cust-avatar { width: 56px; height: 56px; border-radius: 50%; background: var(--accent); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 700; margin: 0 auto 10px; }
+    .cust-header .cust-name { font-weight: 700; font-size: 14px; }
+    .cust-fields { padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 12px; }
+    .cust-fields .field-row { display: flex; justify-content: space-between; padding: 4px 0; gap: 8px; }
+    .cust-fields .field-row .field-label { color: var(--text-secondary); }
+    .cust-fields .field-row .field-value { text-align: right; word-break: break-word; }
+    .detail-section { border-bottom: 1px solid var(--border); }
+    .detail-section summary { list-style: none; cursor: pointer; padding: 10px 16px; font-weight: 700; font-size: 12px; color: var(--text-secondary); display: flex; justify-content: space-between; }
+    .detail-section summary::-webkit-details-marker { display: none; }
+    .detail-section summary::after { content: '▸'; color: #9aa0a6; }
+    .detail-section[open] summary::after { content: '▾'; }
+    .detail-section-body { padding: 0 16px 12px; font-size: 12px; }
+    .note-item, .reminder-item { margin-bottom: 8px; padding: 8px; background: var(--bg); border-radius: 6px; }
+    .note-item .note-meta, .reminder-item .reminder-meta { color: var(--text-secondary); font-size: 10px; margin-top: 2px; }
+    .mini-add { display: flex; gap: 6px; margin-top: 6px; }
+    .mini-add input { flex: 1; padding: 5px 7px; font-size: 12px; border: 1px solid var(--border); border-radius: 6px; }
+    .mini-add button { padding: 0 10px; border: none; border-radius: 6px; background: var(--accent); color: #fff; cursor: pointer; font-size: 12px; }
+
+    /* ---- Generic admin-style pages ---- */
+    h1.page-title { font-size: 18px; margin: 0 0 16px; }
+    h2.section-title { font-size: 14px; margin: 18px 0 8px; }
+    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-bottom: 16px; max-width: 760px; }
+    table.data-table { border-collapse: collapse; width: 100%; margin-bottom: 12px; font-size: 13px; background: var(--card-bg); }
+    table.data-table th, table.data-table td { border-bottom: 1px solid var(--border); padding: 7px 10px; text-align: left; }
+    table.data-table th { color: var(--text-secondary); font-weight: 600; background: var(--bg); }
+    table.data-table tr:hover td { background: #fafafa; }
+    .form-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; align-items: center; }
+    .form-row input, .form-row select { padding: 6px 9px; font-size: 13px; border: 1px solid var(--border); border-radius: 6px; }
+    .form-error { color: var(--danger); font-size: 12px; margin: 4px 0; }
+    label.inline { display: flex; align-items: center; gap: 4px; font-size: 13px; }
+    .settings-tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
+    .settings-tab { padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--text-secondary); border-bottom: 2px solid transparent; }
+    .settings-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .settings-pane { display: none; }
+    .settings-pane.active { display: block; }
   </style>
 </head>
 <body>
-  <div id="landingScreen">
-    <div class="landing-header">
-      <div>
-        <h1>Select a number</h1>
-        <div class="subtitle">Choose which WhatsApp number to work in.</div>
-      </div>
-      <div class="landing-links">
-        <a id="reportsLink" onclick="openReports()" style="display:none;">Reports</a>
-        <a id="adminLink" href="?page=admin" style="display:none;">Admin Panel</a>
+  <div id="app">
+    <div id="sidebar">
+      <div class="brand"><span class="logo">💬</span> WhatsApp Panel</div>
+      <div id="navList"></div>
+      <div class="sidebar-footer">
+        <div class="avatar-circle" id="sidebarAvatar">?</div>
+        <div>
+          <div id="sidebarName" style="font-weight:700;">Loading…</div>
+          <div id="sidebarRole" style="color:#7fa895; font-size:11px;"></div>
+        </div>
       </div>
     </div>
-    <div id="numberCards" class="number-cards"><div class="empty">Loading…</div></div>
-  </div>
 
-  <div id="workspaceScreen">
-    <div class="workspace-header">
-      <a class="back-link" onclick="showLanding()">&larr; Switch number</a>
-      <span class="current-number" id="workspaceNumberName"></span>
-      <span class="current-phone" id="workspaceNumberPhone"></span>
-    </div>
-    <div class="layout">
-      <div class="pane" id="conversationsPane">
-        <div class="pane-header">Conversations</div>
-        <div class="filter-bar">
-          <input type="text" id="searchQuery" placeholder="Search name, phone, message…" oninput="onFilterChange()">
-          <div class="filter-row">
-            <label><input type="checkbox" id="filterNeedsResponse" onchange="onFilterChange()"> Needs response</label>
-            <label><input type="checkbox" id="filterUnassigned" onchange="onFilterChange()"> Unassigned</label>
-            <button onclick="clearFilters()">Clear</button>
+    <div id="mainArea">
+      <div id="topBar">
+        <div id="pageTitle">Dashboard</div>
+        <select id="availabilitySelect" onchange="changeAvailability()">
+          <option value="available">🟢 Available</option>
+          <option value="busy">🟡 Busy</option>
+          <option value="offline">⚪ Offline</option>
+          <option value="on_leave">🟣 On leave</option>
+        </select>
+        <button class="icon-btn" onclick="toggleNotifications()" title="Needs response">🔔<span class="dot" id="notifDot"></span></button>
+        <button class="icon-btn" onclick="location.reload()" title="Refresh">⟳</button>
+      </div>
+      <div id="notifPanel" class="dropdown-panel">
+        <div class="dp-header">Needs a response</div>
+        <div id="notifList" class="empty">Loading…</div>
+      </div>
+
+      <div id="pageContent">
+        <div class="page" id="page-dashboard">
+          <h1 class="page-title">Dashboard</h1>
+          <div class="kpi-row" id="kpiRow"></div>
+          <div id="dashboardSplit"></div>
+        </div>
+        <div class="page" id="page-inbox"><div id="inboxSplit"></div></div>
+        <div class="page" id="page-allConversations"><div id="allSplit"></div></div>
+        <div class="page" id="page-unassigned"><div id="unassignedSplit"></div></div>
+
+        <div class="page" id="page-reminders">
+          <h1 class="page-title">Reminders</h1>
+          <div id="remindersList" class="empty">Loading…</div>
+        </div>
+
+        <div class="page" id="page-customers">
+          <h1 class="page-title">Customers</h1>
+          <table class="data-table" id="customersTable"><thead><tr><th>Name</th><th>Phone</th><th>Company</th><th>Source</th><th></th></tr></thead><tbody></tbody></table>
+        </div>
+
+        <div class="page" id="page-reports">
+          <h1 class="page-title">Reports</h1>
+          <div id="reportsBody" class="empty">Loading…</div>
+        </div>
+
+        <div class="page" id="page-templates">
+          <h1 class="page-title">Templates</h1>
+          <div class="card">
+            <h2 class="section-title" style="margin-top:0;">Create draft</h2>
+            <div class="form-row">
+              <input id="tplName" placeholder="name (snake_case)">
+              <input id="tplLanguage" placeholder="language (e.g. en)" style="width:100px;">
+              <input id="tplCategory" placeholder="category (e.g. UTILITY)" style="width:130px;">
+            </div>
+            <div class="form-row">
+              <input id="tplBody" placeholder="Body text, use {{1}} {{2}} for variables" style="width:420px;">
+              <button class="btn primary" onclick="submitCreateTemplateDraft()">Save draft</button>
+            </div>
+            <div class="form-error" id="tplError"></div>
+          </div>
+          <div class="form-row">
+            <input id="syncWabaId" placeholder="wabaId to sync from provider">
+            <button class="btn" onclick="submitSyncTemplates()">Sync from provider</button>
+          </div>
+          <table class="data-table" id="templatesTable"><thead><tr><th>Name</th><th>Language</th><th>Category</th><th>Status</th><th></th></tr></thead><tbody></tbody></table>
+        </div>
+
+        <div class="page" id="page-quickReplies">
+          <h1 class="page-title">Quick Replies</h1>
+          <div class="card">
+            <h2 class="section-title" style="margin-top:0;">Add quick reply</h2>
+            <div class="form-row">
+              <input id="qrShortcut" placeholder="/shortcut">
+              <input id="qrText" placeholder="Text" style="width:300px;">
+              <button class="btn primary" onclick="submitCreateQuickReply()">Add</button>
+            </div>
+            <div class="form-error" id="qrError"></div>
+          </div>
+          <table class="data-table" id="quickRepliesTable"><thead><tr><th>Shortcut</th><th>Text</th><th>Active</th><th></th></tr></thead><tbody></tbody></table>
+        </div>
+
+        <div class="page" id="page-teams">
+          <h1 class="page-title">Teams</h1>
+          <div class="card">
+            <h2 class="section-title" style="margin-top:0;">Create team</h2>
+            <div class="form-row">
+              <input id="teamName" placeholder="Team name">
+              <select id="teamOwner"></select>
+              <button class="btn primary" onclick="submitCreateTeam()">Create</button>
+            </div>
+            <div class="form-error" id="teamError"></div>
+          </div>
+          <table class="data-table" id="teamsTable"><thead><tr><th>Name</th><th>Owner</th><th>Status</th><th></th></tr></thead><tbody></tbody></table>
+          <div id="teamMembersPanel" style="display:none;">
+            <h2 class="section-title">Members of <span id="teamMembersTitle"></span></h2>
+            <div class="form-row">
+              <select id="memberUser"></select>
+              <input id="memberNumberIds" placeholder="numberIds (comma-separated, blank = all team numbers)">
+              <button class="btn primary" onclick="submitAddTeamMember()">Add member</button>
+            </div>
+            <div class="form-error" id="teamMemberError"></div>
+            <table class="data-table" id="teamMembersTable"><thead><tr><th>User</th><th>Status</th><th>numberIds</th><th></th></tr></thead><tbody></tbody></table>
           </div>
         </div>
-        <div id="conversationsList"><div class="empty">Select a number</div></div>
-      </div>
-      <div class="pane" id="detailPane">
-        <div id="detailContent"><div class="empty">Select a conversation</div></div>
+
+        <div class="page" id="page-users">
+          <h1 class="page-title">Users</h1>
+          <div class="card">
+            <h2 class="section-title" style="margin-top:0;">Add user</h2>
+            <div class="form-row">
+              <input id="userEmail" placeholder="email@echt.co.in">
+              <input id="userDisplayName" placeholder="Display name">
+              <select id="userRole"></select>
+              <button class="btn primary" onclick="submitCreateUser()">Add</button>
+            </div>
+            <div class="form-error" id="userError"></div>
+          </div>
+          <table class="data-table" id="usersTable"><thead><tr><th>Email</th><th>Name</th><th>Status</th><th>Roles</th><th></th></tr></thead><tbody></tbody></table>
+        </div>
+
+        <div class="page" id="page-numbers">
+          <h1 class="page-title">WhatsApp Numbers</h1>
+          <div class="card">
+            <h2 class="section-title" style="margin-top:0;">Register number</h2>
+            <div class="form-row">
+              <input id="numberDisplayName" placeholder="Display name">
+              <input id="numberPhone" placeholder="Phone number">
+              <button class="btn primary" onclick="submitCreateNumber()">Add</button>
+            </div>
+            <div class="form-error" id="numberError"></div>
+          </div>
+          <table class="data-table" id="numbersTable"><thead><tr><th>Display name</th><th>Phone</th><th>Provider account</th><th>WABA</th><th>Active</th><th></th></tr></thead><tbody></tbody></table>
+        </div>
+
+        <div class="page" id="page-settings">
+          <h1 class="page-title">Settings</h1>
+          <div class="settings-tabs">
+            <div class="settings-tab active" data-tab="numberAccess" onclick="showSettingsTab('numberAccess')">Number Access</div>
+            <div class="settings-tab" data-tab="assignmentRules" onclick="showSettingsTab('assignmentRules')">Assignment Rules</div>
+            <div class="settings-tab" data-tab="leadStages" onclick="showSettingsTab('leadStages')">Lead Stages</div>
+            <div class="settings-tab" data-tab="backup" onclick="showSettingsTab('backup')">Backup</div>
+          </div>
+
+          <div class="settings-pane active" id="settings-numberAccess">
+            <div class="card">
+              <h2 class="section-title" style="margin-top:0;">Grant access</h2>
+              <div class="form-row">
+                <select id="accessUser"></select>
+                <select id="accessNumber"></select>
+                <button class="btn primary" onclick="submitGrantAccess()">Grant</button>
+              </div>
+              <div class="form-error" id="accessErrorMsg"></div>
+            </div>
+            <table class="data-table" id="numberAccessTable"><thead><tr><th>User</th><th>Number</th><th>Status</th><th></th></tr></thead><tbody></tbody></table>
+          </div>
+
+          <div class="settings-pane" id="settings-assignmentRules">
+            <div class="form-row"><select id="ruleNumberSelect" onchange="loadAssignmentRules()"></select></div>
+            <div id="assignmentRulesBody" class="empty">Select a number</div>
+          </div>
+
+          <div class="settings-pane" id="settings-leadStages">
+            <div class="form-row"><button class="btn" onclick="submitSeedStages()">Seed default stages</button></div>
+            <div class="card">
+              <h2 class="section-title" style="margin-top:0;">Add stage</h2>
+              <div class="form-row">
+                <input id="stageKey" placeholder="key (e.g. contacted)">
+                <input id="stageName" placeholder="Display name">
+                <input id="stageOrder" type="number" placeholder="Order" style="width:70px;">
+                <button class="btn primary" onclick="submitCreateStage()">Add</button>
+              </div>
+              <div class="form-error" id="stageError"></div>
+            </div>
+            <table class="data-table" id="stagesTable"><thead><tr><th>Order</th><th>Key</th><th>Name</th><th>Active</th><th></th></tr></thead><tbody></tbody></table>
+          </div>
+
+          <div class="settings-pane" id="settings-backup">
+            <div class="card">
+              <h2 class="section-title" style="margin-top:0;">Manual backup</h2>
+              <div class="form-row"><button class="btn primary" onclick="submitBackupNow()">Back up now</button></div>
+              <div id="backupResult" class="empty"></div>
+            </div>
+            <div class="card">
+              <h2 class="section-title" style="margin-top:0;">Daily automatic backup</h2>
+              <div id="backupTriggerStatus" class="empty">Loading…</div>
+              <div class="form-row">
+                <button class="btn" onclick="submitInstallTrigger()">Enable daily backups (2am IST)</button>
+                <button class="btn danger" onclick="submitRemoveTrigger()">Disable</button>
+              </div>
+              <div class="form-error" id="backupError"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="page" id="page-auditLog">
+          <h1 class="page-title">Audit Log</h1>
+          <table class="data-table" id="auditLogTable"><thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Target</th></tr></thead><tbody></tbody></table>
+        </div>
       </div>
     </div>
-  </div>
-
-  <div id="reportsOverlay">
-    <button onclick="closeReports()" style="float:right; padding:6px 14px; border:1px solid #ccc; border-radius:4px; background:#fff; cursor:pointer;">Close</button>
-    <h1 style="margin-top:0;">Reports</h1>
-    <div id="reportsBody" class="empty">Loading…</div>
   </div>
 
   <script>
-    var selectedNumberId = null;
+    // ============================================================================
+    // Shared state & helpers
+    // ============================================================================
+    var currentUser = null;
     var selectedConversationId = null;
-    var selectedCustomerId = null;
-    var cachedStages = null;
-    var cachedTemplates = null;
-    var cachedQuickReplies = null;
-    var cachedNumbers = null;
+    var currentConversations = [];
+    var cachedStages = null, cachedTemplates = null, cachedQuickReplies = null;
+    var cachedUsers = [], cachedRoles = [], cachedTeams = [];
+    var selectedTeamId = null;
+    var composeTab = 'reply';
 
     function escapeHtml(value) {
       return String(value == null ? '' : value).replace(/[&<>"']/g, function (c) {
         return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
       });
     }
-
-    function loadNumbers() {
-      google.script.run.withSuccessHandler(renderNumberCards).withFailureHandler(renderError('numberCards')).listMyNumbers();
+    function initials(name) {
+      var parts = String(name || '?').trim().split(/\s+/);
+      return ((parts[0] || '?')[0] + (parts[1] ? parts[1][0] : '')).toUpperCase();
     }
+    function setError(id, error) { var el = document.getElementById(id); if (el) el.textContent = error ? (error.message || String(error)) : ''; }
+    function roleLabel(key) { return { ADMIN: 'Administrator', SUPERVISOR: 'Supervisor', SITE_MANAGER: 'Site Manager', AGENT: 'Agent', VIEWER: 'Viewer' }[key] || key; }
 
-    function renderNumberCards(numbers) {
-      cachedNumbers = numbers;
-      var container = document.getElementById('numberCards');
-      if (!numbers.length) { container.innerHTML = '<div class="empty">No numbers assigned</div>'; return; }
-      container.innerHTML = numbers.map(function (number) {
-        return '<div class="number-card" tabindex="0" onclick="enterWorkspace(\'' + number.id + '\')" onkeydown="if(event.key===\'Enter\')enterWorkspace(\'' + number.id + '\');">' +
-          '<div class="name">' + escapeHtml(number.displayName) + '<span class="badge" id="needsResponseBadge-' + escapeHtml(number.id) + '" style="display:none;"></span></div>' +
-          '<div class="phone">' + escapeHtml(number.phoneNumber) + '</div></div>';
+    // ============================================================================
+    // Sidebar / navigation
+    // ============================================================================
+    var NAV_ITEMS = [
+      { key: 'dashboard', icon: '🏠', label: 'Dashboard' },
+      { key: 'inbox', icon: '💬', label: 'Inbox', badge: 'needsResponse' },
+      { key: 'allConversations', icon: '☰', label: 'All Conversations' },
+      { key: 'unassigned', icon: '🕓', label: 'Unassigned', badge: 'unassigned' },
+      { key: 'reminders', icon: '⏰', label: 'Reminders' },
+      { key: 'customers', icon: '👥', label: 'Customers' },
+      { key: 'reports', icon: '📊', label: 'Reports', requires: 'reports' },
+      { key: 'templates', icon: '📄', label: 'Templates', adminOnly: true },
+      { key: 'quickReplies', icon: '⚡', label: 'Quick Replies', adminOnly: true },
+      { key: 'teams', icon: '🧑‍🤝‍🧑', label: 'Teams', adminOnly: true },
+      { key: 'users', icon: '👤', label: 'Users', adminOnly: true },
+      { key: 'numbers', icon: '📱', label: 'WhatsApp Numbers', adminOnly: true },
+      { key: 'settings', icon: '⚙️', label: 'Settings', adminOnly: true },
+      { key: 'auditLog', icon: '🛡️', label: 'Audit Log', adminOnly: true }
+    ];
+    var navBadges = {};
+
+    function renderSidebarNav() {
+      var isAdmin = currentUser && currentUser.roleKeys.indexOf('ADMIN') !== -1;
+      var visible = NAV_ITEMS.filter(function (item) {
+        if (item.adminOnly && !isAdmin) return false;
+        if (item.requires === 'reports' && !window.__hasReportsAccess) return false;
+        return true;
+      });
+      document.getElementById('navList').innerHTML = visible.map(function (item) {
+        var badge = item.badge && navBadges[item.badge] ? '<span class="nav-badge">' + navBadges[item.badge] + '</span>' : '';
+        return '<div class="nav-item" data-page="' + item.key + '" onclick="showPage(\'' + item.key + '\')">' +
+          '<span class="nav-icon">' + item.icon + '</span><span class="nav-label">' + escapeHtml(item.label) + '</span>' + badge + '</div>';
       }).join('');
-      loadNeedsResponseCounts();
+      document.querySelectorAll('.nav-item').forEach(function (el) { el.classList.toggle('active', el.dataset.page === currentPage); });
     }
 
-    function loadNeedsResponseCounts() {
-      google.script.run.withSuccessHandler(function (counts) {
-        Object.keys(counts).forEach(function (numberId) {
-          var badge = document.getElementById('needsResponseBadge-' + numberId);
-          if (!badge) return;
-          if (counts[numberId] > 0) { badge.textContent = counts[numberId]; badge.style.display = ''; }
-          else { badge.style.display = 'none'; }
-        });
-      }).withFailureHandler(function () {}).getNeedsResponseCounts();
+    var currentPage = 'dashboard';
+    function showPage(key) {
+      currentPage = key;
+      document.querySelectorAll('.page').forEach(function (el) { el.classList.remove('active'); });
+      var el = document.getElementById('page-' + key);
+      if (el) el.classList.add('active');
+      document.querySelectorAll('.nav-item').forEach(function (el2) { el2.classList.toggle('active', el2.dataset.page === key); });
+      var titleItem = NAV_ITEMS.filter(function (i) { return i.key === key; })[0];
+      document.getElementById('pageTitle').textContent = titleItem ? titleItem.label : key;
+      closeNotifications();
+
+      if (key === 'dashboard') { loadDashboard(); }
+      else if (key === 'inbox') { renderInboxSplit('inboxSplit', { needsResponse: true }); }
+      else if (key === 'allConversations') { renderInboxSplit('allSplit', {}); }
+      else if (key === 'unassigned') { renderInboxSplit('unassignedSplit', { unassigned: true }); }
+      else if (key === 'reminders') loadReminders();
+      else if (key === 'customers') loadCustomers();
+      else if (key === 'reports') loadReports();
+      else if (key === 'templates') loadTemplates();
+      else if (key === 'quickReplies') loadQuickRepliesPage();
+      else if (key === 'teams') loadTeams();
+      else if (key === 'users') loadUsers();
+      else if (key === 'numbers') loadNumbers();
+      else if (key === 'settings') loadSettingsPage();
+      else if (key === 'auditLog') loadAuditLog();
     }
 
-    function enterWorkspace(numberId) {
-      var number = (cachedNumbers || []).filter(function (n) { return n.id === numberId; })[0];
-      selectedNumberId = numberId;
+    // ============================================================================
+    // Top bar: availability, notifications
+    // ============================================================================
+    function changeAvailability() {
+      var status = document.getElementById('availabilitySelect').value;
+      google.script.run.withFailureHandler(function (error) { alert('Could not update availability: ' + (error && error.message)); }).setAvailability(status);
+    }
+    function loadAvailability() {
+      if (!currentUser) return;
+      google.script.run.withSuccessHandler(function (record) {
+        if (record) document.getElementById('availabilitySelect').value = record.status;
+      }).withFailureHandler(function () {}).getAvailability(currentUser.id);
+    }
+
+    function toggleNotifications() {
+      var panel = document.getElementById('notifPanel');
+      if (panel.classList.contains('open')) { closeNotifications(); return; }
+      panel.classList.add('open');
+      google.script.run.withSuccessHandler(function (conversations) {
+        var list = document.getElementById('notifList');
+        list.innerHTML = conversations.map(function (c) {
+          return '<div class="dp-item" onclick="closeNotifications(); showPage(\'inbox\'); openConversationFromAnywhere(\'' + c.id + '\');">' +
+            '<strong>' + escapeHtml(c.customerName || c.customerPhone) + '</strong><br><span style="color:#5f6368;">' + escapeHtml(c.numberDisplayName || '') + '</span></div>';
+        }).join('') || '<div class="empty">Nothing needs a response right now.</div>';
+      }).withFailureHandler(function () { document.getElementById('notifList').innerHTML = '<div class="empty">Could not load.</div>'; })
+        .searchConversations({ needsResponse: true });
+    }
+    function closeNotifications() { document.getElementById('notifPanel').classList.remove('open'); }
+
+    function refreshBadges() {
+      google.script.run.withSuccessHandler(function (metrics) {
+        navBadges.needsResponse = metrics.conversations.needsResponse;
+        navBadges.unassigned = metrics.conversations.unassigned;
+        document.getElementById('notifDot').style.display = metrics.conversations.needsResponse > 0 ? 'block' : 'none';
+        renderSidebarNav();
+      }).withFailureHandler(function () {}).getDashboardMetrics();
+    }
+
+    // ============================================================================
+    // Dashboard / Inbox / All Conversations / Unassigned — shared list+chat view
+    // ============================================================================
+    // Exactly ONE list+chat+detail split ever exists in the DOM. Dashboard/Inbox/All
+    // Conversations/Unassigned each just move this same element into their own slot
+    // and reload it with different default filters — building 4 independent copies
+    // (one per page) would leave 3 of them hidden-but-present at once, so every
+    // document.getElementById('messagesList') etc. call would ambiguously resolve to
+    // whichever copy happened to be built first, not necessarily the visible one.
+    function splitHtml() {
+      return '<div class="split">' +
+        '<div class="col" id="convListCol">' +
+          '<div class="col-header">Conversations</div>' +
+          '<div class="list-toolbar">' +
+            '<input type="text" placeholder="Search name, phone, message…" class="js-search">' +
+            '<select class="js-number-filter"><option value="">All numbers</option></select>' +
+          '</div>' +
+          '<div class="js-conv-list empty">Loading…</div>' +
+        '</div>' +
+        '<div class="col" id="chatCol"><div class="js-chat empty">Select a conversation</div></div>' +
+        '<div class="col" id="detailCol"><div class="js-detail empty"></div></div>' +
+      '</div>';
+    }
+
+    function ensureSplitBuilt() {
+      if (window.__splitEl) return window.__splitEl;
+      var wrapper = document.createElement('div');
+      wrapper.innerHTML = splitHtml();
+      var root = wrapper.firstElementChild;
+      window.__splitEl = root;
+      root.querySelector('.js-search').addEventListener('input', function () { loadConvList(window.__currentBaseFilters); });
+      root.querySelector('.js-number-filter').addEventListener('change', function () { loadConvList(window.__currentBaseFilters); });
+      google.script.run.withSuccessHandler(function (numbers) {
+        root.querySelector('.js-number-filter').innerHTML = '<option value="">All numbers</option>' + numbers.map(function (n) { return '<option value="' + n.id + '">' + escapeHtml(n.displayName) + '</option>'; }).join('');
+      }).withFailureHandler(function () {}).listMyNumbers();
+      return root;
+    }
+
+    function renderInboxSplit(slotId, baseFilters) {
+      var slot = document.getElementById(slotId);
+      var root = ensureSplitBuilt();
+      slot.appendChild(root); // no-op if already there; moves it here otherwise
+      window.__currentBaseFilters = baseFilters;
       selectedConversationId = null;
-      document.getElementById('searchQuery').value = '';
-      document.getElementById('filterNeedsResponse').checked = false;
-      document.getElementById('filterUnassigned').checked = false;
-      document.getElementById('workspaceNumberName').textContent = number ? number.displayName : '';
-      document.getElementById('workspaceNumberPhone').textContent = number ? number.phoneNumber : '';
-      document.getElementById('detailContent').innerHTML = '<div class="empty">Select a conversation</div>';
-      document.getElementById('landingScreen').style.display = 'none';
-      document.getElementById('workspaceScreen').style.display = 'flex';
-      loadConversations();
+      root.querySelector('.js-chat').innerHTML = '<div class="empty">Select a conversation</div>';
+      root.querySelector('.js-detail').innerHTML = '';
+      loadConvList(baseFilters);
     }
 
-    function showLanding() {
-      document.getElementById('workspaceScreen').style.display = 'none';
-      document.getElementById('landingScreen').style.display = 'block';
-      loadNeedsResponseCounts();
-    }
-
-    function activeFilters() {
-      var query = document.getElementById('searchQuery').value.trim();
-      var needsResponse = document.getElementById('filterNeedsResponse').checked;
-      var unassigned = document.getElementById('filterUnassigned').checked;
-      if (!query && !needsResponse && !unassigned) return null;
-      var filters = { numberId: selectedNumberId };
+    function loadConvList(baseFilters) {
+      var root = window.__splitEl;
+      if (!root) return;
+      var listEl = root.querySelector('.js-conv-list');
+      listEl.innerHTML = '<div class="empty">Loading…</div>';
+      var filters = Object.assign({}, baseFilters);
+      var query = root.querySelector('.js-search').value.trim();
+      var numberId = root.querySelector('.js-number-filter').value;
       if (query) filters.query = query;
-      if (needsResponse) filters.needsResponse = true;
-      if (unassigned) filters.unassigned = true;
-      return filters;
+      if (numberId) filters.numberId = numberId;
+      google.script.run.withSuccessHandler(function (conversations) {
+        currentConversations = conversations;
+        listEl.innerHTML = conversations.map(convItemHtml).join('') || '<div class="empty">No conversations</div>';
+      }).withFailureHandler(function (error) { listEl.innerHTML = '<div class="empty">Error: ' + escapeHtml(error && error.message) + '</div>'; })
+        .searchConversations(filters);
     }
 
-    function onFilterChange() { if (selectedNumberId) loadConversations(); }
-
-    function clearFilters() {
-      document.getElementById('searchQuery').value = '';
-      document.getElementById('filterNeedsResponse').checked = false;
-      document.getElementById('filterUnassigned').checked = false;
-      if (selectedNumberId) loadConversations();
+    function convItemHtml(c) {
+      var tags = '';
+      if (c.status === 'CLOSED') tags += '<span class="status-tag closed">Closed</span>';
+      else if (c.needsResponse) tags += '<span class="status-tag needs">Needs reply</span>';
+      else if (!c.assignedUserId) tags += '<span class="status-tag unassigned">Unassigned</span>';
+      return '<div class="conv-item' + (c.id === selectedConversationId ? ' active' : '') + '" data-id="' + c.id + '" onclick="openConversationFromAnywhere(\'' + c.id + '\')">' +
+        '<div class="avatar-circle" style="flex-shrink:0;">' + escapeHtml(initials(c.customerName)) + '</div>' +
+        '<div class="conv-main"><div class="conv-title-row"><span class="conv-name">' + escapeHtml(c.customerName || c.customerPhone || 'Unknown') + '</span>' +
+        '<span class="conv-time">' + escapeHtml((c.lastMessageAt || '').slice(0, 16).replace('T', ' ')) + '</span></div>' +
+        '<div class="conv-preview">' + escapeHtml(c.numberDisplayName || '') + '</div>' + tags + '</div></div>';
     }
 
-    function loadConversations() {
-      document.getElementById('conversationsList').innerHTML = '<div class="empty">Loading…</div>';
-      loadNeedsResponseCounts();
-      var filters = activeFilters();
-      if (filters) {
-        google.script.run.withSuccessHandler(renderConversations).withFailureHandler(renderError('conversationsList')).searchConversations(filters);
-      } else {
-        google.script.run.withSuccessHandler(renderConversations).withFailureHandler(renderError('conversationsList')).listConversations(selectedNumberId);
-      }
-    }
-
-    function renderConversations(conversations) {
-      var container = document.getElementById('conversationsList');
-      if (!conversations.length) { container.innerHTML = '<div class="empty">No conversations</div>'; return; }
-      container.innerHTML = conversations.map(function (conversation) {
-        var title = conversation.customerName ? escapeHtml(conversation.customerName) : escapeHtml(conversation.status);
-        var subtitleParts = [conversation.lastMessageAt || ''];
-        if (conversation.numberDisplayName) subtitleParts.unshift(conversation.numberDisplayName);
-        return '<div class="list-item" data-id="' + escapeHtml(conversation.id) + '" onclick="selectConversation(\'' + conversation.id + '\')">' +
-          '<div class="title">' + title + (conversation.needsResponse ? ' • Needs response' : '') + '</div>' +
-          '<div class="subtitle">' + escapeHtml(subtitleParts.filter(Boolean).join(' • ')) + '</div></div>';
-      }).join('');
-      if (selectedConversationId) {
-        var el = container.querySelector('[data-id="' + selectedConversationId + '"]');
-        if (el) el.classList.add('active');
-      }
-    }
-
-    function selectConversation(conversationId) {
+    /** Selects a conversation, switching to Inbox first if the split isn't mounted anywhere visible yet (e.g. from the notification bell or the Customers directory). */
+    function openConversationFromAnywhere(conversationId) {
+      if (!window.__splitEl || !window.__splitEl.offsetParent) showPage('inbox'); // mounts the split via the router; falls back to the Inbox view
       selectedConversationId = conversationId;
-      document.querySelectorAll('#conversationsList .list-item').forEach(function (el) { el.classList.toggle('active', el.dataset.id === conversationId); });
-      document.getElementById('detailContent').innerHTML = '<div class="empty">Loading…</div>';
+      window.__splitEl.querySelectorAll('.conv-item').forEach(function (el) { el.classList.toggle('active', el.dataset.id === conversationId); });
       loadWorkspace();
     }
 
-    // Single round trip for everything the detail pane needs (WorkspaceApi,
-    // src/WorkspaceServices.gs) — this used to be 8 separate google.script.run calls,
-    // each its own Apps Script execution with real cold-start overhead, which was the
-    // actual cause of the reported slowness (not rendering/animation).
+    // ============================================================================
+    // Chat workspace (single conversation): header, messages, compose, detail panel
+    // ============================================================================
     function loadWorkspace() {
-      google.script.run.withSuccessHandler(renderWorkspace).withFailureHandler(renderError('detailContent')).getConversationWorkspace(selectedConversationId);
+      var root = window.__splitEl;
+      if (!root) return;
+      root.querySelector('.js-chat').innerHTML = '<div class="empty">Loading…</div>';
+      google.script.run.withSuccessHandler(function (workspace) { renderWorkspace(root, workspace); })
+        .withFailureHandler(function (error) { root.querySelector('.js-chat').innerHTML = '<div class="empty">Error: ' + escapeHtml(error && error.message) + '</div>'; })
+        .getConversationWorkspace(selectedConversationId);
     }
 
     function renderMessageMedia(media) {
       if (!media || !media.mediaUrl) return '';
-      if (media.mediaType === 'image') {
-        return '<a href="' + escapeHtml(media.mediaUrl) + '" target="_blank"><img class="media-image" src="' + escapeHtml(media.mediaUrl) + '" alt="Image attachment"></a>';
-      }
+      if (media.mediaType === 'image') return '<a href="' + escapeHtml(media.mediaUrl) + '" target="_blank"><img class="media-image" src="' + escapeHtml(media.mediaUrl) + '" alt="Image attachment"></a>';
       var icons = { video: '🎬', audio: '🎵', document: '📄' };
-      var icon = icons[media.mediaType] || '📎';
-      return '<a class="media-link" href="' + escapeHtml(media.mediaUrl) + '" target="_blank"><span class="media-icon">' + icon + '</span><span>Open ' + escapeHtml(media.mediaType) + '</span></a>';
+      return '<a class="media-link" href="' + escapeHtml(media.mediaUrl) + '" target="_blank"><span>' + (icons[media.mediaType] || '📎') + '</span><span>Open ' + escapeHtml(media.mediaType) + '</span></a>';
     }
 
-    function renderMessage(message) {
-      var senderHtml = (message.direction === 'OUTBOUND' && message.senderName) ? '<div class="sender">' + escapeHtml(message.senderName) + '</div>' : '';
-      var mediaHtml = renderMessageMedia(message.media);
-      // A media message's own text is usually just the caption (or a placeholder if
-      // there's no caption) — skip repeating it under an already-visible attachment.
-      var textHtml = (message.media && message.media.mediaUrl)
-        ? (message.media.caption ? '<div class="text">' + escapeHtml(message.media.caption) + '</div>' : '')
-        : '<div class="text">' + escapeHtml(message.messageText) + '</div>';
-      return '<div class="message ' + escapeHtml(message.direction) + ' ' + escapeHtml(message.status === 'FAILED' ? 'FAILED' : '') + '">' +
-        senderHtml + mediaHtml + textHtml +
-        '<div class="time">' + escapeHtml(message.timestamp) + (message.status === 'FAILED' ? ' • Failed to send' : '') + '</div></div>';
+    function renderMessagesWithDates(messages) {
+      var html = '', lastDate = null;
+      messages.forEach(function (message) {
+        var day = (message.timestamp || '').slice(0, 10);
+        if (day && day !== lastDate) { html += '<div class="date-divider"><span>' + escapeHtml(day) + '</span></div>'; lastDate = day; }
+        var senderHtml = (message.direction === 'OUTBOUND' && message.senderName) ? '<div class="sender">' + escapeHtml(message.senderName) + '</div>' : '';
+        var mediaHtml = renderMessageMedia(message.media);
+        var textHtml = (message.media && message.media.mediaUrl)
+          ? (message.media.caption ? '<div class="text">' + escapeHtml(message.media.caption) + '</div>' : '')
+          : '<div class="text">' + escapeHtml(message.messageText) + '</div>';
+        html += '<div class="message ' + escapeHtml(message.direction) + ' ' + escapeHtml(message.status === 'FAILED' ? 'FAILED' : '') + '">' +
+          senderHtml + mediaHtml + textHtml +
+          '<div class="time">' + escapeHtml((message.timestamp || '').slice(11, 16)) + (message.status === 'FAILED' ? ' • Failed to send' : message.status === 'READ' ? ' ✓✓' : message.direction === 'OUTBOUND' ? ' ✓' : '') + '</div></div>';
+      });
+      return html;
     }
 
-    function renderWorkspace(workspace) {
-      var detail = workspace; // {conversation, customer, number, messages, assignedUserName, stage, remarks, reminders, snoozeStatus, assignableUsers}
-      selectedCustomerId = detail.customer && detail.customer.id;
-      var customerName = (detail.customer && detail.customer.name) || (detail.customer && detail.customer.phone) || 'Unknown customer';
-      var messagesHtml = detail.messages.map(renderMessage).join('');
-      var isClosed = detail.conversation.status === 'CLOSED';
+    function renderWorkspace(container, workspace) {
+      window.__currentWorkspace = workspace;
+      var isClosed = workspace.conversation.status === 'CLOSED';
+      var customerName = (workspace.customer && workspace.customer.name) || (workspace.customer && workspace.customer.phone) || 'Unknown customer';
 
-      document.getElementById('detailContent').innerHTML =
-        '<div class="detail-header"><h2>' + escapeHtml(customerName) + '</h2>' +
-        '<div class="meta">' + escapeHtml(detail.customer && detail.customer.phone) + ' • ' + escapeHtml(detail.number && detail.number.displayName) + '</div>' +
-        '<div class="meta">' +
-        '<span class="pill status-' + escapeHtml(detail.conversation.status) + '">' + escapeHtml(detail.conversation.status) + '</span>' +
-        '<span class="pill">' + (detail.assignedUserName ? escapeHtml(detail.assignedUserName) : 'Unassigned') + '</span>' +
+      container.querySelector('.js-chat').innerHTML =
+        '<div class="chat-header">' +
+        '<div class="chat-title-row"><h2>' + escapeHtml(customerName) + '</h2>' +
+        '<span class="pill status-' + escapeHtml(workspace.conversation.status) + '">' + escapeHtml(workspace.conversation.status) + '</span></div>' +
+        '<div class="meta">' + escapeHtml(workspace.customer && workspace.customer.phone) + ' • ' + escapeHtml(workspace.number && workspace.number.displayName) + '</div>' +
+        '<div class="chat-actions">' +
+        '<select class="btn" id="assignSelect" onchange="submitAssign(this.value)"><option value="">Assign…</option></select>' +
+        '<button class="btn" id="snoozeBtn" onclick="toggleSnooze()">Snooze…</button>' +
+        (isClosed ? '' : '<button class="btn primary" onclick="resolveCurrentConversation()">Resolve</button>') +
+        '</div><div id="snoozeBanner"></div></div>' +
+        '<div class="messages" id="messagesList">' + (renderMessagesWithDates(workspace.messages) || '<div class="empty">No messages yet</div>') + '</div>' +
+        '<div class="compose-tabs">' +
+        '<div class="compose-tab active" data-tab="reply" onclick="switchComposeTab(\'reply\')">Reply</div>' +
+        '<div class="compose-tab" data-tab="note" onclick="switchComposeTab(\'note\')">Note</div>' +
         '</div>' +
-        '<div class="actions">' +
-        '<select class="stage-select" id="stageSelect" onchange="changeStage()"><option value="">Stage: (loading…)</option></select>' +
-        '<button class="action-btn" id="snoozeBtn" onclick="toggleSnooze()">Snooze…</button>' +
-        '<button class="action-btn" id="reassignBtn" style="display:none;" onclick="toggleReassign()">Reassign…</button>' +
-        (isClosed ? '' : '<button class="action-btn primary" id="resolveBtn" onclick="resolveCurrentConversation()">Resolve</button>') +
-        '</div></div>' +
-        '<div id="snoozeBanner"></div>' +
-        '<div class="messages" id="messagesList">' + (messagesHtml || '<div class="empty">No messages yet</div>') + '</div>' +
         '<div class="compose-error" id="composeError"></div>' +
-        '<div class="compose">' +
-        '<textarea id="composeText" rows="2" placeholder="Type a reply…"></textarea>' +
-        '<select id="quickReplySelect" onchange="insertQuickReply()"><option value="">Quick reply…</option></select>' +
-        '<button id="composeSend" onclick="sendCurrentReply()">Send</button>' +
-        '<select id="templateSelect"><option value="">Template…</option></select>' +
-        '<button id="templateSend" onclick="sendCurrentTemplate()">Send Template</button>' +
-        '<button id="mediaSend" onclick="sendCurrentMedia()">Media…</button>' +
-        '</div>' +
-        '<details class="side-panel remarks" id="remarksPane"><summary title="Internal notes — never sent to WhatsApp">Internal remarks</summary><div class="side-panel-body"><div class="empty">Loading…</div></div></details>' +
-        '<details class="side-panel reminders" id="remindersPane"><summary>Reminders</summary><div class="side-panel-body"><div class="empty">Loading…</div></div></details>';
+        '<div class="compose-body" id="composeBody"></div>';
 
       var messagesList = document.getElementById('messagesList');
       messagesList.scrollTop = messagesList.scrollHeight;
 
-      populateStageSelect(detail.stage);
-      renderRemarks(detail.remarks);
-      renderReminders(detail.reminders);
-      renderSnoozeStatus(detail.snoozeStatus);
-      renderReassignControl(detail.assignableUsers);
-      loadTemplateSelect();
-      loadQuickReplySelect();
+      renderAssignSelect(workspace.assignableUsers, workspace.conversation.assignedUserId);
+      renderSnoozeStatus(workspace.snoozeStatus);
+      composeTab = 'reply';
+      renderComposeBody(); // also (re-)populates the Template/Quick reply selects it just created
+
+      renderDetailPanel(container, workspace);
     }
 
-    function renderReassignControl(users) {
-      var btn = document.getElementById('reassignBtn');
-      if (!btn) return;
-      if (users && users.length) { btn.style.display = ''; btn.dataset.users = JSON.stringify(users); }
-      else { btn.style.display = 'none'; } // no reassignment scope on this number — hide rather than show an error
+    function switchComposeTab(tab) {
+      composeTab = tab;
+      document.querySelectorAll('.compose-tab').forEach(function (el) { el.classList.toggle('active', el.dataset.tab === tab); });
+      renderComposeBody();
     }
 
-    function toggleReassign() {
-      var btn = document.getElementById('reassignBtn');
-      var users = JSON.parse(btn.dataset.users || '[]');
-      if (!users.length) { alert('No users available to reassign to.'); return; }
-      var names = users.map(function (u, i) { return (i + 1) + '. ' + u.displayName; }).join('\n');
-      var choice = prompt('Reassign to (enter number):\n' + names);
-      if (!choice) return;
-      var index = Number(choice) - 1;
-      var user = users[index];
-      if (!user) { alert('Invalid choice.'); return; }
-      google.script.run.withSuccessHandler(function () { loadWorkspace(); loadConversations(); })
-        .withFailureHandler(function (error) { alert('Could not reassign: ' + (error && error.message)); })
-        .reassignConversation(selectedConversationId, user.id);
+    function renderComposeBody() {
+      var body = document.getElementById('composeBody');
+      if (!body) return;
+      if (composeTab === 'reply') {
+        body.innerHTML =
+          '<div class="compose-row"><textarea id="composeText" rows="2" placeholder="Type a reply…"></textarea>' +
+          '<button class="send" id="composeSend" onclick="sendCurrentReply()">➤</button></div>' +
+          '<div class="compose-toolbar">' +
+          '<select id="quickReplySelect" onchange="insertQuickReply()"><option value="">Quick reply…</option></select>' +
+          '<select id="templateSelect"><option value="">Template…</option></select>' +
+          '<button onclick="sendCurrentTemplate()">Send Template</button>' +
+          '<button onclick="sendCurrentMedia()">📎 Media…</button>' +
+          '</div>';
+        loadTemplateSelect(); loadQuickReplySelect();
+      } else {
+        body.innerHTML =
+          '<div class="compose-row"><textarea id="noteText" rows="2" placeholder="Add an internal note (never sent to WhatsApp)…"></textarea>' +
+          '<button class="send" onclick="addCurrentNote()">Add</button></div>';
+      }
+    }
+
+    function renderAssignSelect(users, currentAssignedUserId) {
+      var select = document.getElementById('assignSelect');
+      if (!select) return;
+      var options = '<option value="">Unassigned</option>' + (users || []).map(function (u) {
+        return '<option value="' + u.id + '"' + (u.id === currentAssignedUserId ? ' selected' : '') + '>' + escapeHtml(u.displayName) + '</option>';
+      }).join('');
+      select.innerHTML = options;
+      if (!users || !users.length) select.style.display = 'none';
+    }
+    function submitAssign(userId) {
+      if (!userId) return;
+      google.script.run.withSuccessHandler(function () { loadWorkspace(); refreshActiveList(); })
+        .withFailureHandler(function (error) { alert('Could not assign: ' + (error && error.message)); })
+        .reassignConversation(selectedConversationId, userId);
+    }
+
+    function refreshActiveList() {
+      if (!window.__splitEl) return;
+      loadConvList(window.__currentBaseFilters || {});
+      refreshBadges();
     }
 
     function resolveCurrentConversation() {
       if (!confirm('Mark this conversation as resolved?')) return;
-      google.script.run.withSuccessHandler(function () { loadWorkspace(); loadConversations(); })
+      google.script.run.withSuccessHandler(function () { loadWorkspace(); refreshActiveList(); })
         .withFailureHandler(function (error) { alert('Could not resolve: ' + (error && error.message)); })
         .resolveConversation(selectedConversationId);
+    }
+
+    function renderSnoozeStatus(status) {
+      var banner = document.getElementById('snoozeBanner');
+      var btn = document.getElementById('snoozeBtn');
+      if (!banner || !btn) return;
+      if (status && status.snoozed) { banner.innerHTML = '<div class="empty" style="color:#7a5900;">Snoozed until ' + escapeHtml(status.snoozedUntil) + '</div>'; btn.textContent = 'Un-snooze'; }
+      else { banner.innerHTML = ''; btn.textContent = 'Snooze…'; }
+    }
+    function toggleSnooze() {
+      google.script.run.withSuccessHandler(function (status) {
+        if (status && status.snoozed) {
+          google.script.run.withSuccessHandler(function () { loadWorkspace(); refreshActiveList(); })
+            .withFailureHandler(function (error) { alert('Could not un-snooze: ' + (error && error.message)); }).unsnoozeConversation(selectedConversationId);
+          return;
+        }
+        var hours = prompt('Snooze this conversation for how many hours?', '4');
+        if (!hours) return;
+        var until = new Date(Date.now() + Number(hours) * 3600000).toISOString();
+        google.script.run.withSuccessHandler(function () { loadWorkspace(); refreshActiveList(); })
+          .withFailureHandler(function (error) { alert('Could not snooze: ' + (error && error.message)); }).snoozeConversation(selectedConversationId, until);
+      }).withFailureHandler(function () {}).getSnoozeStatus(selectedConversationId);
     }
 
     function loadQuickReplySelect() {
       if (cachedQuickReplies) { populateQuickReplySelect(); return; }
       google.script.run.withSuccessHandler(function (quickReplies) { cachedQuickReplies = quickReplies; populateQuickReplySelect(); }).withFailureHandler(function () {}).listQuickReplies();
     }
-
     function populateQuickReplySelect() {
       var select = document.getElementById('quickReplySelect');
       if (!select) return;
-      select.innerHTML = '<option value="">Quick reply…</option>' +
-        cachedQuickReplies.map(function (q) { return '<option value="' + escapeHtml(q.id) + '">' + escapeHtml(q.shortcut) + '</option>'; }).join('');
+      select.innerHTML = '<option value="">Quick reply…</option>' + cachedQuickReplies.map(function (q) { return '<option value="' + escapeHtml(q.id) + '">' + escapeHtml(q.shortcut) + '</option>'; }).join('');
     }
-
     function insertQuickReply() {
       var select = document.getElementById('quickReplySelect');
       if (!select.value) return;
-      var quickReply = (cachedQuickReplies || []).filter(function (q) { return q.id === select.value; })[0];
-      if (quickReply) {
-        var textarea = document.getElementById('composeText');
-        textarea.value = (textarea.value ? textarea.value + ' ' : '') + quickReply.text;
-        textarea.focus();
-      }
+      var qr = (cachedQuickReplies || []).filter(function (q) { return q.id === select.value; })[0];
+      if (qr) { var t = document.getElementById('composeText'); t.value = (t.value ? t.value + ' ' : '') + qr.text; t.focus(); }
       select.value = '';
     }
-
-    function sendCurrentMedia() {
-      var mediaType = prompt('Media type (image, document, video, audio):', 'image');
-      if (!mediaType) return;
-      var mediaUrl = prompt('Media URL:');
-      if (!mediaUrl) return;
-      var caption = prompt('Caption (optional):', '') || '';
-      var button = document.getElementById('mediaSend');
-      button.disabled = true;
-      google.script.run
-        .withSuccessHandler(function () { button.disabled = false; loadWorkspace(); loadConversations(); })
-        .withFailureHandler(function (error) { button.disabled = false; alert('Could not send media: ' + (error && error.message)); })
-        .sendMediaReply(selectedConversationId, mediaType, mediaUrl, caption);
-    }
-
     function loadTemplateSelect() {
       if (cachedTemplates) { populateTemplateSelect(); return; }
-      google.script.run.withSuccessHandler(function (templates) {
-        cachedTemplates = templates.filter(function (t) { return t.status === 'APPROVED'; });
-        populateTemplateSelect();
-      }).withFailureHandler(function () {}).listTemplates();
+      google.script.run.withSuccessHandler(function (templates) { cachedTemplates = templates.filter(function (t) { return t.status === 'APPROVED'; }); populateTemplateSelect(); }).withFailureHandler(function () {}).listTemplates();
     }
-
     function populateTemplateSelect() {
       var select = document.getElementById('templateSelect');
       if (!select) return;
-      select.innerHTML = '<option value="">Template… (' + cachedTemplates.length + ' approved)</option>' +
-        cachedTemplates.map(function (t) { return '<option value="' + escapeHtml(t.id) + '">' + escapeHtml(t.name) + '</option>'; }).join('');
+      select.innerHTML = '<option value="">Template… (' + cachedTemplates.length + ')</option>' + cachedTemplates.map(function (t) { return '<option value="' + escapeHtml(t.id) + '">' + escapeHtml(t.name) + '</option>'; }).join('');
     }
-
     function sendCurrentTemplate() {
       var select = document.getElementById('templateSelect');
       if (!select.value) return;
@@ -434,205 +770,583 @@
       for (var i = 0; i < placeholders.length; i++) {
         var index = placeholders[i].replace(/\D/g, '');
         var value = prompt('Value for ' + placeholders[i] + ' in "' + template.name + '":');
-        if (value === null) return; // cancelled
+        if (value === null) return;
         variables[index] = value;
       }
-      var button = document.getElementById('templateSend');
+      google.script.run.withSuccessHandler(function () { loadWorkspace(); refreshActiveList(); })
+        .withFailureHandler(function (error) { alert('Could not send template: ' + (error && error.message)); }).sendTemplateReply(selectedConversationId, template.id, variables);
+    }
+    function sendCurrentMedia() {
+      var mediaType = prompt('Media type (image, document, video, audio):', 'image');
+      if (!mediaType) return;
+      var mediaUrl = prompt('Media URL:');
+      if (!mediaUrl) return;
+      var caption = prompt('Caption (optional):', '') || '';
+      google.script.run.withSuccessHandler(function () { loadWorkspace(); refreshActiveList(); })
+        .withFailureHandler(function (error) { alert('Could not send media: ' + (error && error.message)); }).sendMediaReply(selectedConversationId, mediaType, mediaUrl, caption);
+    }
+    function sendCurrentReply() {
+      var textarea = document.getElementById('composeText');
+      var button = document.getElementById('composeSend');
+      var text = textarea.value.trim();
+      if (!text) return;
       button.disabled = true;
-      google.script.run
-        .withSuccessHandler(function () { button.disabled = false; loadWorkspace(); loadConversations(); })
-        .withFailureHandler(function (error) { button.disabled = false; alert('Could not send template: ' + (error && error.message)); })
-        .sendTemplateReply(selectedConversationId, template.id, variables);
+      setError('composeError', null);
+      google.script.run.withSuccessHandler(function () { textarea.value = ''; button.disabled = false; loadWorkspace(); refreshActiveList(); })
+        .withFailureHandler(function (error) { button.disabled = false; setError('composeError', error); }).sendReply(selectedConversationId, text);
+    }
+    function addCurrentNote() {
+      var textarea = document.getElementById('noteText');
+      var text = textarea.value.trim();
+      if (!text) return;
+      google.script.run.withSuccessHandler(function () { loadWorkspace(); })
+        .withFailureHandler(function (error) { alert('Could not add note: ' + (error && error.message)); }).addRemark(selectedConversationId, text);
     }
 
-    function renderSnoozeStatus(status) {
-      var banner = document.getElementById('snoozeBanner');
-      var btn = document.getElementById('snoozeBtn');
-      if (!banner || !btn) return;
-      if (status && status.snoozed) {
-        banner.innerHTML = '<div class="snooze-banner">Snoozed until ' + escapeHtml(status.snoozedUntil) + '</div>';
-        btn.textContent = 'Un-snooze';
-      } else {
-        banner.innerHTML = '';
-        btn.textContent = 'Snooze…';
-      }
+    // ---- Detail panel: customer info, stage, previous conversations, notes, reminders ----
+    function renderDetailPanel(container, workspace) {
+      var el = container.querySelector('.js-detail');
+      var customer = workspace.customer || {};
+      var customerName = customer.name || customer.phone || 'Unknown customer';
+      el.innerHTML =
+        '<div class="cust-header"><div class="cust-avatar">' + escapeHtml(initials(customerName)) + '</div><div class="cust-name">' + escapeHtml(customerName) + '</div>' +
+        '<select class="btn" id="stageSelect" style="margin-top:8px;" onchange="changeStage()"><option value="">Stage…</option></select></div>' +
+        '<div class="cust-fields">' +
+        '<div class="field-row"><span class="field-label">Phone</span><span class="field-value">' + escapeHtml(customer.phone || '—') + '</span></div>' +
+        '<div class="field-row"><span class="field-label">Email</span><span class="field-value">' + escapeHtml(customer.email || '—') + '</span></div>' +
+        '<div class="field-row"><span class="field-label">Company</span><span class="field-value">' + escapeHtml(customer.company || '—') + '</span></div>' +
+        '<div class="field-row"><span class="field-label">Customer since</span><span class="field-value">' + escapeHtml((customer.createdAt || '').slice(0, 10) || '—') + '</span></div>' +
+        '<div class="field-row"><span class="field-label">Assigned to</span><span class="field-value">' + escapeHtml(workspace.assignedUserName || 'Unassigned') + '</span></div>' +
+        '<button class="btn" style="width:100%; margin-top:8px;" onclick="editCustomerFields()">Edit details</button>' +
+        '</div>' +
+        '<details class="detail-section" id="prevConvSection"><summary>Previous Conversations</summary><div class="detail-section-body empty">Loading…</div></details>' +
+        '<details class="detail-section" id="notesSection" open><summary>Notes</summary><div class="detail-section-body empty">Loading…</div></details>' +
+        '<details class="detail-section" id="remindersSection"><summary>Reminders</summary><div class="detail-section-body empty">Loading…</div></details>';
+
+      populateStageSelect(workspace.stage);
+      loadPreviousConversations(customer.id);
+      renderNotesSection(workspace.remarks);
+      loadRemindersSection();
     }
 
-    function toggleSnooze() {
-      google.script.run.withSuccessHandler(function (status) {
-        if (status && status.snoozed) {
-          google.script.run.withSuccessHandler(function () { loadWorkspace(); loadConversations(); })
-            .withFailureHandler(function (error) { alert('Could not un-snooze: ' + (error && error.message)); })
-            .unsnoozeConversation(selectedConversationId);
-          return;
-        }
-        // Currently not snoozed — ask how long to snooze for.
-        var hours = prompt('Snooze this conversation for how many hours?', '4');
-        if (!hours) return;
-        var until = new Date(Date.now() + Number(hours) * 3600000).toISOString();
-        google.script.run.withSuccessHandler(function () { loadWorkspace(); loadConversations(); })
-          .withFailureHandler(function (error) { alert('Could not snooze: ' + (error && error.message)); })
-          .snoozeConversation(selectedConversationId, until);
-      }).withFailureHandler(function () {}).getSnoozeStatus(selectedConversationId);
+    function editCustomerFields() {
+      var workspace = window.__currentWorkspace;
+      var customer = workspace.customer || {};
+      var name = prompt('Name:', customer.name || '');
+      if (name === null) return;
+      var email = prompt('Email:', customer.email || '');
+      if (email === null) return;
+      var company = prompt('Company:', customer.company || '');
+      if (company === null) return;
+      google.script.run.withSuccessHandler(function () { loadWorkspace(); })
+        .withFailureHandler(function (error) { alert('Could not update customer: ' + (error && error.message)); })
+        .updateCustomer(customer.id, { name: name, email: email, company: company });
     }
 
-    function renderReminders(reminders) {
-      var pane = document.getElementById('remindersPane');
-      if (!pane) return;
-      if (reminders === null) { pane.style.display = 'none'; return; } // no reminder view access — hide rather than show an error
-      pane.style.display = '';
-      var pending = reminders.filter(function (r) { return r.status === 'PENDING'; });
-      pane.querySelector('summary').textContent = 'Reminders' + (pending.length ? ' (' + pending.length + ')' : '');
-      var listHtml = pending.map(function (reminder) {
-        return '<div class="reminder"><span>' + escapeHtml(reminder.text) + '<div class="reminder-due">Due ' + escapeHtml(reminder.dueAt) + '</div></span>' +
-          '<button onclick="completeReminder(\'' + reminder.id + '\')">Done</button></div>';
-      }).join('') || '<div class="empty">No pending reminders</div>';
-      pane.querySelector('.side-panel-body').innerHTML = listHtml +
-        '<div class="reminder-add"><input type="text" id="reminderText" placeholder="Reminder text…">' +
-        '<input type="datetime-local" id="reminderDue">' +
-        '<button onclick="addCurrentReminder()">Add</button></div>';
+    function loadPreviousConversations(customerId) {
+      var section = document.getElementById('prevConvSection');
+      if (!section || !customerId) return;
+      google.script.run.withSuccessHandler(function (conversations) {
+        var others = conversations.filter(function (c) { return c.id !== selectedConversationId; });
+        section.querySelector('summary').textContent = 'Previous Conversations (' + others.length + ')';
+        section.querySelector('.detail-section-body').innerHTML = others.map(function (c) {
+          return '<div class="note-item" style="cursor:pointer;" onclick="openConversationFromAnywhere(\'' + c.id + '\')">' +
+            escapeHtml(c.numberDisplayName || '') + '<div class="note-meta">' + escapeHtml(c.status) + ' • ' + escapeHtml((c.lastMessageAt || '').slice(0, 10)) + '</div></div>';
+        }).join('') || '<div class="empty">No other conversations</div>';
+      }).withFailureHandler(function () {}).searchConversations({ customerId: customerId, status: 'ANY' });
     }
 
+    function renderNotesSection(remarks) {
+      var section = document.getElementById('notesSection');
+      if (!section) return;
+      if (remarks === null) { section.style.display = 'none'; return; }
+      section.style.display = '';
+      section.querySelector('summary').textContent = 'Notes' + (remarks.length ? ' (' + remarks.length + ')' : '');
+      section.querySelector('.detail-section-body').innerHTML = remarks.map(function (r) {
+        return '<div class="note-item">' + escapeHtml(r.text) + '<div class="note-meta">' + escapeHtml((r.createdAt || '').replace('T', ' ').slice(0, 16)) + '</div></div>';
+      }).join('') || '<div class="empty">No notes yet</div>';
+    }
+
+    function loadRemindersSection() {
+      var section = document.getElementById('remindersSection');
+      if (!section) return;
+      google.script.run.withSuccessHandler(function (reminders) {
+        section.style.display = '';
+        var pending = reminders.filter(function (r) { return r.status === 'PENDING'; });
+        section.querySelector('summary').textContent = 'Reminders' + (pending.length ? ' (' + pending.length + ')' : '');
+        var listHtml = pending.map(function (r) {
+          return '<div class="reminder-item">' + escapeHtml(r.text) + '<div class="reminder-meta">Due ' + escapeHtml((r.dueAt || '').replace('T', ' ').slice(0, 16)) +
+            ' • <a style="cursor:pointer; color:var(--accent);" onclick="completeReminder(\'' + r.id + '\')">Done</a></div></div>';
+        }).join('') || '<div class="empty">No pending reminders</div>';
+        section.querySelector('.detail-section-body').innerHTML = listHtml +
+          '<div class="mini-add"><input type="text" id="reminderText" placeholder="Reminder text…"></div>' +
+          '<div class="mini-add" style="margin-top:4px;"><input type="datetime-local" id="reminderDue"><button onclick="addCurrentReminder()">Add</button></div>';
+      }).withFailureHandler(function () { section.style.display = 'none'; }).listReminders(selectedConversationId);
+    }
     function addCurrentReminder() {
       var textInput = document.getElementById('reminderText');
       var dueInput = document.getElementById('reminderDue');
       var text = textInput.value.trim();
       if (!text || !dueInput.value) return;
       var dueAt = new Date(dueInput.value).toISOString();
-      google.script.run.withSuccessHandler(function () { loadWorkspace(); })
-        .withFailureHandler(function (error) { alert('Could not add reminder: ' + (error && error.message)); })
-        .createReminder(selectedConversationId, text, dueAt);
+      google.script.run.withSuccessHandler(function () { loadRemindersSection(); })
+        .withFailureHandler(function (error) { alert('Could not add reminder: ' + (error && error.message)); }).createReminder(selectedConversationId, text, dueAt);
     }
-
     function completeReminder(reminderId) {
-      google.script.run.withSuccessHandler(function () { loadWorkspace(); }).withFailureHandler(function (error) { alert('Could not update reminder: ' + (error && error.message)); })
-        .updateReminderStatus(reminderId, 'COMPLETED');
+      google.script.run.withSuccessHandler(function () { loadRemindersSection(); }).withFailureHandler(function (error) { alert('Could not update reminder: ' + (error && error.message)); }).updateReminderStatus(reminderId, 'COMPLETED');
     }
 
     function populateStageSelect(currentStage) {
-      if (!cachedStages) {
-        google.script.run.withSuccessHandler(function (stages) { cachedStages = stages; populateStageSelect(currentStage); }).withFailureHandler(function () {}).listStages();
-        return;
-      }
+      if (!cachedStages) { google.script.run.withSuccessHandler(function (stages) { cachedStages = stages; populateStageSelect(currentStage); }).withFailureHandler(function () {}).listStages(); return; }
       var select = document.getElementById('stageSelect');
       if (!select) return;
       var currentStageId = currentStage && currentStage.stageId;
       select.innerHTML = '<option value="">Stage: (none)</option>' + cachedStages.map(function (stage) {
-        return '<option value="' + escapeHtml(stage.id) + '"' + (stage.id === currentStageId ? ' selected' : '') + '>Stage: ' + escapeHtml(stage.name) + '</option>';
+        return '<option value="' + escapeHtml(stage.id) + '"' + (stage.id === currentStageId ? ' selected' : '') + '>' + escapeHtml(stage.name) + '</option>';
       }).join('');
     }
-
     function changeStage() {
       var select = document.getElementById('stageSelect');
       if (!select.value) return;
-      google.script.run.withFailureHandler(function (error) { alert('Could not change stage: ' + (error && error.message)); }).setCustomerStage(selectedCustomerId, select.value);
+      var customer = (window.__currentWorkspace || {}).customer;
+      if (!customer) return;
+      google.script.run.withFailureHandler(function (error) { alert('Could not change stage: ' + (error && error.message)); }).setCustomerStage(customer.id, select.value);
     }
 
-    function renderRemarks(remarks) {
-      var pane = document.getElementById('remarksPane');
-      if (!pane) return;
-      if (remarks === null) { pane.style.display = 'none'; return; } // e.g. VIEWER has no remarks access — hide rather than show an error here
-      pane.style.display = '';
-      pane.querySelector('summary').textContent = 'Internal remarks' + (remarks.length ? ' (' + remarks.length + ')' : '');
-      var listHtml = remarks.map(function (remark) {
-        return '<div class="remark">' + escapeHtml(remark.text) + '<div class="remark-meta">' + escapeHtml(remark.createdAt) + '</div></div>';
-      }).join('') || '<div class="empty">No remarks yet</div>';
-      pane.querySelector('.side-panel-body').innerHTML = listHtml +
-        '<div class="remark-add"><input id="remarkText" placeholder="Add a remark…" onkeydown="if(event.key===\'Enter\')addCurrentRemark();">' +
-        '<button onclick="addCurrentRemark()">Add</button></div>';
+    // ============================================================================
+    // Dashboard KPIs
+    // ============================================================================
+    function loadDashboard() {
+      google.script.run.withSuccessHandler(function (metrics) {
+        window.__hasReportsAccess = true;
+        renderSidebarNav();
+        var kpis = [
+          { label: 'Total Conversations', value: metrics.conversations.total, icon: '💬', bg: '#e6f4ec', color: '#1f7a53' },
+          { label: 'Assigned to me', value: metrics.assignedToMe, icon: '🙋', bg: '#e8f0fe', color: '#1a73e8' },
+          { label: 'Unassigned', value: metrics.conversations.unassigned, icon: '🕓', bg: '#f3e8fd', color: '#8430ce' },
+          { label: 'Closed', value: metrics.conversations.resolved, icon: '✅', bg: '#fff4e0', color: '#b7791f' },
+          { label: 'Total Customers', value: metrics.totalCustomers, icon: '👥', bg: '#e0f7fa', color: '#00838f' }
+        ];
+        document.getElementById('kpiRow').innerHTML = kpis.map(function (k) {
+          return '<div class="kpi-card"><div class="kpi-icon" style="background:' + k.bg + '; color:' + k.color + ';">' + k.icon + '</div>' +
+            '<div><div class="kpi-label">' + k.label + '</div><div class="kpi-value">' + k.value + '</div></div></div>';
+        }).join('');
+      }).withFailureHandler(function () { document.getElementById('kpiRow').innerHTML = ''; }).getDashboardMetrics();
+      renderInboxSplit('dashboardSplit', {});
     }
 
-    function addCurrentRemark() {
-      var input = document.getElementById('remarkText');
-      var text = input.value.trim();
-      if (!text) return;
-      google.script.run.withSuccessHandler(function () { loadWorkspace(); })
-        .withFailureHandler(function (error) { alert('Could not add remark: ' + (error && error.message)); })
-        .addRemark(selectedConversationId, text);
+    // ============================================================================
+    // Reminders page (personal)
+    // ============================================================================
+    function loadReminders() {
+      google.script.run.withSuccessHandler(function (reminders) {
+        var pending = reminders.filter(function (r) { return r.status === 'PENDING'; });
+        document.getElementById('remindersList').innerHTML = pending.map(function (r) {
+          return '<div class="card" style="max-width:600px;"><strong>' + escapeHtml(r.text) + '</strong><div style="color:var(--text-secondary); font-size:12px; margin-top:4px;">Due ' + escapeHtml((r.dueAt || '').replace('T', ' ').slice(0, 16)) +
+            ' • <a style="cursor:pointer; color:var(--accent);" onclick="completeMyReminder(\'' + r.id + '\')">Mark done</a></div></div>';
+        }).join('') || '<div class="empty">No pending reminders.</div>';
+      }).withFailureHandler(function (error) { document.getElementById('remindersList').innerHTML = '<div class="empty">Error: ' + escapeHtml(error && error.message) + '</div>'; }).listMyReminders();
+    }
+    function completeMyReminder(id) {
+      google.script.run.withSuccessHandler(loadReminders).withFailureHandler(function (error) { alert('Could not update: ' + (error && error.message)); }).updateReminderStatus(id, 'COMPLETED');
     }
 
-    function sendCurrentReply() {
-      var textarea = document.getElementById('composeText');
-      var button = document.getElementById('composeSend');
-      var errorBox = document.getElementById('composeError');
-      var text = textarea.value.trim();
-      if (!text) return;
-      button.disabled = true;
-      errorBox.textContent = '';
-      google.script.run
-        .withSuccessHandler(function () {
-          textarea.value = '';
-          button.disabled = false;
-          loadWorkspace();
-          loadConversations();
-        })
-        .withFailureHandler(function (error) {
-          button.disabled = false;
-          errorBox.textContent = 'Could not send: ' + (error && error.message);
-        })
-        .sendReply(selectedConversationId, text);
+    // ============================================================================
+    // Customers directory
+    // ============================================================================
+    function loadCustomers() {
+      google.script.run.withSuccessHandler(function (customers) {
+        document.getElementById('customersTable').querySelector('tbody').innerHTML = customers.map(function (c) {
+          return '<tr><td>' + escapeHtml(c.name || '—') + '</td><td>' + escapeHtml(c.phone) + '</td><td>' + escapeHtml(c.company || '—') + '</td><td>' + escapeHtml(c.source || '—') + '</td>' +
+            '<td><button class="btn" onclick="openCustomerFromDirectory(\'' + c.id + '\')">View conversations</button></td></tr>';
+        }).join('') || '<tr><td colspan="5" class="empty">No customers yet</td></tr>';
+      }).withFailureHandler(function (error) { document.getElementById('customersTable').querySelector('tbody').innerHTML = '<tr><td colspan="5" class="empty">Error: ' + escapeHtml(error && error.message) + '</td></tr>'; }).listCustomers();
+    }
+    function openCustomerFromDirectory(customerId) {
+      google.script.run.withSuccessHandler(function (conversations) {
+        if (!conversations.length) { alert('This customer has no conversations yet.'); return; }
+        showPage('allConversations');
+        openConversationFromAnywhere(conversations[0].id);
+      }).withFailureHandler(function (error) { alert('Could not load conversations: ' + (error && error.message)); }).searchConversations({ customerId: customerId, status: 'ANY' });
     }
 
-    function renderError(elementId) {
-      return function (error) {
-        document.getElementById(elementId).innerHTML = '<div class="empty">Error: ' + escapeHtml(error && error.message) + '</div>';
-      };
-    }
-
-    loadNumbers();
-    google.script.run.withSuccessHandler(function (me) {
-      if (me.roleKeys.indexOf('ADMIN') !== -1) {
-        var link = document.getElementById('adminLink');
-        if (link) link.style.display = '';
-      }
-    }).withFailureHandler(function () {}).whoAmI();
-
-    // Probing getDashboardMetrics() itself (rather than checking role names) decides
-    // whether to show the Reports link — REPORTS_VIEW is what actually gates it
-    // server-side, not any particular role, and this avoids duplicating that mapping
-    // client-side (same reasoning as the hide-on-denied remarks/reminders panels).
-    google.script.run.withSuccessHandler(function (metrics) {
-      window.__reportsMetrics = metrics;
-      var link = document.getElementById('reportsLink');
-      if (link) link.style.display = '';
-    }).withFailureHandler(function () {}).getDashboardMetrics();
-
-    function openReports() {
-      document.getElementById('reportsOverlay').style.display = 'block';
-      google.script.run.withSuccessHandler(renderReports).withFailureHandler(function (error) {
+    // ============================================================================
+    // Reports page (adapted from the old overlay)
+    // ============================================================================
+    function loadReports() {
+      google.script.run.withSuccessHandler(renderReportsBody).withFailureHandler(function (error) {
         document.getElementById('reportsBody').innerHTML = '<div class="empty">Could not load reports: ' + escapeHtml(error && error.message) + '</div>';
       }).getDashboardMetrics();
     }
-    function closeReports() { document.getElementById('reportsOverlay').style.display = 'none'; }
-    function renderReports(metrics) {
+    function renderReportsBody(metrics) {
       var c = metrics.conversations;
-      var html = '<h2>Conversations</h2><table><tr><th>Total</th><th>Open</th><th>Unassigned</th><th>Needs response</th><th>Resolved</th></tr>' +
+      var html = '<h2 class="section-title" style="margin-top:0;">Conversations</h2><table class="data-table"><tr><th>Total</th><th>Open</th><th>Unassigned</th><th>Needs response</th><th>Resolved</th></tr>' +
         '<tr><td>' + c.total + '</td><td>' + c.open + '</td><td>' + c.unassigned + '</td><td>' + c.needsResponse + '</td><td>' + c.resolved + '</td></tr></table>';
-
-      html += '<h2>By number</h2><table><tr><th>Number</th><th>Total</th><th>Open</th><th>Unassigned</th><th>Needs response</th></tr>' +
-        metrics.byNumber.map(function (n) { return '<tr><td>' + escapeHtml(n.displayName) + '</td><td>' + n.total + '</td><td>' + n.open + '</td><td>' + n.unassigned + '</td><td>' + n.needsResponse + '</td></tr>'; }).join('') +
-        '</table>';
-
-      html += '<h2>Agent workload</h2><table><tr><th>Agent</th><th>Open</th><th>Needs response</th></tr>' +
-        (metrics.byAgent.map(function (a) { return '<tr><td>' + escapeHtml(a.displayName) + '</td><td>' + a.open + '</td><td>' + a.needsResponse + '</td></tr>'; }).join('') || '<tr><td colspan="3" class="empty">Nobody currently has open conversations</td></tr>') +
-        '</table>';
-
-      html += '<h2>Response time</h2><table><tr><th>Average first response</th><th>Sample size</th></tr>' +
+      html += '<h2 class="section-title">By number</h2><table class="data-table"><tr><th>Number</th><th>Total</th><th>Open</th><th>Unassigned</th><th>Needs response</th></tr>' +
+        metrics.byNumber.map(function (n) { return '<tr><td>' + escapeHtml(n.displayName) + '</td><td>' + n.total + '</td><td>' + n.open + '</td><td>' + n.unassigned + '</td><td>' + n.needsResponse + '</td></tr>'; }).join('') + '</table>';
+      html += '<h2 class="section-title">Agent workload</h2><table class="data-table"><tr><th>Agent</th><th>Open</th><th>Needs response</th></tr>' +
+        (metrics.byAgent.map(function (a) { return '<tr><td>' + escapeHtml(a.displayName) + '</td><td>' + a.open + '</td><td>' + a.needsResponse + '</td></tr>'; }).join('') || '<tr><td colspan="3" class="empty">Nobody currently has open conversations</td></tr>') + '</table>';
+      html += '<h2 class="section-title">Response time</h2><table class="data-table"><tr><th>Average first response</th><th>Sample size</th></tr>' +
         '<tr><td>' + (metrics.responseTime.averageFirstResponseMinutes === null ? 'N/A' : metrics.responseTime.averageFirstResponseMinutes + ' min') + '</td><td>' + metrics.responseTime.sampleSize + '</td></tr></table>';
-
-      html += '<h2>Stage distribution</h2><table><tr><th>Stage</th><th>Customers</th></tr>' +
-        (metrics.stageDistribution.map(function (s) { return '<tr><td>' + escapeHtml(s.name) + '</td><td>' + s.count + '</td></tr>'; }).join('') || '<tr><td colspan="2" class="empty">No stages seeded yet</td></tr>') +
-        '</table>';
-
-      html += '<h2>Template usage</h2><table><tr><th>Template</th><th>Times sent</th></tr>' +
-        (metrics.templateUsage.map(function (t) { return '<tr><td>' + escapeHtml(t.name) + '</td><td>' + t.count + '</td></tr>'; }).join('') || '<tr><td colspan="2" class="empty">No templates sent yet</td></tr>') +
-        '</table>';
-
-      html += '<h2>Lead conversion</h2><table><tr><th>Customers with a stage</th><th>Won</th><th>Conversion rate</th></tr>' +
+      html += '<h2 class="section-title">Stage distribution</h2><table class="data-table"><tr><th>Stage</th><th>Customers</th></tr>' +
+        (metrics.stageDistribution.map(function (s) { return '<tr><td>' + escapeHtml(s.name) + '</td><td>' + s.count + '</td></tr>'; }).join('') || '<tr><td colspan="2" class="empty">No stages seeded yet</td></tr>') + '</table>';
+      html += '<h2 class="section-title">Template usage</h2><table class="data-table"><tr><th>Template</th><th>Times sent</th></tr>' +
+        (metrics.templateUsage.map(function (t) { return '<tr><td>' + escapeHtml(t.name) + '</td><td>' + t.count + '</td></tr>'; }).join('') || '<tr><td colspan="2" class="empty">No templates sent yet</td></tr>') + '</table>';
+      html += '<h2 class="section-title">Lead conversion</h2><table class="data-table"><tr><th>Customers with a stage</th><th>Won</th><th>Conversion rate</th></tr>' +
         '<tr><td>' + metrics.leadConversion.totalCustomersWithStage + '</td><td>' + metrics.leadConversion.wonCount + '</td><td>' + (metrics.leadConversion.conversionRate === null ? 'N/A' : metrics.leadConversion.conversionRate + '%') + '</td></tr></table>';
-
       document.getElementById('reportsBody').innerHTML = html;
     }
+
+    // ============================================================================
+    // Templates page (ported from Admin.html)
+    // ============================================================================
+    function loadTemplates() {
+      google.script.run.withSuccessHandler(function (templates) {
+        document.getElementById('templatesTable').querySelector('tbody').innerHTML = templates.map(function (t) {
+          var actions = t.status === 'LOCAL_DRAFT' ? '<button class="btn" onclick="submitTemplateForReviewAction(\'' + t.id + '\')">Submit for review</button>' : '';
+          return '<tr><td>' + escapeHtml(t.name) + '</td><td>' + escapeHtml(t.language) + '</td><td>' + escapeHtml(t.category) + '</td><td><span class="pill">' + escapeHtml(t.status) + '</span></td><td>' + actions + '</td></tr>';
+        }).join('') || '<tr><td colspan="5" class="empty">No templates yet</td></tr>';
+      }).withFailureHandler(function (error) { setError('tplError', error); }).listTemplates();
+    }
+    function submitCreateTemplateDraft() {
+      var name = document.getElementById('tplName').value.trim();
+      var language = document.getElementById('tplLanguage').value.trim();
+      var category = document.getElementById('tplCategory').value.trim();
+      var body = document.getElementById('tplBody').value.trim();
+      if (!name || !language || !category || !body) return;
+      google.script.run.withSuccessHandler(function () {
+        document.getElementById('tplName').value = ''; document.getElementById('tplBody').value = ''; setError('tplError', null); loadTemplates();
+      }).withFailureHandler(function (error) { setError('tplError', error); }).createDraftTemplate({ name: name, language: language, category: category, components: [{ type: 'BODY', text: body }] });
+    }
+    function submitTemplateForReviewAction(id) {
+      var wabaId = prompt('wabaId to submit this template under:', '');
+      if (!wabaId) return;
+      google.script.run.withSuccessHandler(function () {
+        google.script.run.withSuccessHandler(loadTemplates).withFailureHandler(function (error) { alert('Could not submit: ' + (error && error.message)); }).submitTemplateForReview(id);
+      }).withFailureHandler(function (error) { alert('Could not set wabaId: ' + (error && error.message)); }).updateDraftTemplate(id, { wabaId: wabaId });
+    }
+    function submitSyncTemplates() {
+      var wabaId = document.getElementById('syncWabaId').value.trim();
+      if (!wabaId) return;
+      google.script.run.withSuccessHandler(loadTemplates).withFailureHandler(function (error) { alert('Could not sync: ' + (error && error.message)); }).syncTemplatesFromProvider(wabaId);
+    }
+
+    // ============================================================================
+    // Quick Replies page
+    // ============================================================================
+    function loadQuickRepliesPage() {
+      google.script.run.withSuccessHandler(function (list) {
+        document.getElementById('quickRepliesTable').querySelector('tbody').innerHTML = list.map(function (q) {
+          return '<tr><td>' + escapeHtml(q.shortcut) + '</td><td>' + escapeHtml(q.text) + '</td><td><span class="pill">' + (q.active !== false ? 'active' : 'inactive') + '</span></td>' +
+            '<td><button class="btn" onclick="editQuickReply(\'' + q.id + '\', \'' + escapeHtml(q.text).replace(/'/g, "\\'") + '\')">Edit</button></td></tr>';
+        }).join('') || '<tr><td colspan="4" class="empty">No quick replies yet</td></tr>';
+      }).withFailureHandler(function (error) { setError('qrError', error); }).listQuickReplies();
+    }
+    function submitCreateQuickReply() {
+      var shortcut = document.getElementById('qrShortcut').value.trim();
+      var text = document.getElementById('qrText').value.trim();
+      if (!shortcut || !text) return;
+      google.script.run.withSuccessHandler(function () {
+        document.getElementById('qrShortcut').value = ''; document.getElementById('qrText').value = ''; setError('qrError', null); loadQuickRepliesPage(); cachedQuickReplies = null;
+      }).withFailureHandler(function (error) { setError('qrError', error); }).createQuickReply({ shortcut: shortcut, text: text });
+    }
+    function editQuickReply(id, currentText) {
+      var text = prompt('Text:', currentText);
+      if (text === null) return;
+      var active = confirm('Keep this quick reply active? OK = active, Cancel = inactive');
+      google.script.run.withSuccessHandler(function () { loadQuickRepliesPage(); cachedQuickReplies = null; }).withFailureHandler(function (error) { alert('Could not update: ' + (error && error.message)); }).updateQuickReply(id, { text: text, active: active });
+    }
+
+    // ============================================================================
+    // Teams page
+    // ============================================================================
+    function loadTeams() {
+      google.script.run.withSuccessHandler(function (users) { cachedUsers = users; }).withFailureHandler(function () {}).listUsers();
+      google.script.run.withSuccessHandler(function (teams) {
+        cachedTeams = teams;
+        var ownerName = function (id) { var u = cachedUsers.find(function (x) { return x.id === id; }); return u ? u.displayName : id; };
+        document.getElementById('teamsTable').querySelector('tbody').innerHTML = teams.map(function (t) {
+          return '<tr><td>' + escapeHtml(t.name) + '</td><td>' + escapeHtml(ownerName(t.ownerUserId)) + '</td><td><span class="pill">' + escapeHtml(t.status) + '</span></td>' +
+            '<td><button class="btn" onclick="selectTeam(\'' + t.id + '\')">Members</button></td></tr>';
+        }).join('') || '<tr><td colspan="4" class="empty">No teams</td></tr>';
+        document.getElementById('teamOwner').innerHTML = cachedUsers.map(function (u) { return '<option value="' + u.id + '">' + escapeHtml(u.displayName) + '</option>'; }).join('');
+        document.getElementById('memberUser').innerHTML = cachedUsers.map(function (u) { return '<option value="' + u.id + '">' + escapeHtml(u.displayName) + '</option>'; }).join('');
+      }).withFailureHandler(function (error) { setError('teamError', error); }).listTeams();
+    }
+    function submitCreateTeam() {
+      var name = document.getElementById('teamName').value.trim();
+      var ownerUserId = document.getElementById('teamOwner').value;
+      if (!name || !ownerUserId) return;
+      google.script.run.withSuccessHandler(function () { document.getElementById('teamName').value = ''; setError('teamError', null); loadTeams(); }).withFailureHandler(function (error) { setError('teamError', error); }).createTeam({ name: name, ownerUserId: ownerUserId });
+    }
+    function selectTeam(teamId) {
+      selectedTeamId = teamId;
+      var team = cachedTeams.find(function (t) { return t.id === teamId; });
+      document.getElementById('teamMembersTitle').textContent = team ? team.name : teamId;
+      document.getElementById('teamMembersPanel').style.display = 'block';
+      loadTeamMembers();
+    }
+    function loadTeamMembers() {
+      google.script.run.withSuccessHandler(function (members) {
+        var userName = function (id) { var u = cachedUsers.find(function (x) { return x.id === id; }); return u ? u.displayName : id; };
+        document.getElementById('teamMembersTable').querySelector('tbody').innerHTML = members.map(function (m) {
+          return '<tr><td>' + escapeHtml(userName(m.userId)) + '</td><td><span class="pill">' + escapeHtml(m.status) + '</span></td><td>' + escapeHtml((m.numberIds || []).join(', ')) + '</td>' +
+            '<td><button class="btn" onclick="editTeamMember(\'' + m.id + '\')">Edit</button></td></tr>';
+        }).join('') || '<tr><td colspan="4" class="empty">No members yet</td></tr>';
+      }).withFailureHandler(function (error) { setError('teamMemberError', error); }).listTeamMembers(selectedTeamId);
+    }
+    function submitAddTeamMember() {
+      var userId = document.getElementById('memberUser').value;
+      var numberIdsRaw = document.getElementById('memberNumberIds').value.trim();
+      var numberIds = numberIdsRaw ? numberIdsRaw.split(',').map(function (s) { return s.trim(); }).filter(Boolean) : [];
+      if (!userId || !selectedTeamId) return;
+      google.script.run.withSuccessHandler(function () { document.getElementById('memberNumberIds').value = ''; setError('teamMemberError', null); loadTeamMembers(); }).withFailureHandler(function (error) { setError('teamMemberError', error); }).addTeamMember({ teamId: selectedTeamId, userId: userId, numberIds: numberIds });
+    }
+    function editTeamMember(id) {
+      var status = prompt('Status (active/inactive):', 'active');
+      if (status === null) return;
+      var numberIdsRaw = prompt('numberIds (comma-separated, blank = all team numbers):', '');
+      var patch = { status: status };
+      if (numberIdsRaw !== null) patch.numberIds = numberIdsRaw ? numberIdsRaw.split(',').map(function (s) { return s.trim(); }).filter(Boolean) : [];
+      google.script.run.withSuccessHandler(loadTeamMembers).withFailureHandler(function (error) { alert('Could not update member: ' + (error && error.message)); }).updateTeamMember(id, patch);
+    }
+
+    // ============================================================================
+    // Users page
+    // ============================================================================
+    function loadUsers() {
+      google.script.run.withSuccessHandler(function (roles) {
+        cachedRoles = roles;
+        document.getElementById('userRole').innerHTML = roles.map(function (r) { return '<option value="' + r.id + '">' + escapeHtml(r.name) + '</option>'; }).join('');
+      }).withFailureHandler(function (error) { setError('userError', error); }).listRoles();
+      google.script.run.withSuccessHandler(function (users) {
+        cachedUsers = users;
+        var roleName = function (id) { var r = cachedRoles.find(function (x) { return x.id === id; }); return r ? r.name : id; };
+        document.getElementById('usersTable').querySelector('tbody').innerHTML = users.map(function (u) {
+          return '<tr><td>' + escapeHtml(u.email) + '</td><td>' + escapeHtml(u.displayName) + '</td><td><span class="pill">' + escapeHtml(u.status) + '</span></td>' +
+            '<td>' + u.roleIds.map(roleName).join(', ') + '</td><td><button class="btn" onclick="editUser(\'' + u.id + '\')">Edit</button></td></tr>';
+        }).join('') || '<tr><td colspan="5" class="empty">No users</td></tr>';
+      }).withFailureHandler(function (error) { setError('userError', error); }).listUsers();
+    }
+    function submitCreateUser() {
+      var email = document.getElementById('userEmail').value.trim();
+      var displayName = document.getElementById('userDisplayName').value.trim();
+      var roleId = document.getElementById('userRole').value;
+      if (!email || !displayName || !roleId) return;
+      google.script.run.withSuccessHandler(function () { document.getElementById('userEmail').value = ''; document.getElementById('userDisplayName').value = ''; setError('userError', null); loadUsers(); })
+        .withFailureHandler(function (error) { setError('userError', error); }).createUser({ email: email, displayName: displayName, roleIds: [roleId] });
+    }
+    function editUser(id) {
+      var user = cachedUsers.find(function (u) { return u.id === id; });
+      if (!user) return;
+      var status = prompt('Status (active/inactive/suspended):', user.status);
+      if (status === null) return;
+      var roleKey = prompt('Role key to set as the only role (ADMIN/SUPERVISOR/SITE_MANAGER/AGENT/VIEWER), or leave blank to keep current roles:', '');
+      var patch = { status: status };
+      if (roleKey) {
+        var role = cachedRoles.find(function (r) { return r.key === roleKey.toUpperCase(); });
+        if (!role) { alert('Unknown role key'); return; }
+        patch.roleIds = [role.id];
+      }
+      google.script.run.withSuccessHandler(loadUsers).withFailureHandler(function (error) { alert('Could not update user: ' + (error && error.message)); }).updateUser(id, patch);
+    }
+
+    // ============================================================================
+    // WhatsApp Numbers page
+    // ============================================================================
+    var cachedNumbersAdmin = [];
+    function loadNumbers() {
+      google.script.run.withSuccessHandler(function (numbers) {
+        cachedNumbersAdmin = numbers;
+        document.getElementById('numbersTable').querySelector('tbody').innerHTML = numbers.map(function (n) {
+          return '<tr><td>' + escapeHtml(n.displayName) + '</td><td>' + escapeHtml(n.phoneNumber) + '</td><td>' + escapeHtml(n.providerAccountId) + '</td><td>' + escapeHtml(n.wabaId) + '</td>' +
+            '<td><span class="pill">' + (n.active ? 'active' : 'inactive') + '</span></td><td><button class="btn" onclick="editNumber(\'' + n.id + '\')">Edit</button></td></tr>';
+        }).join('') || '<tr><td colspan="6" class="empty">No numbers</td></tr>';
+      }).withFailureHandler(function (error) { setError('numberError', error); }).listNumbers();
+    }
+    function submitCreateNumber() {
+      var displayName = document.getElementById('numberDisplayName').value.trim();
+      var phoneNumber = document.getElementById('numberPhone').value.trim();
+      if (!displayName || !phoneNumber) return;
+      google.script.run.withSuccessHandler(function () { document.getElementById('numberDisplayName').value = ''; document.getElementById('numberPhone').value = ''; setError('numberError', null); loadNumbers(); })
+        .withFailureHandler(function (error) { setError('numberError', error); }).createNumber({ displayName: displayName, phoneNumber: phoneNumber, provider: 'exotel' });
+    }
+    function editNumber(id) {
+      var number = cachedNumbersAdmin.find(function (n) { return n.id === id; });
+      if (!number) return;
+      var providerAccountId = prompt('providerAccountId:', number.providerAccountId || '');
+      if (providerAccountId === null) return;
+      var wabaId = prompt('wabaId:', number.wabaId || '');
+      if (wabaId === null) return;
+      var providerNumberId = prompt('providerNumberId:', number.providerNumberId || '');
+      if (providerNumberId === null) return;
+      var active = confirm('Keep this number active? OK = active, Cancel = inactive');
+      google.script.run.withSuccessHandler(loadNumbers).withFailureHandler(function (error) { alert('Could not update number: ' + (error && error.message)); })
+        .updateNumber(id, { providerAccountId: providerAccountId, wabaId: wabaId, providerNumberId: providerNumberId, active: active });
+    }
+
+    // ============================================================================
+    // Settings page (Number Access / Assignment Rules / Lead Stages / Backup)
+    // ============================================================================
+    function loadSettingsPage() { showSettingsTab(window.__lastSettingsTab || 'numberAccess'); }
+    function showSettingsTab(tab) {
+      window.__lastSettingsTab = tab;
+      document.querySelectorAll('.settings-tab').forEach(function (el) { el.classList.toggle('active', el.dataset.tab === tab); });
+      document.querySelectorAll('.settings-pane').forEach(function (el) { el.classList.toggle('active', el.id === 'settings-' + tab); });
+      if (tab === 'numberAccess') loadNumberAccess();
+      else if (tab === 'assignmentRules') loadAssignmentRulesSection();
+      else if (tab === 'leadStages') loadStages();
+      else if (tab === 'backup') loadBackupStatus();
+    }
+
+    var cachedNumberAccessGrants = null;
+    function loadNumberAccess() {
+      google.script.run.withSuccessHandler(function (users) { cachedUsers = users; document.getElementById('accessUser').innerHTML = users.map(function (u) { return '<option value="' + u.id + '">' + escapeHtml(u.displayName) + '</option>'; }).join(''); }).withFailureHandler(function () {}).listUsers();
+      google.script.run.withSuccessHandler(function (numbers) { cachedNumbersAdmin = numbers; document.getElementById('accessNumber').innerHTML = numbers.map(function (n) { return '<option value="' + n.id + '">' + escapeHtml(n.displayName) + '</option>'; }).join(''); renderNumberAccessTable(); }).withFailureHandler(function () {}).listNumbers();
+      google.script.run.withSuccessHandler(function (grants) { cachedNumberAccessGrants = grants; renderNumberAccessTable(); }).withFailureHandler(function (error) { setError('accessErrorMsg', error); }).listNumberAccess();
+    }
+    function renderNumberAccessTable() {
+      if (!cachedNumberAccessGrants || !cachedNumbersAdmin.length) return;
+      var userName = function (id) { var u = cachedUsers.find(function (x) { return x.id === id; }); return u ? u.displayName : id; };
+      var numberName = function (id) { var n = cachedNumbersAdmin.find(function (x) { return x.id === id; }); return n ? n.displayName : id; };
+      document.getElementById('numberAccessTable').querySelector('tbody').innerHTML = cachedNumberAccessGrants.map(function (g) {
+        return '<tr><td>' + escapeHtml(userName(g.userId)) + '</td><td>' + escapeHtml(numberName(g.numberId)) + '</td><td><span class="pill">' + escapeHtml(g.status) + '</span></td>' +
+          '<td>' + (g.status === 'active' ? '<button class="btn danger" onclick="submitRevokeAccess(\'' + g.id + '\')">Revoke</button>' : '') + '</td></tr>';
+      }).join('') || '<tr><td colspan="4" class="empty">No grants</td></tr>';
+    }
+    function submitGrantAccess() {
+      var userId = document.getElementById('accessUser').value;
+      var numberId = document.getElementById('accessNumber').value;
+      if (!userId || !numberId) return;
+      google.script.run.withSuccessHandler(function () { setError('accessErrorMsg', null); loadNumberAccess(); }).withFailureHandler(function (error) { setError('accessErrorMsg', error); }).grantNumberAccess({ userId: userId, numberId: numberId });
+    }
+    function submitRevokeAccess(id) {
+      google.script.run.withSuccessHandler(loadNumberAccess).withFailureHandler(function (error) { alert('Could not revoke: ' + (error && error.message)); }).revokeNumberAccess(id);
+    }
+
+    function loadAssignmentRulesSection() {
+      google.script.run.withSuccessHandler(function (numbers) {
+        cachedNumbersAdmin = numbers;
+        document.getElementById('ruleNumberSelect').innerHTML = '<option value="">Select a number…</option>' + numbers.map(function (n) { return '<option value="' + n.id + '">' + escapeHtml(n.displayName) + '</option>'; }).join('');
+      }).withFailureHandler(function (error) { setError('accessErrorMsg', error); }).listNumbers();
+      google.script.run.withSuccessHandler(function (users) { cachedUsers = users; }).withFailureHandler(function () {}).listUsers();
+    }
+    function loadAssignmentRules() {
+      var numberId = document.getElementById('ruleNumberSelect').value;
+      var body = document.getElementById('assignmentRulesBody');
+      if (!numberId) { body.innerHTML = '<div class="empty">Select a number</div>'; return; }
+      body.innerHTML = '<div class="empty">Loading…</div>';
+      google.script.run.withSuccessHandler(function (config) { renderAssignmentConfig(numberId, config); })
+        .withFailureHandler(function (error) { body.innerHTML = '<div class="form-error">' + escapeHtml(error && error.message) + '</div>'; }).getNumberAssignmentConfig(numberId);
+    }
+    function renderAssignmentConfig(numberId, config) {
+      config = config || { roundRobinEnabled: false, fallbackUserId: '', workingHoursStart: '', workingHoursEnd: '' };
+      var userOptions = '<option value="">(none)</option>' + cachedUsers.map(function (u) { return '<option value="' + u.id + '"' + (u.id === config.fallbackUserId ? ' selected' : '') + '>' + escapeHtml(u.displayName) + '</option>'; }).join('');
+      document.getElementById('assignmentRulesBody').innerHTML =
+        '<div class="card"><h2 class="section-title" style="margin-top:0;">Round robin config</h2>' +
+        '<div class="form-row"><label class="inline"><input type="checkbox" id="rrEnabled"' + (config.roundRobinEnabled ? ' checked' : '') + '> Round robin enabled</label></div>' +
+        '<div class="form-row">Fallback user: <select id="rrFallback">' + userOptions + '</select></div>' +
+        '<div class="form-row">Working hours: <input id="rrStart" placeholder="09:00" value="' + escapeHtml(config.workingHoursStart || '') + '" style="width:70px;"> to ' +
+        '<input id="rrEnd" placeholder="18:00" value="' + escapeHtml(config.workingHoursEnd || '') + '" style="width:70px;"> (blank = no restriction)</div>' +
+        '<button class="btn primary" onclick="submitAssignmentConfig(\'' + numberId + '\')">Save config</button>' +
+        '<div class="form-error" id="assignConfigError"></div></div>' +
+        '<h2 class="section-title">Participants (rotation order)</h2>' +
+        '<div class="form-row"><select id="participantUser">' + cachedUsers.map(function (u) { return '<option value="' + u.id + '">' + escapeHtml(u.displayName) + '</option>'; }).join('') + '</select>' +
+        '<input id="participantOrder" type="number" placeholder="Order" style="width:70px;"><button class="btn primary" onclick="submitAddParticipant(\'' + numberId + '\')">Add participant</button></div>' +
+        '<div class="form-error" id="participantError"></div>' +
+        '<table class="data-table" id="participantsTable"><thead><tr><th>Order</th><th>User</th><th>Active</th><th></th></tr></thead><tbody></tbody></table>';
+      loadParticipants(numberId);
+    }
+    function submitAssignmentConfig(numberId) {
+      var patch = { roundRobinEnabled: document.getElementById('rrEnabled').checked, fallbackUserId: document.getElementById('rrFallback').value, workingHoursStart: document.getElementById('rrStart').value.trim(), workingHoursEnd: document.getElementById('rrEnd').value.trim() };
+      google.script.run.withSuccessHandler(function () { setError('assignConfigError', null); loadAssignmentRules(); }).withFailureHandler(function (error) { setError('assignConfigError', error); }).setNumberAssignmentConfig(numberId, patch);
+    }
+    function loadParticipants(numberId) {
+      google.script.run.withSuccessHandler(function (participants) {
+        var userName = function (id) { var u = cachedUsers.find(function (x) { return x.id === id; }); return u ? u.displayName : id; };
+        document.getElementById('participantsTable').querySelector('tbody').innerHTML = participants.map(function (p) {
+          return '<tr><td>' + p.sequenceOrder + '</td><td>' + escapeHtml(userName(p.userId)) + '</td><td><span class="pill">' + (p.active ? 'active' : 'inactive') + '</span></td>' +
+            '<td><button class="btn" onclick="toggleParticipant(\'' + p.id + '\', ' + (!p.active) + ', \'' + numberId + '\')">' + (p.active ? 'Deactivate' : 'Activate') + '</button></td></tr>';
+        }).join('') || '<tr><td colspan="4" class="empty">No participants yet</td></tr>';
+      }).withFailureHandler(function (error) { setError('participantError', error); }).listAssignmentParticipants(numberId);
+    }
+    function submitAddParticipant(numberId) {
+      var userId = document.getElementById('participantUser').value;
+      var order = Number(document.getElementById('participantOrder').value) || 1;
+      if (!userId) return;
+      google.script.run.withSuccessHandler(function () { setError('participantError', null); loadParticipants(numberId); }).withFailureHandler(function (error) { setError('participantError', error); }).addAssignmentParticipant(numberId, userId, order);
+    }
+    function toggleParticipant(id, active, numberId) {
+      google.script.run.withSuccessHandler(function () { loadParticipants(numberId); }).withFailureHandler(function (error) { alert('Could not update participant: ' + (error && error.message)); }).updateAssignmentParticipant(id, { active: active });
+    }
+
+    function loadStages() {
+      google.script.run.withSuccessHandler(function (stages) {
+        document.getElementById('stagesTable').querySelector('tbody').innerHTML = stages.map(function (s) {
+          return '<tr><td>' + s.sequenceOrder + '</td><td>' + escapeHtml(s.key) + '</td><td>' + escapeHtml(s.name) + '</td><td><span class="pill">' + (s.active ? 'active' : 'inactive') + '</span></td>' +
+            '<td><button class="btn" onclick="editStage(\'' + s.id + '\', \'' + escapeHtml(s.name).replace(/'/g, "\\'") + '\', ' + s.sequenceOrder + ', ' + s.active + ')">Edit</button></td></tr>';
+        }).join('') || '<tr><td colspan="5" class="empty">No stages yet — seed the defaults above</td></tr>';
+      }).withFailureHandler(function (error) { setError('stageError', error); }).listStages();
+    }
+    function submitSeedStages() {
+      google.script.run.withSuccessHandler(function () { loadStages(); cachedStages = null; }).withFailureHandler(function (error) { alert('Could not seed: ' + (error && error.message)); }).seedDefaultLeadStages();
+    }
+    function submitCreateStage() {
+      var key = document.getElementById('stageKey').value.trim();
+      var name = document.getElementById('stageName').value.trim();
+      var order = Number(document.getElementById('stageOrder').value) || undefined;
+      if (!key || !name) return;
+      google.script.run.withSuccessHandler(function () {
+        document.getElementById('stageKey').value = ''; document.getElementById('stageName').value = ''; document.getElementById('stageOrder').value = ''; setError('stageError', null); loadStages(); cachedStages = null;
+      }).withFailureHandler(function (error) { setError('stageError', error); }).createStage({ key: key, name: name, sequenceOrder: order });
+    }
+    function editStage(id, currentName, currentOrder, currentActive) {
+      var name = prompt('Stage name:', currentName);
+      if (name === null) return;
+      var order = prompt('Sequence order:', currentOrder);
+      if (order === null) return;
+      var active = confirm('Keep this stage active? OK = active, Cancel = inactive');
+      google.script.run.withSuccessHandler(function () { loadStages(); cachedStages = null; }).withFailureHandler(function (error) { alert('Could not update stage: ' + (error && error.message)); }).updateStage(id, { name: name, sequenceOrder: Number(order), active: active });
+    }
+
+    function loadBackupStatus() {
+      google.script.run.withSuccessHandler(function (status) { document.getElementById('backupTriggerStatus').textContent = status.installed ? 'Daily backups are enabled (runs ~2am Asia/Kolkata).' : 'Daily backups are not enabled.'; })
+        .withFailureHandler(function (error) { setError('backupError', error); }).getBackupTriggerStatus();
+    }
+    function submitBackupNow() {
+      document.getElementById('backupResult').textContent = 'Backing up…';
+      google.script.run.withSuccessHandler(function (result) { document.getElementById('backupResult').innerHTML = 'Created: ' + escapeHtml(result.name) + ' — <a href="' + escapeHtml(result.url) + '" target="_blank">open</a>'; })
+        .withFailureHandler(function (error) { document.getElementById('backupResult').textContent = ''; alert('Backup failed: ' + (error && error.message)); }).backupNow();
+    }
+    function submitInstallTrigger() { google.script.run.withSuccessHandler(loadBackupStatus).withFailureHandler(function (error) { setError('backupError', error); }).installDailyBackupTrigger(); }
+    function submitRemoveTrigger() { google.script.run.withSuccessHandler(loadBackupStatus).withFailureHandler(function (error) { setError('backupError', error); }).removeDailyBackupTrigger(); }
+
+    // ============================================================================
+    // Audit Log page
+    // ============================================================================
+    function loadAuditLog() {
+      google.script.run.withSuccessHandler(function (entries) {
+        document.getElementById('auditLogTable').querySelector('tbody').innerHTML = entries.slice(0, 200).map(function (e) {
+          return '<tr><td>' + escapeHtml(e.occurredAt) + '</td><td>' + escapeHtml(e.actorUserId || 'system') + '</td><td>' + escapeHtml(e.action) + '</td><td>' + escapeHtml(e.targetType) + ':' + escapeHtml(e.targetId) + '</td></tr>';
+        }).join('') || '<tr><td colspan="4" class="empty">No audit entries</td></tr>';
+      }).withFailureHandler(function (error) { document.getElementById('auditLogTable').querySelector('tbody').innerHTML = '<tr><td colspan="4" class="empty">Error: ' + escapeHtml(error && error.message) + '</td></tr>'; }).listAuditLog();
+    }
+
+    // ============================================================================
+    // Boot
+    // ============================================================================
+    google.script.run.withSuccessHandler(function (me) {
+      currentUser = me;
+      document.getElementById('sidebarAvatar').textContent = initials(me.displayName);
+      document.getElementById('sidebarName').textContent = me.displayName;
+      document.getElementById('sidebarRole').textContent = me.roleKeys.map(roleLabel).join(', ');
+      renderSidebarNav();
+      loadAvailability();
+      refreshBadges();
+      showPage('dashboard');
+    }).withFailureHandler(function (error) {
+      document.body.innerHTML = '<div style="padding:40px; font-family:Arial, sans-serif;">Could not verify identity: ' + escapeHtml(error && error.message) + '</div>';
+    }).whoAmI();
   </script>
 </body>
 </html>

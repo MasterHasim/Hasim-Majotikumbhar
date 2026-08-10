@@ -33,7 +33,7 @@ class Phase14Api {
   }
 
   getDashboardMetrics() {
-    this.access_.require(Phase1Permissions.REPORTS_VIEW);
+    var actor = this.access_.require(Phase1Permissions.REPORTS_VIEW);
     var numbers = this.phase5_.listMyNumbers(); // ADMIN: every number; else: only admin-granted numbers
     var numberIds = {};
     numbers.forEach(function (n) { numberIds[n.id] = true; });
@@ -42,6 +42,7 @@ class Phase14Api {
     var messages = this.messages_.list().filter(function (m) { return numberIds[m.numberId]; });
     var customerIds = {};
     conversations.forEach(function (c) { customerIds[c.customerId] = true; });
+    var assignedToMe = conversations.filter(function (c) { return c.status === 'OPEN' && c.assignedUserId === actor.id; }).length;
 
     var summarize = function (list) {
       return {
@@ -73,6 +74,8 @@ class Phase14Api {
 
     return {
       conversations: summarize(conversations),
+      totalCustomers: Object.keys(customerIds).length,
+      assignedToMe: assignedToMe,
       byNumber: byNumber,
       byAgent: byAgent,
       responseTime: this.computeResponseTime_(conversations, messages),

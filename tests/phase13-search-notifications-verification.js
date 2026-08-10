@@ -105,6 +105,14 @@ new ConversationRepository().update(conv2.id, { status: 'OPEN' });
 assert.strictEqual(phase13().searchConversations({ numberId: numberA.id, dateFrom: '2026-08-03T00:00:00.000Z' }).length, 1);
 assert.strictEqual(phase13().searchConversations({ numberId: numberA.id, dateTo: '2026-08-02T00:00:00.000Z' }).length, 1);
 
+// customerId filter + status: 'ANY' (Customer Details "Previous Conversations" — full
+// history including resolved, not just the active inbox).
+assert.strictEqual(phase13().searchConversations({ customerId: rahulCustomer.id }).length, 2, 'rahul has one conversation on each number');
+new ConversationRepository().update(conv1.id, { status: 'CLOSED' });
+assert.strictEqual(phase13().searchConversations({ customerId: rahulCustomer.id }).length, 1, 'default still excludes the now-closed one');
+assert.strictEqual(phase13().searchConversations({ customerId: rahulCustomer.id, status: 'ANY' }).length, 2, 'status: ANY includes it');
+new ConversationRepository().update(conv1.id, { status: 'OPEN' });
+
 // Stage filter.
 phase8().seedDefaultLeadStages();
 const contactedStage = phase8().listStages().find(s => s.key === 'contacted');

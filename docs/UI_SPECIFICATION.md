@@ -1,258 +1,150 @@
 # UI_SPECIFICATION
 
+This describes the **current** UI. For how it got here (three-pane inbox → landing
+screen → this unified sidebar app), see `memory/CHANGELOG.md`'s dated entries —
+this file is kept current, not a running history.
+
 ## Stack
 
 Plain HTML/CSS/JavaScript served via Apps Script `HtmlService` — no build step, no
-frontend framework (per the project's established stack). Client-side JS talks to the
-server via `google.script.run` (Apps Script's own RPC mechanism), not `fetch`/REST.
+frontend framework. Client-side JS talks to the server via `google.script.run` (Apps
+Script's own RPC mechanism), not `fetch`/REST. Everything lives in one file,
+`frontend/Index.html`, served by `doGet` (`src/Phase5Endpoints.gs`) from deployment
+`phase5-admin-ui` (`Execute as: Me`, `Access: Anyone within ECHT` — domain-restricted
+access still lets `Session.getActiveUser()` report each visitor's real identity, so
+Phase 1's `AccessControl` applies normally).
 
-## Entry point
+## Overall structure (2026-08-10 redesign)
 
-`doGet(e)` in `src/Phase5Endpoints.gs` renders `frontend/Index.html`. Served from
-deployment `phase5-admin-ui` (`Execute as: Me`, `Access: Anyone within ECHT`) — see
-`memory/DECISIONS.md` for why `Execute as: Me` (not "User accessing the web app") is
-the architecturally correct choice. Domain-restricted access means
-`Session.getActiveUser()` still correctly reports each visitor's real identity, so
-Phase 1's `AccessControl` applies normally here (unlike the anonymous webhook
-deployment).
+The app is a single-page shell matching a reference commercial WhatsApp CRM's layout
+the user shared screenshots of: a dark-green sidebar with icon+label navigation, a top
+bar, and a swappable content area. There is no longer a separate Admin Panel page
+(`frontend/Admin.html` and the `?page=admin` route are retired) — every section,
+including what used to be admin-only pages, is a client-side view within this one
+shell (`showPage(key)` toggles `.page` visibility and calls that page's load function).
 
-## Layout (Phase 5: view-only inbox)
+Sidebar nav items, in order: **Dashboard, Inbox, All Conversations, Unassigned,
+Reminders, Customers, Reports** (visible only if `REPORTS_VIEW` is probed successfully,
+same "call the real endpoint and hide on denial" pattern used throughout), then
+ADMIN-only: **Templates, Quick Replies, Teams, Users, WhatsApp Numbers, Settings, Audit
+Log**. Sidebar visibility is decided by `whoAmI()`'s `roleKeys` for the ADMIN-only
+split, and by whether `getDashboardMetrics()` succeeds for the Reports item — never a
+hardcoded assumption about which literal role has which permission.
 
-Three-pane CSS grid: **Numbers | Conversations | Customer detail** — matches the
-roadmap's mockup. Admin sees all registered numbers; everyone else sees only numbers
-they hold an active `numberAccess` grant for.
+The top bar has: page title, an **Availability** dropdown (wired to Phase 1's
+pre-existing but previously-never-exposed `setAvailability`/`getAvailability` —
+AVAILABLE/BUSY/OFFLINE/ON_LEAVE), and a notification bell showing conversations that
+need a response (`searchConversations({needsResponse: true})`).
 
-- **Numbers pane**: `listMyNumbers()` (`src/Phase5Services.gs`) — display name + phone.
-- **Conversations pane**: `listConversations(numberId)` — status, needs-response flag,
-  last message time. Filtered per-conversation through
-  `AccessControl.requireConversationOperation('view', ...)` (`src/Phase1AccessControl.gs`)
-  — Agents see only conversations assigned to them; Supervisors/Site Managers see
-  conversations on numbers their team covers (resolved on the fly, see
-  `memory/DECISIONS.md`); Admin sees everything.
-- **Detail pane**: `getConversationDetail(conversationId)` — customer name/phone,
-  number, assigned agent (usually "Unassigned" until Phase 7 exists), status, and the
-  full message thread (inbound left-aligned, outbound right-aligned — outbound styling
-  exists in the CSS in advance of Phase 6, but nothing produces outbound messages yet).
+## Dashboard / Inbox / All Conversations / Unassigned — one shared view
 
-## Phase 6: reply
+These four nav items are the same underlying list+chat+customer-detail three-column
+view, differing only in default filters passed to `searchConversations`:
+Dashboard/All Conversations have none, Inbox defaults to `needsResponse: true`,
+Unassigned to `unassigned: true`. Dashboard additionally shows a KPI row above the
+view (`getDashboardMetrics()` — Total Conversations, Assigned to me, Unassigned,
+Closed, Total Customers; **no trend deltas** like "+18% vs yesterday" — the user chose
+real-counts-only over building historical snapshot tracking for now, see
+`memory/DECISIONS.md`). No number-picker gate exists — `searchConversations` already
+aggregates across every number the signed-in user can access when no `numberId` is
+given, so browsing starts immediately; a number filter `<select>` in the list toolbar
+narrows to one number when wanted.
 
-A fixed compose box at the bottom of the detail pane (`#composeText`/`#composeSend` in
-`frontend/Index.html`) calls `sendReply(conversationId, text)`
-(`src/Phase6Services.gs`). On success, both the detail pane and the conversation list
-are reloaded (to reflect the cleared `needsResponse` flag and the new message). On
-failure (including authorization denial for a non-assigned agent), an inline error
-shows under the compose box rather than a full-page error — the box itself isn't
-hidden based on role, since the backend enforces authorization regardless and adding a
-"can I reply" pre-check endpoint wasn't needed for that. Failed sends render with a
-red-tinted message bubble (`.message.FAILED`) and "Failed to send" label.
+**Architecturally important**: there is exactly **one** DOM instance of the
+list+chat+detail split, ever (`window.__splitEl`, built once by `ensureSplitBuilt()`).
+Switching between Dashboard/Inbox/All Conversations/Unassigned moves this single
+element into that page's slot via `appendChild` (which the DOM API defines as "remove
+from wherever it was, insert here") rather than each page building its own copy. This
+was a real bug caught before shipping: building 4 independent copies would have left
+3 hidden-but-present in the DOM at once, and every `document.getElementById('messagesList')`
+(and `assignSelect`, `stageSelect`, `composeBody`, etc.) would have ambiguously
+resolved to whichever copy was built first, not necessarily the visible one. The
+single-shared-element approach makes plain `getElementById` calls throughout the chat/
+compose/detail code safe by construction — there is only ever one of each id in the DOM.
 
-## Phase 8: stage & remarks
+### Chat panel
 
-A `<select>` in the detail header (`#stageSelect`) lists all lead stages
-(`listStages()`) and shows the customer's current one (`getCustomerStage`); changing
-it calls `setCustomerStage`. A remarks mini-panel (`#remarksPane`, yellow-tinted,
-clearly distinct from the WhatsApp message thread) shows existing remarks and a small
-add-remark input, calling `addRemark`/`listRemarks`. If the signed-in user lacks
-remarks access (e.g. VIEWER — has neither `REMARKS_VIEW` nor `REMARKS_MANAGE`), the
-panel just hides itself rather than showing an error, since that's an expected,
-role-based absence, not a failure.
+Header: customer name, status pill, an inline **Assign** `<select>` (populated from
+`Phase7Api.listAssignableUsers`, same properly role-scoped list Phase 12 built —
+ADMIN sees everyone, SUPERVISOR/SITE_MANAGER see their team, changing it calls
+`reassignConversation` directly, no `prompt()` needed anymore), **Snooze…**, and
+**Resolve** (hidden once already `CLOSED`) buttons.
 
-## Phase 9: reminders & snooze
+Message thread: date-divider rows (`renderMessagesWithDates`), sender name on outbound
+bubbles (`WorkspaceApi`'s `senderName` — the roadmap's "Rahul replied," not just
+"Agent replied"), inline image rendering or an icon+link for other media types
+(`WorkspaceApi`'s `media` join against `Message_Media`), and a simple
+✓ (sent) / ✓✓ (read) suffix on outbound message timestamps derived from `status`.
 
-A blue-tinted reminders mini-panel (`#remindersPane`, same hide-on-denied pattern as
-remarks) lists pending reminders with a "Done" button (`updateReminderStatus` →
-`COMPLETED`) and an add form (text + `datetime-local` input → `createReminder`). A
-"Snooze…"/"Un-snooze" button in the detail header (`#snoozeBtn`) calls
-`getSnoozeStatus` first to decide which action applies; snoozing prompts for a number
-of hours and calls `snoozeConversation`, which also reloads the conversation list so
-the now-hidden conversation disappears immediately. A yellow banner
-(`#snoozeBanner`) shows "Snoozed until …" when applicable.
+Compose: **Reply**/**Note** tabs above the input. Reply has the textarea + send
+button, plus a toolbar (Quick reply select, Template select + Send, Media… button —
+the same `sendReply`/`sendTemplateReply`/`sendMediaReply` endpoints as before). Note
+is a separate textarea that calls `addRemark` — the same underlying Remarks data the
+Customer Details panel's Notes section reads, just two entry points into it (matching
+the reference UX, which has both a compose-area Note tab and a panel-level Notes list
+backed by the same data).
 
-## Phase 10: send a template
+### Customer Details panel (right column)
 
-A `<select>` (`#templateSelect`) in the compose row lists `APPROVED` templates only
-(`listTemplates()`, filtered client-side). Selecting one and clicking "Send Template"
-prompts once per `{{n}}` placeholder found in the template's `BODY` component, then
-calls `sendTemplateReply`. No template-authoring UI (draft/submit/sync) — that's an
-admin-configuration workflow better suited to Phase 12's Admin Panel; `Phase10Api`'s
-draft/submit/sync methods exist and are tested at the API level.
+Avatar (initials-in-circle — no photo storage), name, phone/email/company, "Customer
+since" (`Customers.createdAt`), "Assigned to" (`WorkspaceApi.assignedUserName`), and
+an **Edit details** button (`updateCustomer` — name/email/company only; phone stays
+read-only since it's the identity Phase 4's ingestion matches inbound messages
+against). Below that, three collapsible `<details>` sections: **Previous
+Conversations** (count + list, `searchConversations({customerId, status: 'ANY'})` —
+the `ANY` status bypass added specifically for this, so resolved conversations still
+show up in someone's history), **Notes** (Remarks, shown/added the same as the Reply/
+Note tab), **Reminders** (per-conversation, same `createReminder`/
+`updateReminderStatus` as before).
 
-## Phase 11: quick replies & media
+## Customers page
 
-A `<select>` (`#quickReplySelect`) in the compose row lists active quick replies
-(`listQuickReplies()`). Selecting one inserts its text into the compose textarea
-(appended, not replacing existing text) rather than sending immediately — the agent
-can still edit before hitting Send, and it reuses the exact same `sendReply` path,
-so no separate send code path was needed for quick replies. No quick-reply authoring
-UI (create/edit shortcuts) — that's admin configuration, same reasoning as Phase 10's
-template authoring being deferred to Phase 12's Admin Panel; `Phase11Api`'s
-`createQuickReply`/`updateQuickReply` exist and are tested at the API level.
+A flat directory (`Phase8Api.listCustomers()` — ADMIN sees everyone, others see only
+customers they have at least one viewable conversation with, same relationship gate
+`setCustomerStage` already used). "View conversations" jumps into All Conversations
+and opens that customer's most recent conversation.
 
-A "Media…" button (`#mediaSend`) prompts for media type, URL, and an optional caption
-(three sequential `prompt()` calls — the same minimal, no-modal-dialog UI style already
-used for snooze duration), then calls `sendMediaReply`. This mirrors the "Send Template"
-button's pattern rather than adding a persistent form, since media sending is expected
-to be occasional, not the primary compose action.
+## Reminders page
 
-## Phase 12: reassignment & Admin Panel
+The signed-in user's own pending reminders across every conversation
+(`listMyReminders()`, pre-existing endpoint, previously unused in any UI).
 
-The reassignment UI deferred from Phase 7 is now in the inbox detail header: a
-"Reassign…" button (`#reassignBtn`) calls the new `Phase7Api.listAssignableUsers(numberId)`
-(`src/Phase7Services.gs`) — ADMIN gets every active user, SUPERVISOR/SITE_MANAGER get
-active members of the team that covers that number, anyone else gets `FORBIDDEN` and
-the button just hides (same hide-on-denied pattern as remarks/reminders). Picking a
-user (via a numbered `prompt()` list, consistent with this project's minimal-UI
-convention) calls `reassignConversation`.
+## Reports page
 
-A separate page, `frontend/Admin.html`, served at `?page=admin` (routed in `doGet`,
-`src/Phase5Endpoints.gs`) is the roadmap's Admin Panel. It's client-side-gated by a new
-`whoAmI()` endpoint (`src/Phase1Services.gs` — returns the signed-in user's own id/role
-keys, never used as the actual authorization decision, only to decide what the UI shows)
-and linked from the main inbox header only when the signed-in user is ADMIN. Every
-section is real server-enforced ADMIN-only regardless of the client-side gate. Sections:
+Full-page version of what was previously an overlay: conversation totals, per-number
+and per-agent breakdowns, average first-response time, stage distribution, template
+usage, lead conversion rate — all from `Phase14Api.getDashboardMetrics()`, which is
+now scoped to the numbers the signed-in user actually has access to (not org-wide —
+see `memory/DECISIONS.md` for the same-day reversal of the original Phase 14 decision).
 
-- **Dashboard** — small landing counts (`getDashboardSummary`, `src/Phase12Services.gs`)
-  — numbers/users/open/unassigned/needs-response totals only, deliberately not
-  Phase 14's trend/response-time analytics, so this doesn't step on that future phase.
-- **Users / Teams / Numbers / Number Access / Audit Log** — thin UI over each entity's
-  own existing service layer (Phase 1 and Phase 3 — nothing new here except the new
-  `listTeamMembers(teamId)` endpoint the Teams section needed and didn't have before).
-- **Assignment Rules** — the one genuinely new backend piece: `Number_Assignment_Config`/
-  `Number_Assignment_Users` (Phase 2's schema) had no admin-facing CRUD at all before
-  now — only Phase 7's engine read them, only tests ever wrote them. `Phase12Api`
-  (`src/Phase12Services.gs`) adds `getNumberAssignmentConfig`/`setNumberAssignmentConfig`
-  (upsert) and `listAssignmentParticipants`/`addAssignmentParticipant`/
-  `updateAssignmentParticipant`, gated on `NUMBERS_ADMIN` (the same permission Phase 3's
-  number CRUD already uses).
-- **Lead Stages / Quick Replies / Templates** — thin UI over Phase 8/11/10's existing
-  service layers. Template authoring in the admin panel closes the gap Phase 10 left
-  open ("no template authoring UI... better suited to Phase 12's Admin Panel").
+## Admin-only pages (Templates, Quick Replies, Teams, Users, WhatsApp Numbers, Settings, Audit Log)
 
-Row-level edits throughout Admin.html use sequential `prompt()`/`confirm()` calls
-rather than inline edit forms, matching the project's established minimal-UI style
-(already used for snooze duration, media type/URL/caption) rather than building a
-heavier modal/dialog system for a low-traffic admin surface.
-
-## Phase 13: search, filters & needs-response badges
-
-A filter bar (`.filter-bar`) sits under the Conversations pane header: a search input
-(`#searchQuery`, debounced only by being typed-triggered via `oninput`, no separate
-button) plus "Needs response" and "Unassigned" checkboxes. Any of the three active
-switches `loadConversations()` from `listConversations(numberId)` (Phase 5, unfiltered)
-to `searchConversations(filters)` (Phase 13, `src/Phase13Services.gs`) — same result
-shape either way, so `renderConversations` handles both without a branch. Search results
-additionally carry `customerName`/`numberDisplayName` (useful once cross-number search
-is wired up further), shown in place of the plain status/date row when present.
-
-Each number in the Numbers pane shows a small red needs-response count badge
-(`getNeedsResponseCounts()`), refreshed whenever the conversation list reloads (i.e.
-after every send/reassign/snooze action, not just on page load) — this is Phase 13's
-"Notifications": deliberately scoped to an in-UI badge, not push/email, since Apps
-Script has no clean push channel and building one wasn't asked for — see
-`memory/DECISIONS.md`.
-
-## Phase 14: Reports overlay
-
-A "Reports" link appears next to "Admin Panel" in the Numbers pane header, but its
-visibility isn't role-checked client-side — it's shown only if a probe call to
-`getDashboardMetrics()` succeeds on load (mirrors the hide-on-denied pattern already
-used for the remarks/reminders panels), since `REPORTS_VIEW` is what actually gates it
-server-side, not any specific role name. Clicking it opens a full-page overlay
-(`#reportsOverlay`) with tables for conversation totals, per-number and per-agent
-breakdowns, average first-response time, stage distribution, template usage, and lead
-conversion rate — all from `Phase14Api.getDashboardMetrics()`
-(`src/Phase14Services.gs`). A plain overlay rather than a third page (like
-`Admin.html`) since reports are a read-only, occasional lookup, not a distinct workflow
-surface.
-
-## Phase 15: Backup section (Admin Panel)
-
-A new "Backup" nav section in `frontend/Admin.html` — a "Back up now" button
-(`backupNow()`, shows the created copy's name + a link to open it in Drive) and an
-enable/disable control for the daily automatic backup trigger
-(`installDailyBackupTrigger()`/`removeDailyBackupTrigger()`, with current status shown
-via `getBackupTriggerStatus()`).
-
-## Post-Phase-18 follow-up (2026-08-10, user-directed)
-
-**Performance**: a single new endpoint, `getConversationWorkspace(conversationId)`
-(`WorkspaceApi`, `src/WorkspaceServices.gs`), replaced 8 separate `google.script.run`
-calls that used to fire every time a conversation was opened (detail, stage, remarks,
-reminders, snooze status, templates, quick replies, reassignment eligibility) — each
-one is a full Apps Script execution with real cold-start latency, which was the actual
-cause of reported slowness, not rendering. `frontend/Index.html`'s `selectConversation`
-now makes exactly one call; templates and quick replies (not conversation-specific)
-are cached client-side after their first load per page session, and stage
-definitions were already cached this way since Phase 8.
-
-**Resolve**: a "Resolve" button (`#resolveBtn`) appears in the detail header for any
-open conversation, calling the new `resolveConversation` (`Phase6Api`, same
-authorization as reply — assigned AGENT or ADMIN). A resolved conversation
-disappears from the active conversation list (same as a snoozed one) but is still
-reachable via search with an explicit `status: 'CLOSED'` filter.
-
-**Reports scoping**: superseded the original Phase 14 decision to leave `REPORTS_VIEW`
-org-wide — see `docs/DATABASE.md`'s "Post-Phase-18 follow-up" section for the reversal.
-
-## Number/org-select landing screen (2026-08-10, user-directed)
-
-`frontend/Index.html` is now two screens, not one. `#landingScreen` is the entry
-point — a card grid (`.number-cards`, one `.number-card` per accessible number,
-`listMyNumbers()`) matching the reference UX the user shared (a commercial WhatsApp
-CRM's "Select Org" screen): display name, phone number, and a needs-response count
-badge per card. Clicking a card (`enterWorkspace(numberId)`) hides the landing screen
-and shows `#workspaceScreen` — the same Conversations + Detail two-pane layout as
-before, now anchored to that one number, with a small header bar showing the active
-number's name/phone and a "← Switch number" link (`showLanding()`) back to the card
-grid. The Numbers list pane that used to sit to the left of Conversations is gone —
-number selection now happens once, up front, on the landing screen, not as a
-persistent third pane.
-
-Admin Panel and Reports links live on the landing screen header only (not repeated in
-the workspace) — they're one click away via "Switch number," and duplicating them in
-the workspace header would add clutter for a rarely-used pair of links.
-
-## Inbox polish (2026-08-10, user-directed, after live-testing the deployed panel)
-
-Prompted by real screenshots the user shared of the live workspace pane, a handful of
-real gaps got fixed in the same pass as each other:
-
-- **Conversation list showed "OPEN" instead of a name.** `Phase5Api.listConversations`/
-  `listConversationsAllStatuses` now return `customerName`/`customerPhone` per
-  conversation (the default list's `renderConversations` already supported this field
-  when present — Phase 13's search results always had it — it just wasn't populated on
-  the default, unfiltered path until now).
-- **Nobody could tell who sent a reply.** The roadmap's own requirement ("Rahul
-  replied at 2:41 PM," not just "Agent replied") was in the data (`Messages.senderUserId`)
-  but never surfaced. `WorkspaceApi` now resolves it to `senderName` per message and
-  `assignedUserName` for the conversation; outbound bubbles show a small sender label,
-  and the header's "Unassigned" pill now shows the actual assignee's name.
-- **Media messages showed literal `"[Media: image]"` text**, never the actual
-  attachment. `WorkspaceApi` now joins `Message_Media` onto each message; the client
-  renders an inline `<img>` for images and an icon + "Open <type>" link for
-  video/audio/document, with the caption (if any) shown once, not duplicated.
-- **Remarks/Reminders permanently occupied the top of the pane**, pushing the message
-  thread and compose box below the fold on any conversation with a couple of remarks
-  or reminders. Both are now `<details>`/`<summary>` collapsible sections
-  (`.side-panel`), moved *below* the compose box, collapsed by default with a count in
-  the summary (e.g. "Internal remarks (2)") — the chat thread and reply box are always
-  visible without scrolling now.
-- Smaller visual pass: the header's status/assignment became small pills instead of a
-  plain text line, action buttons (`Snooze…`/`Reassign…`/`Resolve`) got consistent
-  `.action-btn` styling with `Resolve` as the one primary/filled action, and message
-  bubbles got a WhatsApp-style asymmetric corner radius.
+Directly ported from the retired `frontend/Admin.html` — same backend calls, same
+`prompt()`/`confirm()` row-edit pattern (deliberately kept: a heavier modal/dialog
+system isn't worth building for a low-traffic admin surface), just reskinned into the
+new shell's visual language. **Settings** consolidates what used to be three separate
+Admin Panel sections (Number Access, Assignment Rules, Backup) plus Lead Stages into
+one page with sub-tabs, since the reference layout has a single "Settings" nav item
+rather than one per admin concern.
 
 ## Deliberately not yet in the UI
 
-No push/email notifications (Phase 13's own scoping decision — see above). No manual
-"reopen" action for a resolved conversation (a new inbound message from that customer
-naturally starts a fresh one instead — see above).
+No push/email notifications (bell is in-app only — see `memory/DECISIONS.md`'s
+original Phase 13 scoping decision, still the reasoning). No manual "reopen" for a
+resolved conversation (a new inbound message from that customer starts a fresh one
+automatically). No "Mentions" nav item from the reference mockup — there's no
+`@mention` concept anywhere in this system's data model, and inventing one wasn't
+part of what was asked; omitted rather than faked. No real avatar photos (initials
+only — no image storage exists). No KPI trend deltas ("+18% vs yesterday") — would
+need new daily-snapshot infrastructure the user chose to defer.
 
 ## Testing note
 
 There is no local dev-server equivalent for Apps Script `HtmlService`. The only way to
 see and use this UI is the real deployed Web App URL, opened in a browser signed into
-a Google Workspace account within `echt.co.in`. Server-side authorization logic
-(`Phase5Api`) is Node-tested (`tests/phase5-inbox-verification.js`); the actual
-rendered page is verified live by the user, the same collaborative pattern used for
-every other live-verification step in this project.
+a Google Workspace account within `echt.co.in`. Server-side authorization logic is
+Node-tested (`tests/*.js`); the actual rendered page is verified live by the user, the
+same collaborative pattern used throughout this project. A syntax check
+(`node --check` against the extracted `<script>` block) is run before every deploy as
+a minimum sanity gate, but it cannot catch DOM-structure or wiring bugs — those were
+caught by careful code review this round (see the shared-split-element note above).

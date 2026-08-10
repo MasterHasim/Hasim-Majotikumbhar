@@ -117,6 +117,33 @@ class Phase8Api {
       .sort(function (a, b) { return (a.createdAt || '').localeCompare(b.createdAt || ''); });
   }
 
+  /** Customer directory (2026-08-10, unified-app redesign): ADMIN sees every customer; anyone else sees only customers they have at least one viewable conversation with. */
+  listCustomers() {
+    var actor = this.access_.currentUser();
+    var customers = this.customers_.list();
+    if (this.access_.hasRole(actor, Phase1Roles.ADMIN)) return customers;
+    var self = this;
+    return customers.filter(function (customer) { return self.canSeeCustomer_(actor, customer.id); });
+  }
+
+  /** Editing contact details (not phone — that's the identity Phase 4's ingestion matches inbound messages against, so it stays read-only here). Same relationship gate as setCustomerStage. */
+  updateCustomer(customerId, patch) {
+    var actor = this.access_.currentUser();
+    if (!this.customers_.get(customerId)) throw new Phase1Error('NOT_FOUND', 'Customer was not found.');
+    if (!this.access_.hasRole(actor, Phase1Roles.ADMIN) && !this.canSeeCustomer_(actor, customerId)) {
+      this.access_.denied_(actor, 'customer', customerId, 'NO_RELATED_CONVERSATION');
+    }
+    var allowed = ['name', 'email', 'company'];
+    var safePatch = {};
+    Object.keys(patch || {}).forEach(function (key) {
+      if (allowed.indexOf(key) === -1) throw new Phase1Error('VALIDATION_ERROR', 'Field cannot be updated: ' + key);
+      safePatch[key] = patch[key];
+    });
+    var record = this.customers_.update(customerId, safePatch);
+    this.audit_.write(actor.id, 'customer.updated', 'customer', customerId, {});
+    return record;
+  }
+
   canSeeCustomer_(actor, customerId) {
     var self = this;
     return this.conversations_.list().filter(function (c) { return c.customerId === customerId; }).some(function (conversation) {

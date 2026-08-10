@@ -88,6 +88,9 @@ assert.strictEqual(metrics.conversations.resolved, 0, 'no phase has ever added a
 assert.strictEqual(metrics.byNumber.length, 1);
 assert.strictEqual(metrics.byNumber[0].total, 2);
 
+assert.strictEqual(metrics.totalCustomers, 2);
+assert.strictEqual(metrics.assignedToMe, 0, 'viewer is not assigned to any conversation');
+
 assert.strictEqual(metrics.byAgent.length, 1, 'only agents with at least one open/needs-response conversation are listed');
 assert.strictEqual(metrics.byAgent[0].userId, agent.id);
 assert.strictEqual(metrics.byAgent[0].open, 1);
@@ -122,5 +125,7 @@ assert.strictEqual(scopedMetrics.byNumber[0].numberId, otherNumber.id);
 assert.strictEqual(scopedMetrics.byAgent.length, 0);
 assert.strictEqual(scopedMetrics.stageDistribution.every(s => s.count === 0), true);
 assert.strictEqual(scopedMetrics.leadConversion.totalCustomersWithStage, 0);
+assert.strictEqual(scopedMetrics.totalCustomers, 0);
+assert.strictEqual(scopedMetrics.assignedToMe, 0);
 
 console.log('Phase 14 dashboard verification: PASS');

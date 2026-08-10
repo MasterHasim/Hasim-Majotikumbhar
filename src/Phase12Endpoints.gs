@@ -6,9 +6,3 @@ function listAssignmentParticipants(numberId) { return phase12Api_().listAssignm
 function addAssignmentParticipant(numberId, userId, sequenceOrder) { return phase12Api_().addAssignmentParticipant(numberId, userId, sequenceOrder); }
 function updateAssignmentParticipant(id, patch) { return phase12Api_().updateAssignmentParticipant(id, patch); }
 function getDashboardSummary() { return phase12Api_().getDashboardSummary(); }
-
-function doGetAdmin() {
-  return HtmlService.createTemplateFromFile('frontend/Admin').evaluate()
-    .setTitle('WhatsApp Panel — Admin')
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
-}

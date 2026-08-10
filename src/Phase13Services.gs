@@ -26,9 +26,10 @@ class Phase13Api {
   }
 
   /**
-   * filters: { numberId, query, assignedUserId, stageId, status, needsResponse,
-   * unassigned, dateFrom, dateTo }. numberId is optional — omitted means "every number
-   * the signed-in user can access" (via Phase5Api.listMyNumbers()).
+   * filters: { numberId, query, assignedUserId, customerId, stageId, status,
+   * needsResponse, unassigned, dateFrom, dateTo }. numberId is optional — omitted
+   * means "every number the signed-in user can access" (via Phase5Api.listMyNumbers()).
+   * status: 'ANY' returns every status instead of defaulting to OPEN-only.
    */
   searchConversations(filters) {
     filters = filters || {};
@@ -44,7 +45,12 @@ class Phase13Api {
     });
 
     if (filters.assignedUserId) results = results.filter(function (c) { return c.assignedUserId === filters.assignedUserId; });
-    results = filters.status ? results.filter(function (c) { return c.status === filters.status; }) : results.filter(function (c) { return c.status === 'OPEN'; });
+    if (filters.customerId) results = results.filter(function (c) { return c.customerId === filters.customerId; });
+    // status: 'ANY' explicitly opts out of the OPEN-only default — used for a
+    // customer's full conversation history (Customer Details "Previous Conversations"),
+    // where resolved/closed ones are exactly the point, not something to hide.
+    if (filters.status && filters.status !== 'ANY') results = results.filter(function (c) { return c.status === filters.status; });
+    else if (!filters.status) results = results.filter(function (c) { return c.status === 'OPEN'; });
     if (filters.needsResponse) results = results.filter(function (c) { return c.needsResponse === true; });
     if (filters.unassigned) results = results.filter(function (c) { return !c.assignedUserId; });
     if (filters.dateFrom) results = results.filter(function (c) { return (c.lastMessageAt || '') >= filters.dateFrom; });
