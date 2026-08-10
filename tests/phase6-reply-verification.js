@@ -43,6 +43,34 @@ function makeSpreadsheet() {
 const mockSpreadsheet = makeSpreadsheet();
 global.SpreadsheetApp = { openById: () => mockSpreadsheet };
 
+let driveFilesCreated = [];
+const driveFoldersById = {};
+function makeDriveFolder(id) {
+  const folder = {
+    getId: () => id,
+    createFile: blob => {
+      const file = {
+        id: 'file_' + (driveFilesCreated.length + 1),
+        blob, shared: null,
+        getId() { return this.id; },
+        setSharing(access, permission) { this.shared = { access, permission }; return this; }
+      };
+      driveFilesCreated.push(file);
+      return file;
+    }
+  };
+  driveFoldersById[id] = folder;
+  return folder;
+}
+global.DriveApp = {
+  Access: { ANYONE_WITH_LINK: 'ANYONE_WITH_LINK' },
+  Permission: { VIEW: 'VIEW' },
+  createFolder: name => makeDriveFolder('folder_' + name.replace(/\s+/g, '_')),
+  getFolderById: id => { if (!driveFoldersById[id]) throw new Error('no such folder'); return driveFoldersById[id]; }
+};
+global.Utilities.base64Decode = str => Buffer.from(str, 'base64');
+global.Utilities.newBlob = (bytes, mimeType, filename) => ({ bytes, mimeType, filename });
+
 const srcDir = path.join(__dirname, '..', 'src');
 fs.readdirSync(srcDir).filter(file => file.endsWith('.gs')).sort().forEach(file => {
   vm.runInThisContext(fs.readFileSync(path.join(srcDir, file), 'utf8'), { filename: file });
@@ -108,5 +136,23 @@ email = 'agent@example.com';
 const resolved = phase6().resolveConversation(conversation.id);
 assert.strictEqual(resolved.status, 'CLOSED');
 assert.strictEqual(new ConversationRepository().get(conversation.id).status, 'CLOSED');
+
+// uploadConversationMedia: same 'reply' authorization tier as sendReply.
+email = 'other-agent@example.com';
+assert.throws(() => phase6().uploadConversationMedia(conversation.id, 'YWJj', 'photo.jpg', 'image/jpeg'), error => error.code === 'FORBIDDEN');
+email = 'viewer@example.com';
+assert.throws(() => phase6().uploadConversationMedia(conversation.id, 'YWJj', 'photo.jpg', 'image/jpeg'), error => error.code === 'FORBIDDEN');
+
+email = 'agent@example.com';
+const uploaded = phase6().uploadConversationMedia(conversation.id, 'YWJj', 'photo.jpg', 'image/jpeg');
+assert.strictEqual(uploaded.url, 'https://drive.google.com/uc?export=download&id=' + uploaded.fileId);
+assert.strictEqual(driveFilesCreated.length, 1);
+assert.deepStrictEqual(driveFilesCreated[0].shared, { access: 'ANYONE_WITH_LINK', permission: 'VIEW' });
+assert.strictEqual(properties.MEDIA_FOLDER_ID, 'folder_WhatsApp_Panel_Media');
+
+// A second upload reuses the same cached folder rather than creating another one.
+phase6().uploadConversationMedia(conversation.id, 'ZGVm', 'doc.pdf', 'application/pdf');
+assert.strictEqual(driveFilesCreated.length, 2);
+assert.strictEqual(Object.keys(driveFoldersById).length, 1);
 
 console.log('Phase 6 reply verification: PASS');

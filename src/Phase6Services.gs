@@ -78,6 +78,47 @@ class Phase6Api {
   }
 
   /**
+   * Uploads a locally-picked file (base64, from the compose box's file input) to a
+   * shared Drive folder and returns a public URL, so the agent doesn't have to already
+   * have a hosted URL to attach media — see sendMediaReply above for the send itself.
+   * Gated on the same 'reply' tier as sendMediaReply/sendReply, scoped to the specific
+   * conversation, so this can't be used as an open file-upload endpoint.
+   *
+   * The returned URL must be fetchable by Exotel with no Google sign-in (WhatsApp's/
+   * Exotel's servers, not a browser), so the file is shared "Anyone with the link" —
+   * this makes the uploaded media as unlisted-but-public as its Drive link, which is
+   * unavoidable for external delivery. UNVERIFIED whether Exotel's sendMedia can
+   * actually fetch a drive.google.com URL — same live-test caveat as sendMedia itself
+   * (see file header), flag this the same way if delivery fails.
+   */
+  uploadConversationMedia(conversationId, base64Data, filename, mimeType) {
+    var conversation = this.conversations_.get(conversationId);
+    if (!conversation) throw new Phase1Error('NOT_FOUND', 'Conversation was not found.');
+    var teamId = this.access_.resolveTeamIdForNumber(conversation.numberId);
+    this.access_.requireConversationOperation('reply', { numberId: conversation.numberId, teamId: teamId, assignedUserId: conversation.assignedUserId });
+    base64Data = Phase1Validation.requiredString(base64Data, 'base64Data');
+    filename = Phase1Validation.requiredString(filename, 'filename');
+    mimeType = Phase1Validation.requiredString(mimeType, 'mimeType');
+    var bytes = Utilities.base64Decode(base64Data);
+    var blob = Utilities.newBlob(bytes, mimeType, filename);
+    var file = this.mediaFolder_().createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    return { url: 'https://drive.google.com/uc?export=download&id=' + file.getId(), fileId: file.getId() };
+  }
+  // Folder ID is cached in a Script Property rather than found by name search —
+  // under the drive.file OAuth scope (per-file access only), DriveApp can reliably
+  // re-access a folder this app already created by ID, but a name search isn't
+  // guaranteed to surface it the same way a broader Drive scope would.
+  mediaFolder_() {
+    var props = PropertiesService.getScriptProperties();
+    var folderId = props.getProperty('MEDIA_FOLDER_ID');
+    if (folderId) { try { return DriveApp.getFolderById(folderId); } catch (ignored) {} }
+    var folder = DriveApp.createFolder('WhatsApp Panel Media');
+    props.setProperty('MEDIA_FOLDER_ID', folder.getId());
+    return folder;
+  }
+
+  /**
    * Marks a conversation resolved once an agent feels the query is handled (per
    * explicit user decision, 2026-08-10 — see memory/DECISIONS.md). Reuses the same
    * 'reply' authorization tier as sendReply/sendTemplateReply/sendMediaReply — ADMIN
