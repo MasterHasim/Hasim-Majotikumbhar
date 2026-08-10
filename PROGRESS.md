@@ -5,11 +5,12 @@
 
 ## Action needed from you right now
 
-- **"Sent reply not showing in the thread" — still open, top priority.** Not a caching issue (ruled out and reverted). No server-side error either. What's needed now: send a test reply, then immediately check the **browser's own JavaScript console** (F12 → Console tab — different from Apps Script's Executions log) for any red error, and share it.
-- **Test the email/password login (deployed @37).** Google Sign-In is untouched. Test: Users page → "Send setup link" on a user → confirm the email actually arrives (unverified — check spam) → set a password → confirm sign-in and normal use works.
-- **Media upload's OAuth-scope error is fixed and verified live** (@38) — confirm a fresh upload works, then separately confirm Exotel actually delivers it to the customer (still unverified end-to-end).
-- ~~"Previous Conversations" missing data~~ — turned out not to be a bug, just needed a visible scrollbar; fixed (@38).
-- **Firebase Realtime Database migration approved** (Messages/Conversations only) — not started yet, queued as the next major piece of work once the items above settle.
+- **"Sent reply not showing in the thread" — still open, top priority.** Not caching (ruled out, reverted). No server-side error. Still need: send a test reply, then immediately check the **browser's own JavaScript console** (F12 → Console tab — not Apps Script's Executions log) for any red error, and share it.
+- **Authorize the new Drive scope (once, by you).** Media upload needed the full `drive` scope, not `drive.file` — fixed in the manifest (@39/@40), but since the app runs "Execute as: Me," *you* need to grant it once: Apps Script editor → pick any function → Run → approve the permissions dialog. Until that's done, media upload will keep failing with the same permissions error.
+- **The domain-restricted deployment setting is likely blocking non-`echt.co.in` users entirely** — not a code issue, I can't fix this myself. Check Apps Script → Deploy → Manage Deployments → edit the active deployment → what does "Who has access" say? If domain-restricted, change to "Anyone" (your own `AccessControl` still gates all real actions).
+- **Test the login system** (deployed @40): two ways to get someone signed in now — "Send setup link" (email, unverified whether it arrives) or **"Generate temp password"** (new — no email needed, shows a one-time password for you to share directly; forces a password change on first login). Try the temp-password path first since it sidesteps the email-delivery question entirely.
+- **Media/Exotel delivery** — test after the Drive scope + deployment-access items above are sorted.
+- **Firebase Realtime Database migration approved** (Messages/Conversations only) — not started yet, next major piece of work once the items above settle.
 - See the **full wake-up task list** at the bottom of this file for everything else queued up (template live-send verification, seeding lead stages, etc.)
 
 ## Phase status
