@@ -5,11 +5,9 @@
 
 ## Action needed from you right now
 
-- **Media sending is still broken** — you reported it, but I need specifics to fix it blind-safely: does `sendMediaReply` error out immediately, hang, or send-but-never-arrive? If you can grab the raw request/response from Apps Script → Executions for that call and share it, I can very likely fix it in one pass (same pattern as every other Exotel field-name mismatch this project has hit).
-- **Speed should be much better now** — diagnosed the real cause (8 server round-trips per conversation open) and fixed it (down to 1). Please confirm it actually feels faster in daily use.
-- **Resolve button** is live in the inbox detail header — any assigned agent or ADMIN can use it now.
-- **Reports are now scoped** to what each Supervisor/Site Manager actually has access to, per your instruction.
-- Next up (not started yet): a card-style number/org-select landing screen before the inbox, matching the Superfone screenshot you shared — see the bottom of this file.
+- **Media sending is still broken** — you asked to do this after the UI work, so it's still open. Same ask as before: check Apps Script → Executions for the `sendMediaReply` call and tell me whether it errors, hangs, or sends-but-never-arrives (or share the raw request/response) so I can fix it in one pass instead of guessing.
+- **New landing screen is live** — open the Web App URL and you'll now land on a card grid to pick a number first, matching the Superfone screenshot you shared, then "← Switch number" to go back. Please click through it once to confirm it looks/feels right.
+- Everything from the previous round (Resolve button, scoped Reports, the speed fix, the Exotel webhook incident) is done — see "Recently shipped" below.
 - See the **full wake-up task list** at the bottom of this file for everything else queued up.
 
 ## Phase status
@@ -41,6 +39,8 @@
 
 ## Recently shipped (brief — see `memory/CHANGELOG.md` for full detail)
 
+- **Number/org-select landing screen**: the Web App now opens on a card grid — one card per number you can access, with a needs-response badge — matching the Superfone screenshot you shared. Click a card to enter that number's inbox (Conversations + Detail, same as before); "← Switch number" in the header takes you back to the grid. The old always-visible Numbers list pane is gone — you pick once, up front.
+- **Chatbot/webhook incident (resolved)**: the chatbot on 079-485-02810 was intercepting messages for every number because Exotel routes webhooks per-account, not truly per-number — confirmed our own code was untouched all day, so it wasn't a regression from anything I did. Fixed by you re-adding our webhook URL to that same slot.
 - **Post-Phase-18 follow-up** (your direct feedback after using the live system): **Resolve** — any assigned agent or ADMIN can now mark a conversation resolved (button in the detail header); resolved conversations leave the active list but are still findable via search. **Reports are now scoped** — Supervisors/Site Managers see only numbers/data they actually have access to, not the whole org (reverses this morning's earlier decision, per your explicit instruction). **Speed** — diagnosed and fixed the real cause: opening a conversation was firing 8 separate server calls; now it's 1, plus templates/quick replies are cached instead of re-fetched every time. Declined a full database migration for now (see `memory/DECISIONS.md`) since this addressed the actual measured cause — flag it again if things are still slow after real daily use. Media sending bug is still open — **need diagnostics from you** (see task list).
 - **Phase 17/18**: Wrote `docs/DEPLOYMENT.md` (current deployment/credential/scope state against the roadmap's go-live checklist — nothing here is a code gap, "going live" is entirely your decision) and `docs/ZOHO_PHASE_2.md` (the full entity mapping the roadmap calls for, plus 5 open questions only you can answer before Zoho integration itself can start — Lead vs. Contact, what "Won" maps to, the dedupe key, your Zoho edition/customizations, and sync conflict resolution). Also appended a Phase 15/16 section to `docs/SECURITY.md` tying together the audit-coverage mapping and the `getCustomerStage` fix. **Phases 19-21 are genuinely blocked** — 19 needs real Zoho credentials, 20 needs real usage data, and 21 (final handover docs) deliberately waits on 17/19/20 per the roadmap's own "don't build out of order" rule. This is as far as I can take the roadmap unattended.
 - **Phase 16**: Systematic QA pass. Added a consolidated test runner (`node tests/run-all.js`) and a coverage matrix (`docs/TESTING.md`). **Found and fixed a real security bug**: `getCustomerStage` had no authorization check at all — any signed-in Google account could read any customer's lead stage. It's fixed now (matches `setCustomerStage`'s own access rule) and there's a permanent automated check (`authorization-sweep-verification.js`) that would catch this class of bug again on any future endpoint. This already went through the same testing/deploy/commit process as every other phase — nothing further needed from you here, just flagging that it happened since it's a security-relevant fix.
@@ -72,14 +72,13 @@
 
 ### Open
 
-1. **Media sending is broken (you reported this) — I need diagnostics.** Open Apps Script → Executions, find the `sendMediaReply` call, and share the raw request/response (or just describe exactly what happens: error, hang, or silent no-arrival). I haven't guessed a fix blind since the request shape has always been unverified and I'd rather fix it right the first time than guess again.
-2. **Live-verify Phase 6 `sendText`** — reply to a real conversation, confirm it arrives, check Exotel's real response shape with me so I can fix `extractOutboundProviderMessageId_` if needed.
-3. **Confirm speed actually feels better** — the 8-round-trips-per-conversation issue is fixed (down to 1), but I can't feel the real UX myself; let me know if it's still slow anywhere.
-4. **Card-style number/org-select landing screen** (like your Superfone screenshot) — not started yet; next planned UI work.
-5. Create at least one quick reply — Admin Panel → Quick Replies — so the compose box's dropdown has something in it.
-6. Fill in `Spreewalk - Raipur` / `ECHT Advisory` provider fields — Admin Panel → Numbers → Edit (optional).
-7. Remove the ngrok callback URL from Exotel (optional).
-8. **Read `docs/ZOHO_PHASE_2.md` and answer its 5 open questions** whenever you're ready to think about Zoho.
+1. **Media sending is broken — I need diagnostics** (you asked to do this after the landing screen, which is now done). Open Apps Script → Executions, find the `sendMediaReply` call, and share the raw request/response (or describe exactly what happens: error, hang, or silent no-arrival).
+2. **Click through the new landing screen** — confirm the card grid, per-card badges, and "Switch number" flow all look/feel right.
+3. **Live-verify Phase 6 `sendText`** — reply to a real conversation, confirm it arrives, check Exotel's real response shape with me so I can fix `extractOutboundProviderMessageId_` if needed.
+4. Create at least one quick reply — Admin Panel → Quick Replies — so the compose box's dropdown has something in it.
+5. Fill in `Spreewalk - Raipur` / `ECHT Advisory` provider fields — Admin Panel → Numbers → Edit (optional).
+6. Remove the ngrok callback URL from Exotel (optional).
+7. **Read `docs/ZOHO_PHASE_2.md` and answer its 5 open questions** whenever you're ready to think about Zoho.
 
 ### Done (kept for history)
 
@@ -88,6 +87,9 @@
 - ~~Real security bug (`getCustomerStage` had no auth check)~~ — found and fixed, Phase 16.
 - ~~Should conversations be resolvable?~~ — yes, any assigned agent/ADMIN; built and deployed.
 - ~~Reports org-wide vs. team-scoped?~~ — scoped to admin-granted access; built and deployed.
+- ~~Chatbot on 079-485-02810 hijacking every number's webhook~~ — Exotel-side config, fixed by you; confirmed not a code issue.
+- ~~Card-style number/org-select landing screen~~ — built and deployed, see item 2 above to verify.
+- ~~Speed (8 round-trips per conversation)~~ — fixed, down to 1 round-trip; confirmed working.
 - ~~Backups~~ — built; **still needs your one-time click-through** in Admin Panel → Backup to confirm it works against the real spreadsheet (new OAuth consent screen expected).
 - ~~Read `docs/DEPLOYMENT.md`~~ — go-live readiness checklist, available whenever useful.
 - *(This list will keep evolving — check the bottom of this file for the latest.)*

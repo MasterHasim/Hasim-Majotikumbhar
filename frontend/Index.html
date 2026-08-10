@@ -4,8 +4,31 @@
   <base target="_top">
   <style>
     * { box-sizing: border-box; }
+    html, body { height: 100%; }
     body { margin: 0; font-family: Arial, Helvetica, sans-serif; font-size: 14px; color: #202124; }
-    .layout { display: grid; grid-template-columns: 220px 320px 1fr; height: 100vh; }
+
+    #landingScreen { max-width: 1040px; margin: 0 auto; padding: 40px 28px; }
+    .landing-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 28px; flex-wrap: wrap; gap: 8px; }
+    .landing-header h1 { font-size: 22px; margin: 0; }
+    .landing-header .subtitle { color: #5f6368; font-size: 13px; margin-top: 4px; }
+    .landing-links a { margin-left: 16px; font-size: 13px; color: #1a73e8; text-decoration: none; cursor: pointer; }
+    .landing-links a:hover { text-decoration: underline; }
+    .number-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
+    .number-card { position: relative; background: #fff; border: 1px solid #e3e5e8; border-radius: 10px; padding: 18px 20px; cursor: pointer; transition: box-shadow .15s ease, transform .15s ease, border-color .15s ease; }
+    .number-card:hover { box-shadow: 0 4px 14px rgba(32, 33, 36, .08); transform: translateY(-2px); border-color: #c9cdd3; }
+    .number-card:focus-visible { outline: 2px solid #1a73e8; outline-offset: 2px; }
+    .number-card .name { font-size: 16px; font-weight: 700; padding-right: 26px; }
+    .number-card .phone { color: #5f6368; font-size: 13px; margin-top: 5px; font-variant-numeric: tabular-nums; }
+    .number-card .badge { position: absolute; top: 16px; right: 16px; }
+
+    #workspaceScreen { display: none; flex-direction: column; height: 100vh; }
+    .workspace-header { flex-shrink: 0; padding: 10px 16px; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; gap: 14px; }
+    .workspace-header .back-link { color: #1a73e8; font-size: 13px; text-decoration: none; cursor: pointer; white-space: nowrap; }
+    .workspace-header .back-link:hover { text-decoration: underline; }
+    .workspace-header .current-number { font-weight: 700; }
+    .workspace-header .current-phone { color: #5f6368; font-size: 12px; font-variant-numeric: tabular-nums; }
+
+    .layout { display: grid; grid-template-columns: 320px 1fr; flex: 1; min-height: 0; }
     .pane { overflow-y: auto; border-right: 1px solid #e0e0e0; }
     .pane:last-child { border-right: none; }
     #detailPane { display: flex; flex-direction: column; overflow: hidden; }
@@ -64,28 +87,42 @@
   </style>
 </head>
 <body>
-  <div class="layout">
-    <div class="pane" id="numbersPane">
-      <div class="pane-header">Numbers
-        <a id="reportsLink" onclick="openReports()" style="display:none; float:right; font-size:12px; font-weight:normal; margin-left:10px; cursor:pointer;">Reports</a>
-        <a id="adminLink" href="?page=admin" style="display:none; float:right; font-size:12px; font-weight:normal;">Admin Panel</a>
+  <div id="landingScreen">
+    <div class="landing-header">
+      <div>
+        <h1>Select a number</h1>
+        <div class="subtitle">Choose which WhatsApp number to work in.</div>
       </div>
-      <div id="numbersList"><div class="empty">Loading…</div></div>
+      <div class="landing-links">
+        <a id="reportsLink" onclick="openReports()" style="display:none;">Reports</a>
+        <a id="adminLink" href="?page=admin" style="display:none;">Admin Panel</a>
+      </div>
     </div>
-    <div class="pane" id="conversationsPane">
-      <div class="pane-header">Conversations</div>
-      <div class="filter-bar">
-        <input type="text" id="searchQuery" placeholder="Search name, phone, message…" oninput="onFilterChange()">
-        <div class="filter-row">
-          <label><input type="checkbox" id="filterNeedsResponse" onchange="onFilterChange()"> Needs response</label>
-          <label><input type="checkbox" id="filterUnassigned" onchange="onFilterChange()"> Unassigned</label>
-          <button onclick="clearFilters()">Clear</button>
+    <div id="numberCards" class="number-cards"><div class="empty">Loading…</div></div>
+  </div>
+
+  <div id="workspaceScreen">
+    <div class="workspace-header">
+      <a class="back-link" onclick="showLanding()">&larr; Switch number</a>
+      <span class="current-number" id="workspaceNumberName"></span>
+      <span class="current-phone" id="workspaceNumberPhone"></span>
+    </div>
+    <div class="layout">
+      <div class="pane" id="conversationsPane">
+        <div class="pane-header">Conversations</div>
+        <div class="filter-bar">
+          <input type="text" id="searchQuery" placeholder="Search name, phone, message…" oninput="onFilterChange()">
+          <div class="filter-row">
+            <label><input type="checkbox" id="filterNeedsResponse" onchange="onFilterChange()"> Needs response</label>
+            <label><input type="checkbox" id="filterUnassigned" onchange="onFilterChange()"> Unassigned</label>
+            <button onclick="clearFilters()">Clear</button>
+          </div>
         </div>
+        <div id="conversationsList"><div class="empty">Select a number</div></div>
       </div>
-      <div id="conversationsList"><div class="empty">Select a number</div></div>
-    </div>
-    <div class="pane" id="detailPane">
-      <div id="detailContent"><div class="empty">Select a conversation</div></div>
+      <div class="pane" id="detailPane">
+        <div id="detailContent"><div class="empty">Select a conversation</div></div>
+      </div>
     </div>
   </div>
 
@@ -102,6 +139,7 @@
     var cachedStages = null;
     var cachedTemplates = null;
     var cachedQuickReplies = null;
+    var cachedNumbers = null;
 
     function escapeHtml(value) {
       return String(value == null ? '' : value).replace(/[&<>"']/g, function (c) {
@@ -110,16 +148,17 @@
     }
 
     function loadNumbers() {
-      google.script.run.withSuccessHandler(renderNumbers).withFailureHandler(renderError('numbersList')).listMyNumbers();
+      google.script.run.withSuccessHandler(renderNumberCards).withFailureHandler(renderError('numberCards')).listMyNumbers();
     }
 
-    function renderNumbers(numbers) {
-      var container = document.getElementById('numbersList');
+    function renderNumberCards(numbers) {
+      cachedNumbers = numbers;
+      var container = document.getElementById('numberCards');
       if (!numbers.length) { container.innerHTML = '<div class="empty">No numbers assigned</div>'; return; }
       container.innerHTML = numbers.map(function (number) {
-        return '<div class="list-item" data-id="' + escapeHtml(number.id) + '" onclick="selectNumber(\'' + number.id + '\')">' +
-          '<div class="title">' + escapeHtml(number.displayName) + '<span class="badge" id="needsResponseBadge-' + escapeHtml(number.id) + '" style="display:none;"></span></div>' +
-          '<div class="subtitle">' + escapeHtml(number.phoneNumber) + '</div></div>';
+        return '<div class="number-card" tabindex="0" onclick="enterWorkspace(\'' + number.id + '\')" onkeydown="if(event.key===\'Enter\')enterWorkspace(\'' + number.id + '\');">' +
+          '<div class="name">' + escapeHtml(number.displayName) + '<span class="badge" id="needsResponseBadge-' + escapeHtml(number.id) + '" style="display:none;"></span></div>' +
+          '<div class="phone">' + escapeHtml(number.phoneNumber) + '</div></div>';
       }).join('');
       loadNeedsResponseCounts();
     }
@@ -135,12 +174,25 @@
       }).withFailureHandler(function () {}).getNeedsResponseCounts();
     }
 
-    function selectNumber(numberId) {
+    function enterWorkspace(numberId) {
+      var number = (cachedNumbers || []).filter(function (n) { return n.id === numberId; })[0];
       selectedNumberId = numberId;
       selectedConversationId = null;
-      document.querySelectorAll('#numbersList .list-item').forEach(function (el) { el.classList.toggle('active', el.dataset.id === numberId); });
-      loadConversations();
+      document.getElementById('searchQuery').value = '';
+      document.getElementById('filterNeedsResponse').checked = false;
+      document.getElementById('filterUnassigned').checked = false;
+      document.getElementById('workspaceNumberName').textContent = number ? number.displayName : '';
+      document.getElementById('workspaceNumberPhone').textContent = number ? number.phoneNumber : '';
       document.getElementById('detailContent').innerHTML = '<div class="empty">Select a conversation</div>';
+      document.getElementById('landingScreen').style.display = 'none';
+      document.getElementById('workspaceScreen').style.display = 'flex';
+      loadConversations();
+    }
+
+    function showLanding() {
+      document.getElementById('workspaceScreen').style.display = 'none';
+      document.getElementById('landingScreen').style.display = 'block';
+      loadNeedsResponseCounts();
     }
 
     function activeFilters() {

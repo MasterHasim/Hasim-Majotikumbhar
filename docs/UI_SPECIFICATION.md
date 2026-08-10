@@ -194,6 +194,24 @@ reachable via search with an explicit `status: 'CLOSED'` filter.
 **Reports scoping**: superseded the original Phase 14 decision to leave `REPORTS_VIEW`
 org-wide — see `docs/DATABASE.md`'s "Post-Phase-18 follow-up" section for the reversal.
 
+## Number/org-select landing screen (2026-08-10, user-directed)
+
+`frontend/Index.html` is now two screens, not one. `#landingScreen` is the entry
+point — a card grid (`.number-cards`, one `.number-card` per accessible number,
+`listMyNumbers()`) matching the reference UX the user shared (a commercial WhatsApp
+CRM's "Select Org" screen): display name, phone number, and a needs-response count
+badge per card. Clicking a card (`enterWorkspace(numberId)`) hides the landing screen
+and shows `#workspaceScreen` — the same Conversations + Detail two-pane layout as
+before, now anchored to that one number, with a small header bar showing the active
+number's name/phone and a "← Switch number" link (`showLanding()`) back to the card
+grid. The Numbers list pane that used to sit to the left of Conversations is gone —
+number selection now happens once, up front, on the landing screen, not as a
+persistent third pane.
+
+Admin Panel and Reports links live on the landing screen header only (not repeated in
+the workspace) — they're one click away via "Switch number," and duplicating them in
+the workspace header would add clutter for a rarely-used pair of links.
+
 ## Deliberately not yet in the UI
 
 No push/email notifications (Phase 13's own scoping decision — see above). No manual
