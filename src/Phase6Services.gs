@@ -101,12 +101,10 @@ class Phase6Api {
     mimeType = Phase1Validation.requiredString(mimeType, 'mimeType');
     var bytes = Utilities.base64Decode(base64Data);
     var blob = Utilities.newBlob(bytes, mimeType, filename);
-    // DriveApp.createFile() (a genuinely NEW file) is covered by the drive.file
-    // scope, but DriveApp.createFolder()/getFolderById() are not — Apps Script
-    // requires the full https://www.googleapis.com/auth/drive scope for folder
-    // operations even under the "restricted" drive.file model. A dedicated media
-    // folder isn't worth forcing every user through a fresh, broader OAuth consent
-    // screen for, so files land directly in Drive root instead.
+    // 2026-08-10: DriveApp.createFile() was assumed covered by the narrower
+    // drive.file scope — live-tested and that assumption was wrong (Apps Script
+    // required the full https://www.googleapis.com/auth/drive scope for it too).
+    // appsscript.json now grants that instead; see the manifest and memory/DECISIONS.md.
     var file = DriveApp.createFile(blob);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
     return { url: 'https://drive.google.com/uc?export=download&id=' + file.getId(), fileId: file.getId() };
