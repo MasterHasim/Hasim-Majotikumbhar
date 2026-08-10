@@ -26,16 +26,28 @@ var Phase2Spreadsheet = {
   }
 };
 
+// Request-scoped read cache, shared by collection name across every SheetRepository
+// instance (each service class constructs its own repository instances, so without
+// this, one aggregated call like WorkspaceApi.getConversationWorkspace re-reads the
+// same Conversations/Customers tabs several times over). Bounded by a short TTL
+// (rather than trusted to live only for one execution) because Apps Script's V8
+// runtime can reuse global state across separate invocations of a warm container —
+// TTL keeps any such leak bounded to a couple seconds instead of assuming isolation
+// that isn't guaranteed. Every write invalidates its collection's entry immediately,
+// so a read-after-write within the same request never sees stale data.
+var Phase2SheetCache_ = {};
+var PHASE2_SHEET_CACHE_TTL_MS = 3000;
+
 class SheetRepository {
   constructor(collectionName, columns) {
     this.collectionName_ = collectionName;
     this.columns_ = columns;
   }
 
-  list() { return this.readAll_(this.sheet_()).map(function (row) { return row.record; }); }
+  list() { return this.rows_().map(function (row) { return row.record; }); }
   get(id) { var found = this.findRow_(id); return found ? found.record : null; }
   findOne(predicate) {
-    var rows = this.readAll_(this.sheet_());
+    var rows = this.rows_();
     for (var i = 0; i < rows.length; i++) if (predicate(rows[i].record)) return rows[i].record;
     return null;
   }
@@ -91,6 +103,12 @@ class SheetRepository {
     }
     return sheet;
   }
+  rows_() {
+    Phase2Spreadsheet.requireSpreadsheetId_(); // cheap Property read — validated even on a cache hit, so a config error is never masked by stale cache
+    var cached = Phase2SheetCache_[this.collectionName_];
+    if (cached && (Date.now() - cached.ts) < PHASE2_SHEET_CACHE_TTL_MS) return cached.rows;
+    return this.readAll_(this.sheet_());
+  }
   readAll_(sheet) {
     var values = sheet.getDataRange().getValues();
     var header = values[0] || ['id'].concat(this.columns_);
@@ -102,10 +120,11 @@ class SheetRepository {
       header.forEach(function (field, c) { record[field] = raw[c]; });
       rows.push({ rowIndex: r + 1, record: record });
     }
+    Phase2SheetCache_[this.collectionName_] = { rows: rows, ts: Date.now() };
     return rows;
   }
   findRow_(id) {
-    var rows = this.readAll_(this.sheet_());
+    var rows = this.rows_();
     return rows.filter(function (row) { return row.record.id === id; })[0] || null;
   }
   appendRow_(sheet, record) {
@@ -131,7 +150,9 @@ class SheetRepository {
     try {
       var sheet = this.sheet_();
       var rows = this.readAll_(sheet);
-      return mutator(sheet, rows);
+      var result = mutator(sheet, rows);
+      delete Phase2SheetCache_[this.collectionName_];
+      return result;
     } finally { lock.releaseLock(); }
   }
 }
