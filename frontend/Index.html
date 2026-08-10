@@ -50,6 +50,12 @@
     .reminder-add button { padding: 0 12px; border: none; border-radius: 4px; background: #1a73e8; color: #fff; cursor: pointer; font-size: 12px; }
     .snooze-btn { margin-top: 6px; margin-left: 8px; padding: 4px 10px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; background: #fff; cursor: pointer; }
     .snooze-banner { background: #fef7e0; padding: 6px 16px; font-size: 12px; color: #7a5900; }
+    .badge { display: inline-block; min-width: 16px; padding: 0 5px; border-radius: 9px; background: #d93025; color: #fff; font-size: 10px; text-align: center; margin-left: 6px; }
+    .filter-bar { padding: 8px 10px; border-bottom: 1px solid #e0e0e0; }
+    .filter-bar input[type="text"] { width: 100%; padding: 5px 8px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 6px; }
+    .filter-bar .filter-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; font-size: 11px; }
+    .filter-bar label { display: flex; align-items: center; gap: 3px; }
+    .filter-bar button { padding: 2px 8px; font-size: 11px; border: 1px solid #ccc; border-radius: 4px; background: #fff; cursor: pointer; }
   </style>
 </head>
 <body>
@@ -60,6 +66,14 @@
     </div>
     <div class="pane" id="conversationsPane">
       <div class="pane-header">Conversations</div>
+      <div class="filter-bar">
+        <input type="text" id="searchQuery" placeholder="Search name, phone, message…" oninput="onFilterChange()">
+        <div class="filter-row">
+          <label><input type="checkbox" id="filterNeedsResponse" onchange="onFilterChange()"> Needs response</label>
+          <label><input type="checkbox" id="filterUnassigned" onchange="onFilterChange()"> Unassigned</label>
+          <button onclick="clearFilters()">Clear</button>
+        </div>
+      </div>
       <div id="conversationsList"><div class="empty">Select a number</div></div>
     </div>
     <div class="pane" id="detailPane">
@@ -88,9 +102,21 @@
       if (!numbers.length) { container.innerHTML = '<div class="empty">No numbers assigned</div>'; return; }
       container.innerHTML = numbers.map(function (number) {
         return '<div class="list-item" data-id="' + escapeHtml(number.id) + '" onclick="selectNumber(\'' + number.id + '\')">' +
-          '<div class="title">' + escapeHtml(number.displayName) + '</div>' +
+          '<div class="title">' + escapeHtml(number.displayName) + '<span class="badge" id="needsResponseBadge-' + escapeHtml(number.id) + '" style="display:none;"></span></div>' +
           '<div class="subtitle">' + escapeHtml(number.phoneNumber) + '</div></div>';
       }).join('');
+      loadNeedsResponseCounts();
+    }
+
+    function loadNeedsResponseCounts() {
+      google.script.run.withSuccessHandler(function (counts) {
+        Object.keys(counts).forEach(function (numberId) {
+          var badge = document.getElementById('needsResponseBadge-' + numberId);
+          if (!badge) return;
+          if (counts[numberId] > 0) { badge.textContent = counts[numberId]; badge.style.display = ''; }
+          else { badge.style.display = 'none'; }
+        });
+      }).withFailureHandler(function () {}).getNeedsResponseCounts();
     }
 
     function selectNumber(numberId) {
@@ -101,18 +127,48 @@
       document.getElementById('detailContent').innerHTML = '<div class="empty">Select a conversation</div>';
     }
 
+    function activeFilters() {
+      var query = document.getElementById('searchQuery').value.trim();
+      var needsResponse = document.getElementById('filterNeedsResponse').checked;
+      var unassigned = document.getElementById('filterUnassigned').checked;
+      if (!query && !needsResponse && !unassigned) return null;
+      var filters = { numberId: selectedNumberId };
+      if (query) filters.query = query;
+      if (needsResponse) filters.needsResponse = true;
+      if (unassigned) filters.unassigned = true;
+      return filters;
+    }
+
+    function onFilterChange() { if (selectedNumberId) loadConversations(); }
+
+    function clearFilters() {
+      document.getElementById('searchQuery').value = '';
+      document.getElementById('filterNeedsResponse').checked = false;
+      document.getElementById('filterUnassigned').checked = false;
+      if (selectedNumberId) loadConversations();
+    }
+
     function loadConversations() {
       document.getElementById('conversationsList').innerHTML = '<div class="empty">Loading…</div>';
-      google.script.run.withSuccessHandler(renderConversations).withFailureHandler(renderError('conversationsList')).listConversations(selectedNumberId);
+      loadNeedsResponseCounts();
+      var filters = activeFilters();
+      if (filters) {
+        google.script.run.withSuccessHandler(renderConversations).withFailureHandler(renderError('conversationsList')).searchConversations(filters);
+      } else {
+        google.script.run.withSuccessHandler(renderConversations).withFailureHandler(renderError('conversationsList')).listConversations(selectedNumberId);
+      }
     }
 
     function renderConversations(conversations) {
       var container = document.getElementById('conversationsList');
       if (!conversations.length) { container.innerHTML = '<div class="empty">No conversations</div>'; return; }
       container.innerHTML = conversations.map(function (conversation) {
+        var title = conversation.customerName ? escapeHtml(conversation.customerName) : escapeHtml(conversation.status);
+        var subtitleParts = [conversation.lastMessageAt || ''];
+        if (conversation.numberDisplayName) subtitleParts.unshift(conversation.numberDisplayName);
         return '<div class="list-item" data-id="' + escapeHtml(conversation.id) + '" onclick="selectConversation(\'' + conversation.id + '\')">' +
-          '<div class="title">' + escapeHtml(conversation.status) + (conversation.needsResponse ? ' • Needs response' : '') + '</div>' +
-          '<div class="subtitle">' + escapeHtml(conversation.lastMessageAt || '') + '</div></div>';
+          '<div class="title">' + title + (conversation.needsResponse ? ' • Needs response' : '') + '</div>' +
+          '<div class="subtitle">' + escapeHtml(subtitleParts.filter(Boolean).join(' • ')) + '</div></div>';
       }).join('');
       if (selectedConversationId) {
         var el = container.querySelector('[data-id="' + selectedConversationId + '"]');

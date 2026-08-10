@@ -182,3 +182,14 @@ patch-if-present) rather than requiring the caller to know whether a config row 
 exists. `Users`/`Teams`/`Team_Members` (Phase 1) gained one new read endpoint,
 `listTeamMembers(teamId)`, that the Admin Panel's Teams section needed and nothing
 before it had exposed.
+
+# Phase 13 data contracts
+
+No new entities. `Phase13Api` (`src/Phase13Services.gs`) adds `searchConversations`
+and `getNeedsResponseCounts`, both composing Phase 5's already-authorized
+`listMyNumbers()`/`listConversations()` rather than re-implementing any access-control
+logic — search/filtering happens only within the conversation set a user is already
+allowed to see. `searchConversations` matches `Customers.name`/`.phone` and
+`Messages.messageText` (case-insensitive substring), plus filters on
+`assignedUserId`/`status`/`needsResponse`/`unassigned`/`stageId` (via Phase 8's
+`Customer_Stage`)/`dateFrom`/`dateTo` (against `lastMessageAt`).

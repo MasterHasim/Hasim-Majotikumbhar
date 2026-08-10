@@ -133,10 +133,28 @@ rather than inline edit forms, matching the project's established minimal-UI sty
 (already used for snooze duration, media type/URL/caption) rather than building a
 heavier modal/dialog system for a low-traffic admin surface.
 
+## Phase 13: search, filters & needs-response badges
+
+A filter bar (`.filter-bar`) sits under the Conversations pane header: a search input
+(`#searchQuery`, debounced only by being typed-triggered via `oninput`, no separate
+button) plus "Needs response" and "Unassigned" checkboxes. Any of the three active
+switches `loadConversations()` from `listConversations(numberId)` (Phase 5, unfiltered)
+to `searchConversations(filters)` (Phase 13, `src/Phase13Services.gs`) — same result
+shape either way, so `renderConversations` handles both without a branch. Search results
+additionally carry `customerName`/`numberDisplayName` (useful once cross-number search
+is wired up further), shown in place of the plain status/date row when present.
+
+Each number in the Numbers pane shows a small red needs-response count badge
+(`getNeedsResponseCounts()`), refreshed whenever the conversation list reloads (i.e.
+after every send/reassign/snooze action, not just on page load) — this is Phase 13's
+"Notifications": deliberately scoped to an in-UI badge, not push/email, since Apps
+Script has no clean push channel and building one wasn't asked for — see
+`memory/DECISIONS.md`.
+
 ## Deliberately not yet in the UI
 
-No template-usage analytics or dashboard trends (Phase 14). No notifications/search
-(Phase 13). No backup/export UI (Phase 15).
+No template-usage analytics or dashboard trends (Phase 14). No backup/export UI
+(Phase 15). No push/email notifications (Phase 13's own scoping decision — see above).
 
 ## Testing note
 
