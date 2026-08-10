@@ -23,7 +23,7 @@
 | 8 | CRM-lite: Customers, Stages, Remarks | ✅ Code done, Node-tested | Stage seed needs a one-time live run (see task list) |
 | 9 | Reminders, Snooze & Follow-up | ✅ Code done, Node-tested | |
 | 10 | WhatsApp Templates | 🟡 Code done, Node-tested — live submit/send pending you | `createTemplate`/`sendTemplate` real-world side effects, deliberately not invoked live |
-| 11 | Quick Replies & Media | ⬜ In progress (autonomous session) | |
+| 11 | Quick Replies & Media | 🟡 Code done, Node-tested — live media send pending you | `sendMedia`/inbound media extraction both unverified (no real media message ever sent/received) |
 | 12 | Admin Panel & Configuration | ⬜ Not started yet | |
 | 13 | Notifications, Search & Productivity | ⬜ Not started yet | |
 | 14 | Dashboard & Analytics | ⬜ Not started yet | |
@@ -37,6 +37,7 @@
 
 ## Recently shipped (brief — see `memory/CHANGELOG.md` for full detail)
 
+- **Phase 11**: Quick replies (admin-managed shortcut list, `SETTINGS_MANAGE`; any authenticated user can list/use — inserted into the compose textarea, not sent directly) and media messages (`Phase6Api.sendMediaReply`, new `Message_Media` tab for both outbound sends and inbound webhook ingestion when a `mediaUrl` is present). Quick-reply `<select>` and a "Media…" button added to the compose row. `sendMedia`/inbound media extraction are both unverified — no real media message has ever been sent or received on this integration. Nothing else here needed live/costly verification (quick replies are pure internal logic).
 - **Phase 10**: Template draft → admin review → submit → sync workflow (`Phase10Api`), sending an approved template with variable substitution (`Phase6Api.sendTemplateReply`). `syncTemplatesFromProvider` reuses the already-live-confirmed `getTemplates()` call, but `submitTemplateForReview` (creates a real template on your WABA) and `sendTemplateReply` (a real send) are both held for you, same as Phase 6's plain-text sending. Template dropdown added to the compose row.
 - **Phase 9**: Reminders (create/complete/cancel, personal "my reminders" list) and snooze (hides a conversation from Phase 5's active list until it auto-expires — no scheduled job, just a timestamp check). Reminders + snooze UI added. Nothing here needed live/costly verification.
 - **Phase 8**: Lead stage definitions (admin-only, default 7-stage list ready to seed), per-customer current stage (its own new tab — `Customers` already has real data and `SheetRepository` can't safely migrate an existing schema, see `memory/DECISIONS.md`), internal remarks. Stage dropdown + remarks panel added to the UI. Nothing here needed live/costly verification.
@@ -62,6 +63,8 @@
 2. **Round-robin won't actually assign anyone yet on your real numbers** — the engine (Phase 7) is done and tested, but no `Number_Assignment_Config`/`Number_Assignment_Users` records exist for your real 10 numbers (nobody's configured which agents participate). Until that's set up — either manually or once Phase 12's Admin Panel exists — real new leads will just land in the unassigned queue. Not urgent, just worth knowing.
 3. **Seed the default lead stages once** — run `seedDefaultLeadStages()` (e.g. via the Apps Script editor, same one-time-wrapper pattern used for Phase 1/3's live setup) before the stage dropdown in the UI will show anything.
 4. **Templates**: if you want to actually create/submit a real WhatsApp template, use `createDraftTemplate`/`updateDraftTemplate` then `submitTemplateForReview` (creates it on your real WABA, pending Meta review) — or run `syncTemplatesFromProvider(wabaId)` first to pull in templates that already exist on your account (e.g. the `otp_veri_code`/`otp` ones seen live in Phase 3) rather than recreating them.
-5. Fill in `Spreewalk - Raipur` / `ECHT Advisory` provider fields (optional).
-6. Remove the ngrok callback URL from Exotel (optional).
-7. *(This list will grow as I continue — check the bottom of this file for the latest.)*
+5. **Live-verify Phase 11 media sending** — same pattern as Phase 6: use the new "Media…" button in the UI to send a real media message, confirm it arrives, and (ideally) get a customer to send a real media message back so we can check the Apps Script Executions panel for the real inbound webhook shape and fix `extractInboundMediaUrl_` if the field-name guess is wrong — no real inbound media webhook has ever been observed, only inbound text so far.
+6. Create at least one quick reply (`createQuickReply`, e.g. via the Apps Script editor or once Phase 12's admin panel exists) so the compose box's "Quick reply…" dropdown has something in it — it's empty until an ADMIN adds one.
+7. Fill in `Spreewalk - Raipur` / `ECHT Advisory` provider fields (optional).
+8. Remove the ngrok callback URL from Exotel (optional).
+9. *(This list will grow as I continue — check the bottom of this file for the latest.)*

@@ -62,3 +62,7 @@ class CustomerStageRepository extends SheetRepository {
 class ConversationSnoozeRepository extends SheetRepository {
   constructor() { super('Conversation_Snooze', Phase2Schemas.Conversation_Snooze); }
 }
+
+class MessageMediaRepository extends SheetRepository {
+  constructor() { super('Message_Media', Phase2Schemas.Message_Media); }
+}

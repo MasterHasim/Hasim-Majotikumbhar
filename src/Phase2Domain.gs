@@ -28,5 +28,8 @@ var Phase2Schemas = {
   Customer_Stage: ['customerId', 'stageId', 'setByUserId', 'updatedAt'],
   // Phase 9: snooze state, same rationale as Customer_Stage — its own tab rather than
   // new columns on the already-live Conversations tab.
-  Conversation_Snooze: ['conversationId', 'snoozedUntil', 'snoozedByUserId', 'createdAt']
+  Conversation_Snooze: ['conversationId', 'snoozedUntil', 'snoozedByUserId', 'createdAt'],
+  // Phase 11: media attached to a message. Its own tab, same rationale — Messages
+  // already has real live data and has no mediaUrl column.
+  Message_Media: ['messageId', 'mediaType', 'mediaUrl', 'caption']
 };

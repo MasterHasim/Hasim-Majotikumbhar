@@ -140,3 +140,33 @@ No new entities — `WhatsApp_Templates` (Phase 2, unused until now) is now writ
 `createDraftTemplate`/`submitTemplateForReview`/`syncTemplatesFromProvider`, and read
 via `Phase6Api.sendTemplateReply`. See `docs/TEMPLATES.md` for the full workflow and
 what's still unverified live.
+
+# Phase 11 data contracts
+
+`Quick_Replies` (Phase 2, unused until now) is now written via `createQuickReply`/
+`updateQuickReply` (ADMIN-only, `SETTINGS_MANAGE` — same authorization level as Phase
+8's `Lead_Stages`) and read via `listQuickReplies` (any authenticated user; the compose
+box's shortcut picker). One new entity: `Message_Media` (`MessageMediaRepository`,
+`messageId, mediaType, mediaUrl, caption`) — its own tab for the same reason as
+Phase 8/9's `Customer_Stage`/`Conversation_Snooze` (`Messages` already has real live
+data, and `SheetRepository` has no safe header-migration mechanism). Unlike those two,
+`Message_Media` is a plain `create` (one row per media message, keyed by its own id),
+not a `replace`-upsert — a message's media never changes after the fact.
+
+Written from two directions: `Phase6Api.sendMediaReply` (`src/Phase6Services.gs`)
+creates the `OUTBOUND` `Messages` row via the existing `sendOutbound_` helper, then
+writes the `Message_Media` row on success or failure alike (the send attempt itself is
+still real, so the record stays for visibility/retry, matching how a `FAILED` text
+message is still recorded). `Phase4Api.ingestInboundMessage` (`src/Phase4Services.gs`)
+writes a `Message_Media` row only when the normalized webhook payload carries a
+`mediaUrl`.
+
+`ExotelProvider.sendMedia` and the new `extractInboundMediaUrl_` helper
+(`src/Phase3ExotelProvider.gs`) are both **UNVERIFIED** — no real media message has
+ever been sent or received through this integration. `sendMedia`'s request shape
+mirrors the same best-effort convention as `sendText`/`sendTemplate` (unverified since
+Phase 3, still pending a live test — see `memory/DECISIONS.md`). `extractInboundMediaUrl_`
+is modeled on the WhatsApp Cloud API's inbound-media shape (`content.<type>.link` or
+`.url`) since no real inbound media webhook has ever been observed (only inbound text,
+confirmed 2026-08-10) — flagged clearly in code, to be corrected once a real media
+message arrives, same live-verify-and-fix pattern used throughout this project.

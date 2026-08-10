@@ -19,6 +19,17 @@
  */
 var Phase3ExotelStatusCodes = { 30001: 'SENT', 30002: 'DELIVERED', 30003: 'READ' };
 
+// UNVERIFIED — no real inbound media webhook has ever been observed (only inbound
+// text, confirmed 2026-08-10). Modeled on WhatsApp Cloud API's inbound media shape
+// (content.<type>.link or content.<type>.url), same best-effort convention as the
+// rest of this file's still-unconfirmed fields. Fix once a real media message arrives.
+function extractInboundMediaUrl_(content) {
+  if (!content || !content.type) return null;
+  var body = content[content.type];
+  if (!body) return null;
+  return body.link || body.url || null;
+}
+
 class ExotelProvider {
   constructor() {
     this.config_ = Phase3ExotelConfig.require_();
@@ -80,6 +91,7 @@ class ExotelProvider {
         direction: 'INBOUND',
         messageType: (message.content && message.content.type) || 'text',
         text: message.content && message.content.text && message.content.text.body,
+        mediaUrl: extractInboundMediaUrl_(message.content),
         timestamp: message.timestamp || Phase1Ids.now(),
         profileName: message.profile_name || null,
         status: null
@@ -93,7 +105,7 @@ class ExotelProvider {
         status: Phase3ExotelStatusCodes[payload.status_code] || 'UNKNOWN'
       };
     }
-    return { providerMessageId: null, fromPhone: null, providerNumberId: null, direction: null, messageType: null, text: null, timestamp: Phase1Ids.now(), status: null, raw: payload };
+    return { providerMessageId: null, fromPhone: null, providerNumberId: null, direction: null, messageType: null, text: null, mediaUrl: null, timestamp: Phase1Ids.now(), status: null, raw: payload };
   }
 
   request_(method, path, body) {

@@ -155,9 +155,11 @@
         '<div class="compose-error" id="composeError"></div>' +
         '<div class="compose">' +
         '<textarea id="composeText" rows="2" placeholder="Type a reply…"></textarea>' +
+        '<select id="quickReplySelect" onchange="insertQuickReply()"><option value="">Quick reply…</option></select>' +
         '<button id="composeSend" onclick="sendCurrentReply()">Send</button>' +
         '<select id="templateSelect"><option value="">Template…</option></select>' +
         '<button id="templateSend" onclick="sendCurrentTemplate()">Send Template</button>' +
+        '<button id="mediaSend" onclick="sendCurrentMedia()">Media…</button>' +
         '</div>';
 
       var messagesList = document.getElementById('messagesList');
@@ -168,6 +170,44 @@
       loadReminders();
       loadSnoozeStatus();
       loadTemplateSelect();
+      loadQuickReplySelect();
+    }
+
+    function loadQuickReplySelect() {
+      google.script.run.withSuccessHandler(function (quickReplies) {
+        var select = document.getElementById('quickReplySelect');
+        if (!select) return;
+        select.innerHTML = '<option value="">Quick reply…</option>' +
+          quickReplies.map(function (q) { return '<option value="' + escapeHtml(q.id) + '">' + escapeHtml(q.shortcut) + '</option>'; }).join('');
+        select.dataset.quickReplies = JSON.stringify(quickReplies);
+      }).withFailureHandler(function () {}).listQuickReplies();
+    }
+
+    function insertQuickReply() {
+      var select = document.getElementById('quickReplySelect');
+      if (!select.value) return;
+      var quickReplies = JSON.parse(select.dataset.quickReplies || '[]');
+      var quickReply = quickReplies.filter(function (q) { return q.id === select.value; })[0];
+      if (quickReply) {
+        var textarea = document.getElementById('composeText');
+        textarea.value = (textarea.value ? textarea.value + ' ' : '') + quickReply.text;
+        textarea.focus();
+      }
+      select.value = '';
+    }
+
+    function sendCurrentMedia() {
+      var mediaType = prompt('Media type (image, document, video, audio):', 'image');
+      if (!mediaType) return;
+      var mediaUrl = prompt('Media URL:');
+      if (!mediaUrl) return;
+      var caption = prompt('Caption (optional):', '') || '';
+      var button = document.getElementById('mediaSend');
+      button.disabled = true;
+      google.script.run
+        .withSuccessHandler(function () { button.disabled = false; loadDetail(); loadConversations(); })
+        .withFailureHandler(function (error) { button.disabled = false; alert('Could not send media: ' + (error && error.message)); })
+        .sendMediaReply(selectedConversationId, mediaType, mediaUrl, caption);
     }
 
     function loadTemplateSelect() {

@@ -77,6 +77,23 @@ calls `sendTemplateReply`. No template-authoring UI (draft/submit/sync) — that
 admin-configuration workflow better suited to Phase 12's Admin Panel; `Phase10Api`'s
 draft/submit/sync methods exist and are tested at the API level.
 
+## Phase 11: quick replies & media
+
+A `<select>` (`#quickReplySelect`) in the compose row lists active quick replies
+(`listQuickReplies()`). Selecting one inserts its text into the compose textarea
+(appended, not replacing existing text) rather than sending immediately — the agent
+can still edit before hitting Send, and it reuses the exact same `sendReply` path,
+so no separate send code path was needed for quick replies. No quick-reply authoring
+UI (create/edit shortcuts) — that's admin configuration, same reasoning as Phase 10's
+template authoring being deferred to Phase 12's Admin Panel; `Phase11Api`'s
+`createQuickReply`/`updateQuickReply` exist and are tested at the API level.
+
+A "Media…" button (`#mediaSend`) prompts for media type, URL, and an optional caption
+(three sequential `prompt()` calls — the same minimal, no-modal-dialog UI style already
+used for snooze duration), then calls `sendMediaReply`. This mirrors the "Send Template"
+button's pattern rather than adding a persistent form, since media sending is expected
+to be occasional, not the primary compose action.
+
 ## Deliberately not yet in the UI
 
 No round-robin assignment UI (Phase 7's engine runs automatically on ingestion;

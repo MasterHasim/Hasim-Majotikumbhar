@@ -43,6 +43,7 @@ class Phase6Api {
     this.conversations_ = new ConversationRepository();
     this.messages_ = new MessageRepository();
     this.templates_ = new TemplateRepository();
+    this.messageMedia_ = new MessageMediaRepository();
   }
 
   sendReply(conversationId, text) {
@@ -62,6 +63,18 @@ class Phase6Api {
     return this.sendOutbound_(conversationId, 'template', displayText, function (provider, number, customer) {
       return provider.sendTemplate(toE164_(number.phoneNumber), toE164_(customer.phone), template.name, template.language, components);
     });
+  }
+
+  /** Phase 11: send a media message (image/document/etc). UNVERIFIED — sendMedia has never been called live, same as sendText/sendTemplate. */
+  sendMediaReply(conversationId, mediaType, mediaUrl, caption) {
+    mediaType = Phase1Validation.requiredString(mediaType, 'mediaType');
+    mediaUrl = Phase1Validation.requiredString(mediaUrl, 'mediaUrl');
+    var displayText = caption || ('[Media: ' + mediaType + ']');
+    var message = this.sendOutbound_(conversationId, 'media', displayText, function (provider, number, customer) {
+      return provider.sendMedia(toE164_(number.phoneNumber), toE164_(customer.phone), mediaType, mediaUrl, caption || '');
+    });
+    this.messageMedia_.create({ id: Phase1Ids.create('media'), messageId: message.id, mediaType: mediaType, mediaUrl: mediaUrl, caption: caption || '' });
+    return message;
   }
 
   sendOutbound_(conversationId, messageType, displayText, sendFn) {

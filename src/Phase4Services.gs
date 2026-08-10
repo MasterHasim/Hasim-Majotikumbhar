@@ -30,6 +30,7 @@ class Phase4Api {
     this.customers_ = new CustomerRepository();
     this.conversations_ = new ConversationRepository();
     this.messages_ = new MessageRepository();
+    this.messageMedia_ = new MessageMediaRepository();
   }
 
   ingestInboundMessage(normalized) {
@@ -69,6 +70,9 @@ class Phase4Api {
         providerMessageId: normalized.providerMessageId, status: normalized.status || 'RECEIVED', timestamp: normalized.timestamp || now
       };
       this.messages_.create(message);
+      if (normalized.mediaUrl) {
+        this.messageMedia_.create({ id: Phase1Ids.create('media'), messageId: message.id, mediaType: normalized.messageType || 'unknown', mediaUrl: normalized.mediaUrl, caption: normalized.text || '' });
+      }
       this.conversations_.update(conversation.id, { needsResponse: true, lastMessageAt: message.timestamp });
       this.audit_.write(null, 'message.ingested', 'message', message.id, { conversationId: conversation.id, customerId: customer.id, numberId: number.id });
     } finally {
