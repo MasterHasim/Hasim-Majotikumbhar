@@ -66,6 +66,9 @@ class Phase5Api {
       } catch (deniedOrInvalid) {
         return false;
       }
+    }).map(function (conversation) {
+      var customer = self.customers_.get(conversation.customerId);
+      return Object.assign({}, conversation, { customerName: customer ? (customer.name || customer.phone) : '', customerPhone: customer ? customer.phone : '' });
     });
   }
 

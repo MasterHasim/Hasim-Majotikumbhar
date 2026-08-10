@@ -66,6 +66,7 @@ email = 'admin@example.com';
 assert.strictEqual(phase5().listMyNumbers().length, 2);
 assert.strictEqual(phase5().listConversations(numberA.id).length, 1);
 assert.strictEqual(phase5().listConversations(numberB.id).length, 1);
+assert.strictEqual(phase5().listConversations(numberA.id)[0].customerName, 'Test Customer', 'the conversation list carries the customer name, not just status, for a real inbox listing');
 const adminDetail = phase5().getConversationDetail(conversationA.id);
 assert.strictEqual(adminDetail.customer.id, customer.id);
 assert.strictEqual(adminDetail.messages.length, 1);

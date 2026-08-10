@@ -40,30 +40,43 @@
     .list-item .subtitle { color: #5f6368; font-size: 12px; margin-top: 2px; }
     .empty { padding: 16px; color: #5f6368; }
     .detail-header { padding: 12px 16px; border-bottom: 1px solid #e0e0e0; }
-    .detail-header h2 { margin: 0 0 4px; font-size: 16px; }
-    .detail-header .meta { color: #5f6368; font-size: 12px; }
+    .detail-header h2 { margin: 0 0 6px; font-size: 16px; }
+    .detail-header .meta { color: #5f6368; font-size: 12px; margin-bottom: 8px; }
+    .detail-header .pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; background: #f1f3f4; color: #3c4043; margin-right: 4px; }
+    .detail-header .pill.status-OPEN { background: #e6f4ea; color: #1e7e34; }
+    .detail-header .pill.status-CLOSED { background: #f1f3f4; color: #5f6368; }
+    .detail-header .actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
     .messages { flex: 1; overflow-y: auto; padding: 16px; }
-    .message { max-width: 70%; margin-bottom: 10px; padding: 8px 12px; border-radius: 8px; }
-    .message.INBOUND { background: #fff; border: 1px solid #e0e0e0; margin-right: auto; }
-    .message.OUTBOUND { background: #d9fdd3; margin-left: auto; }
+    .message { max-width: 70%; margin-bottom: 10px; padding: 8px 12px; border-radius: 10px; }
+    .message.INBOUND { background: #fff; border: 1px solid #e0e0e0; margin-right: auto; border-bottom-left-radius: 2px; }
+    .message.OUTBOUND { background: #d9fdd3; margin-left: auto; border-bottom-right-radius: 2px; }
     .message.FAILED { background: #fce8e6; border: 1px solid #f28b82; }
+    .message .sender { font-size: 11px; font-weight: 700; color: #1a73e8; margin-bottom: 2px; }
     .message .text { white-space: pre-wrap; }
     .message .time { color: #5f6368; font-size: 11px; margin-top: 4px; }
+    .message .media-image { max-width: 100%; border-radius: 6px; display: block; margin-bottom: 6px; cursor: pointer; }
+    .message .media-link { display: flex; align-items: center; gap: 6px; padding: 6px 8px; margin-bottom: 6px; background: rgba(0,0,0,.04); border-radius: 6px; color: inherit; text-decoration: none; font-size: 12px; }
+    .message .media-link .media-icon { font-size: 16px; }
     .compose { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid #e0e0e0; }
     .compose textarea { flex: 1; resize: none; padding: 8px; font-family: inherit; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; }
     .compose button { padding: 0 18px; border: none; border-radius: 4px; background: #1a73e8; color: #fff; cursor: pointer; }
     .compose button:disabled { background: #9aa0a6; cursor: default; }
     .compose-error { color: #d93025; font-size: 12px; padding: 0 16px 8px; }
     .compose select { max-width: 140px; padding: 0 6px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; }
-    .stage-select { margin-top: 6px; padding: 4px 6px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; }
-    .remarks { background: #fff8e1; border-bottom: 1px solid #e0e0e0; padding: 10px 16px; }
-    .remarks-title { font-weight: 600; font-size: 12px; color: #5f6368; margin-bottom: 6px; }
+    .stage-select { padding: 4px 6px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; }
+    .side-panel { border-top: 1px solid #e0e0e0; flex-shrink: 0; }
+    .side-panel summary { list-style: none; cursor: pointer; padding: 8px 16px; font-weight: 600; font-size: 12px; color: #5f6368; display: flex; align-items: center; justify-content: space-between; }
+    .side-panel summary::-webkit-details-marker { display: none; }
+    .side-panel summary::after { content: '▸'; transition: transform .15s ease; color: #9aa0a6; }
+    .side-panel[open] summary::after { transform: rotate(90deg); }
+    .side-panel.remarks[open] { background: #fffdf5; }
+    .side-panel.reminders[open] { background: #f6f9fe; }
+    .side-panel-body { padding: 0 16px 12px; }
     .remark { font-size: 13px; margin-bottom: 6px; }
     .remark .remark-meta { color: #5f6368; font-size: 11px; }
     .remark-add { display: flex; gap: 6px; margin-top: 6px; }
     .remark-add input { flex: 1; padding: 5px 8px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; }
     .remark-add button { padding: 0 12px; border: none; border-radius: 4px; background: #5f6368; color: #fff; cursor: pointer; font-size: 12px; }
-    .reminders { background: #e8f0fe; border-bottom: 1px solid #e0e0e0; padding: 10px 16px; }
     .reminder { font-size: 13px; margin-bottom: 6px; display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
     .reminder .reminder-due { color: #5f6368; font-size: 11px; }
     .reminder button { border: none; background: none; color: #1a73e8; cursor: pointer; font-size: 11px; padding: 0; }
@@ -71,7 +84,8 @@
     .reminder-add input[type="text"] { flex: 1; min-width: 120px; padding: 5px 8px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; }
     .reminder-add input[type="datetime-local"] { padding: 4px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; }
     .reminder-add button { padding: 0 12px; border: none; border-radius: 4px; background: #1a73e8; color: #fff; cursor: pointer; font-size: 12px; }
-    .snooze-btn { margin-top: 6px; margin-left: 8px; padding: 4px 10px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; background: #fff; cursor: pointer; }
+    .action-btn { padding: 4px 10px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; background: #fff; cursor: pointer; }
+    .action-btn.primary { background: #1a73e8; border-color: #1a73e8; color: #fff; }
     .snooze-banner { background: #fef7e0; padding: 6px 16px; font-size: 12px; color: #7a5900; }
     .badge { display: inline-block; min-width: 16px; padding: 0 5px; border-radius: 9px; background: #d93025; color: #fff; font-size: 10px; text-align: center; margin-left: 6px; }
     .filter-bar { padding: 8px 10px; border-bottom: 1px solid #e0e0e0; }
@@ -259,30 +273,50 @@
       google.script.run.withSuccessHandler(renderWorkspace).withFailureHandler(renderError('detailContent')).getConversationWorkspace(selectedConversationId);
     }
 
+    function renderMessageMedia(media) {
+      if (!media || !media.mediaUrl) return '';
+      if (media.mediaType === 'image') {
+        return '<a href="' + escapeHtml(media.mediaUrl) + '" target="_blank"><img class="media-image" src="' + escapeHtml(media.mediaUrl) + '" alt="Image attachment"></a>';
+      }
+      var icons = { video: '🎬', audio: '🎵', document: '📄' };
+      var icon = icons[media.mediaType] || '📎';
+      return '<a class="media-link" href="' + escapeHtml(media.mediaUrl) + '" target="_blank"><span class="media-icon">' + icon + '</span><span>Open ' + escapeHtml(media.mediaType) + '</span></a>';
+    }
+
+    function renderMessage(message) {
+      var senderHtml = (message.direction === 'OUTBOUND' && message.senderName) ? '<div class="sender">' + escapeHtml(message.senderName) + '</div>' : '';
+      var mediaHtml = renderMessageMedia(message.media);
+      // A media message's own text is usually just the caption (or a placeholder if
+      // there's no caption) — skip repeating it under an already-visible attachment.
+      var textHtml = (message.media && message.media.mediaUrl)
+        ? (message.media.caption ? '<div class="text">' + escapeHtml(message.media.caption) + '</div>' : '')
+        : '<div class="text">' + escapeHtml(message.messageText) + '</div>';
+      return '<div class="message ' + escapeHtml(message.direction) + ' ' + escapeHtml(message.status === 'FAILED' ? 'FAILED' : '') + '">' +
+        senderHtml + mediaHtml + textHtml +
+        '<div class="time">' + escapeHtml(message.timestamp) + (message.status === 'FAILED' ? ' • Failed to send' : '') + '</div></div>';
+    }
+
     function renderWorkspace(workspace) {
-      var detail = workspace; // {conversation, customer, number, messages, stage, remarks, reminders, snoozeStatus, assignableUsers}
+      var detail = workspace; // {conversation, customer, number, messages, assignedUserName, stage, remarks, reminders, snoozeStatus, assignableUsers}
       selectedCustomerId = detail.customer && detail.customer.id;
       var customerName = (detail.customer && detail.customer.name) || (detail.customer && detail.customer.phone) || 'Unknown customer';
-      var messagesHtml = detail.messages.map(function (message) {
-        return '<div class="message ' + escapeHtml(message.direction) + ' ' + escapeHtml(message.status === 'FAILED' ? 'FAILED' : '') + '">' +
-          '<div class="text">' + escapeHtml(message.messageText) + '</div>' +
-          '<div class="time">' + escapeHtml(message.timestamp) + (message.status === 'FAILED' ? ' • Failed to send' : '') + '</div></div>';
-      }).join('');
+      var messagesHtml = detail.messages.map(renderMessage).join('');
       var isClosed = detail.conversation.status === 'CLOSED';
 
       document.getElementById('detailContent').innerHTML =
         '<div class="detail-header"><h2>' + escapeHtml(customerName) + '</h2>' +
-        '<div class="meta">' + escapeHtml(detail.customer && detail.customer.phone) + ' • ' + escapeHtml(detail.number && detail.number.displayName) +
-        ' • Assigned: ' + escapeHtml(detail.conversation.assignedUserId || 'Unassigned') +
-        ' • Status: ' + escapeHtml(detail.conversation.status) + '</div>' +
-        '<select class="stage-select" id="stageSelect" onchange="changeStage()"><option value="">Stage: (loading…)</option></select>' +
-        '<button class="snooze-btn" id="snoozeBtn" onclick="toggleSnooze()">Snooze…</button>' +
-        '<button class="snooze-btn" id="reassignBtn" style="display:none;" onclick="toggleReassign()">Reassign…</button>' +
-        (isClosed ? '' : '<button class="snooze-btn" id="resolveBtn" onclick="resolveCurrentConversation()">Resolve</button>') +
+        '<div class="meta">' + escapeHtml(detail.customer && detail.customer.phone) + ' • ' + escapeHtml(detail.number && detail.number.displayName) + '</div>' +
+        '<div class="meta">' +
+        '<span class="pill status-' + escapeHtml(detail.conversation.status) + '">' + escapeHtml(detail.conversation.status) + '</span>' +
+        '<span class="pill">' + (detail.assignedUserName ? escapeHtml(detail.assignedUserName) : 'Unassigned') + '</span>' +
         '</div>' +
+        '<div class="actions">' +
+        '<select class="stage-select" id="stageSelect" onchange="changeStage()"><option value="">Stage: (loading…)</option></select>' +
+        '<button class="action-btn" id="snoozeBtn" onclick="toggleSnooze()">Snooze…</button>' +
+        '<button class="action-btn" id="reassignBtn" style="display:none;" onclick="toggleReassign()">Reassign…</button>' +
+        (isClosed ? '' : '<button class="action-btn primary" id="resolveBtn" onclick="resolveCurrentConversation()">Resolve</button>') +
+        '</div></div>' +
         '<div id="snoozeBanner"></div>' +
-        '<div class="remarks" id="remarksPane"><div class="remarks-title">Internal remarks (never sent to WhatsApp)</div><div class="empty">Loading…</div></div>' +
-        '<div class="reminders" id="remindersPane"><div class="remarks-title">Reminders</div><div class="empty">Loading…</div></div>' +
         '<div class="messages" id="messagesList">' + (messagesHtml || '<div class="empty">No messages yet</div>') + '</div>' +
         '<div class="compose-error" id="composeError"></div>' +
         '<div class="compose">' +
@@ -292,7 +326,9 @@
         '<select id="templateSelect"><option value="">Template…</option></select>' +
         '<button id="templateSend" onclick="sendCurrentTemplate()">Send Template</button>' +
         '<button id="mediaSend" onclick="sendCurrentMedia()">Media…</button>' +
-        '</div>';
+        '</div>' +
+        '<details class="side-panel remarks" id="remarksPane"><summary title="Internal notes — never sent to WhatsApp">Internal remarks</summary><div class="side-panel-body"><div class="empty">Loading…</div></div></details>' +
+        '<details class="side-panel reminders" id="remindersPane"><summary>Reminders</summary><div class="side-panel-body"><div class="empty">Loading…</div></div></details>';
 
       var messagesList = document.getElementById('messagesList');
       messagesList.scrollTop = messagesList.scrollHeight;
@@ -446,11 +482,12 @@
       if (reminders === null) { pane.style.display = 'none'; return; } // no reminder view access — hide rather than show an error
       pane.style.display = '';
       var pending = reminders.filter(function (r) { return r.status === 'PENDING'; });
+      pane.querySelector('summary').textContent = 'Reminders' + (pending.length ? ' (' + pending.length + ')' : '');
       var listHtml = pending.map(function (reminder) {
         return '<div class="reminder"><span>' + escapeHtml(reminder.text) + '<div class="reminder-due">Due ' + escapeHtml(reminder.dueAt) + '</div></span>' +
           '<button onclick="completeReminder(\'' + reminder.id + '\')">Done</button></div>';
       }).join('') || '<div class="empty">No pending reminders</div>';
-      pane.innerHTML = '<div class="remarks-title">Reminders</div>' + listHtml +
+      pane.querySelector('.side-panel-body').innerHTML = listHtml +
         '<div class="reminder-add"><input type="text" id="reminderText" placeholder="Reminder text…">' +
         '<input type="datetime-local" id="reminderDue">' +
         '<button onclick="addCurrentReminder()">Add</button></div>';
@@ -496,10 +533,11 @@
       if (!pane) return;
       if (remarks === null) { pane.style.display = 'none'; return; } // e.g. VIEWER has no remarks access — hide rather than show an error here
       pane.style.display = '';
+      pane.querySelector('summary').textContent = 'Internal remarks' + (remarks.length ? ' (' + remarks.length + ')' : '');
       var listHtml = remarks.map(function (remark) {
         return '<div class="remark">' + escapeHtml(remark.text) + '<div class="remark-meta">' + escapeHtml(remark.createdAt) + '</div></div>';
       }).join('') || '<div class="empty">No remarks yet</div>';
-      pane.innerHTML = '<div class="remarks-title">Internal remarks (never sent to WhatsApp)</div>' + listHtml +
+      pane.querySelector('.side-panel-body').innerHTML = listHtml +
         '<div class="remark-add"><input id="remarkText" placeholder="Add a remark…" onkeydown="if(event.key===\'Enter\')addCurrentRemark();">' +
         '<button onclick="addCurrentRemark()">Add</button></div>';
     }

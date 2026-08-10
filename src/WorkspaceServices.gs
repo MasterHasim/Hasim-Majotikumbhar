@@ -21,11 +21,17 @@ class WorkspaceApi {
     this.phase7_ = new Phase7Api();
     this.phase8_ = new Phase8Api();
     this.phase9_ = new Phase9Api();
+    this.repository_ = new PropertiesRepository();
+    this.messageMedia_ = new MessageMediaRepository();
   }
 
   getConversationWorkspace(conversationId) {
     var detail = this.phase5_.getConversationDetail(conversationId);
-    var workspace = { conversation: detail.conversation, customer: detail.customer, number: detail.number, messages: detail.messages };
+    var assignedUser = detail.conversation.assignedUserId ? this.repository_.get('users', detail.conversation.assignedUserId) : null;
+    var workspace = {
+      conversation: detail.conversation, customer: detail.customer, number: detail.number,
+      messages: this.enrichMessages_(detail.messages), assignedUserName: assignedUser ? assignedUser.displayName : null
+    };
 
     try { workspace.stage = this.phase8_.getCustomerStage(detail.customer.id); } catch (ignored) { workspace.stage = null; }
     try { workspace.remarks = this.phase8_.listRemarks(conversationId); } catch (ignored) { workspace.remarks = null; }
@@ -34,5 +40,31 @@ class WorkspaceApi {
     try { workspace.assignableUsers = this.phase7_.listAssignableUsers(detail.conversation.numberId); } catch (ignored) { workspace.assignableUsers = []; }
 
     return workspace;
+  }
+
+  /** Adds senderName (who actually sent an OUTBOUND message — "Rahul replied at 2:41 PM," per the roadmap) and media (image/document/etc, if any) to each message, so the client renders both without extra round-trips. */
+  enrichMessages_(messages) {
+    var repository = this.repository_;
+    var userNameCache = {};
+    var mediaByMessageId = {};
+    var messageIds = {};
+    messages.forEach(function (m) { messageIds[m.id] = true; });
+    this.messageMedia_.list().forEach(function (media) { if (messageIds[media.messageId]) mediaByMessageId[media.messageId] = media; });
+
+    return messages.map(function (message) {
+      var senderName = null;
+      if (message.senderUserId) {
+        if (!(message.senderUserId in userNameCache)) {
+          var user = repository.get('users', message.senderUserId);
+          userNameCache[message.senderUserId] = user ? user.displayName : null;
+        }
+        senderName = userNameCache[message.senderUserId];
+      }
+      var media = mediaByMessageId[message.id];
+      return Object.assign({}, message, {
+        senderName: senderName,
+        media: media ? { mediaType: media.mediaType, mediaUrl: media.mediaUrl, caption: media.caption } : null
+      });
+    });
   }
 }

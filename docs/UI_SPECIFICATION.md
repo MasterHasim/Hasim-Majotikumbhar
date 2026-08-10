@@ -212,6 +212,36 @@ Admin Panel and Reports links live on the landing screen header only (not repeat
 the workspace) — they're one click away via "Switch number," and duplicating them in
 the workspace header would add clutter for a rarely-used pair of links.
 
+## Inbox polish (2026-08-10, user-directed, after live-testing the deployed panel)
+
+Prompted by real screenshots the user shared of the live workspace pane, a handful of
+real gaps got fixed in the same pass as each other:
+
+- **Conversation list showed "OPEN" instead of a name.** `Phase5Api.listConversations`/
+  `listConversationsAllStatuses` now return `customerName`/`customerPhone` per
+  conversation (the default list's `renderConversations` already supported this field
+  when present — Phase 13's search results always had it — it just wasn't populated on
+  the default, unfiltered path until now).
+- **Nobody could tell who sent a reply.** The roadmap's own requirement ("Rahul
+  replied at 2:41 PM," not just "Agent replied") was in the data (`Messages.senderUserId`)
+  but never surfaced. `WorkspaceApi` now resolves it to `senderName` per message and
+  `assignedUserName` for the conversation; outbound bubbles show a small sender label,
+  and the header's "Unassigned" pill now shows the actual assignee's name.
+- **Media messages showed literal `"[Media: image]"` text**, never the actual
+  attachment. `WorkspaceApi` now joins `Message_Media` onto each message; the client
+  renders an inline `<img>` for images and an icon + "Open <type>" link for
+  video/audio/document, with the caption (if any) shown once, not duplicated.
+- **Remarks/Reminders permanently occupied the top of the pane**, pushing the message
+  thread and compose box below the fold on any conversation with a couple of remarks
+  or reminders. Both are now `<details>`/`<summary>` collapsible sections
+  (`.side-panel`), moved *below* the compose box, collapsed by default with a count in
+  the summary (e.g. "Internal remarks (2)") — the chat thread and reply box are always
+  visible without scrolling now.
+- Smaller visual pass: the header's status/assignment became small pills instead of a
+  plain text line, action buttons (`Snooze…`/`Reassign…`/`Resolve`) got consistent
+  `.action-btn` styling with `Resolve` as the one primary/filled action, and message
+  bubbles got a WhatsApp-style asymmetric corner radius.
+
 ## Deliberately not yet in the UI
 
 No push/email notifications (Phase 13's own scoping decision — see above). No manual

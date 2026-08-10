@@ -266,6 +266,8 @@ reviewing the deployed system:
   `REPORTS_VIEW` flat/org-wide; see `memory/DECISIONS.md` for both the original
   reasoning and the reversal.
 
+**Workspace enrichment (2026-08-10, user-directed inbox polish)**: `WorkspaceApi.getConversationWorkspace` now also returns `assignedUserName` (resolved from `Conversations.assignedUserId`) and, per message, `senderName` (resolved from `Messages.senderUserId` — the roadmap's "Rahul replied at 2:41 PM," not just an opaque ID) and `media` (`{mediaType, mediaUrl, caption}` joined from `Message_Media`, or `null`). `Phase5Api.listConversations`/`listConversationsAllStatuses` now also return `customerName`/`customerPhone` per conversation (same enrichment `Phase13Api.searchConversations` already did, now applied at the source so the default conversation list shows the customer's name instead of just its status). No schema changes — all joins against existing tables, computed at read time.
+
 Also new: **`WorkspaceApi.getConversationWorkspace(conversationId)`**
 (`src/WorkspaceServices.gs`) — a pure performance aggregator, not a new phase or new
 authorization concept. It composes `Phase5Api.getConversationDetail` +

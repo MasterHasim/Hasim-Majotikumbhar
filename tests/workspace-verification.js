@@ -49,7 +49,9 @@ const viewer = phase1().createUser({ email: 'viewer@example.com', displayName: '
 const number = new NumberRepository().create({ id: 'number_1', displayName: 'Sales 1', phoneNumber: '079-1', provider: 'exotel', providerAccountId: '', wabaId: '', providerNumberId: '', active: true, createdAt: '', updatedAt: '' });
 const customer = new CustomerRepository().create({ id: 'customer_1', phone: '+919999999999', name: 'Test Customer', email: '', company: '', source: 'whatsapp', createdAt: '', updatedAt: '' });
 const conversation = new ConversationRepository().create({ id: 'conversation_1', customerId: customer.id, numberId: number.id, assignedUserId: agent.id, status: 'OPEN', needsResponse: true, lastMessageAt: '', createdAt: '', updatedAt: '' });
-new MessageRepository().create({ id: 'message_1', conversationId: conversation.id, numberId: number.id, senderUserId: '', direction: 'INBOUND', messageType: 'text', messageText: 'Hi', providerMessageId: 'wamid.1', status: 'RECEIVED', timestamp: '' });
+new MessageRepository().create({ id: 'message_1', conversationId: conversation.id, numberId: number.id, senderUserId: '', direction: 'INBOUND', messageType: 'text', messageText: 'Hi', providerMessageId: 'wamid.1', status: 'RECEIVED', timestamp: '2026-08-10T09:00:00.000Z' });
+new MessageRepository().create({ id: 'message_2', conversationId: conversation.id, numberId: number.id, senderUserId: agent.id, direction: 'OUTBOUND', messageType: 'media', messageText: 'A photo', providerMessageId: '', status: 'SENT', timestamp: '2026-08-10T09:05:00.000Z' });
+new MessageMediaRepository().create({ id: 'media_1', messageId: 'message_2', mediaType: 'image', mediaUrl: 'https://example.com/photo.jpg', caption: 'A photo' });
 
 phase1().grantNumberAccess({ userId: agent.id, numberId: number.id });
 phase1().grantNumberAccess({ userId: viewer.id, numberId: number.id });
@@ -67,12 +69,19 @@ const full = workspace().getConversationWorkspace(conversation.id);
 assert.strictEqual(full.conversation.id, conversation.id);
 assert.strictEqual(full.customer.id, customer.id);
 assert.strictEqual(full.number.id, number.id);
-assert.strictEqual(full.messages.length, 1);
+assert.strictEqual(full.assignedUserName, 'Agent');
+assert.strictEqual(full.messages.length, 2);
 assert.strictEqual(full.stage.stageId, wonStage.id);
 assert.strictEqual(full.remarks.length, 1);
 assert.strictEqual(full.reminders.length, 1);
 assert.deepStrictEqual(full.snoozeStatus, { snoozed: false });
 assert.ok(Array.isArray(full.assignableUsers));
+
+// Messages carry who actually sent them (roadmap: "Rahul replied," not just "Agent replied") and any attached media.
+assert.strictEqual(full.messages[0].senderName, null, 'inbound messages have no senderUserId, so no sender name');
+assert.strictEqual(full.messages[1].senderName, 'Agent');
+assert.strictEqual(full.messages[0].media, null, 'a plain text message has no media');
+assert.deepStrictEqual(full.messages[1].media, { mediaType: 'image', mediaUrl: 'https://example.com/photo.jpg', caption: 'A photo' });
 
 // A VIEWER: remarks/reminders come back null (no access), not an error for the whole call.
 email = 'viewer@example.com';
