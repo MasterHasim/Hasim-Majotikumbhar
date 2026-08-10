@@ -98,4 +98,15 @@ const failed = phase6().sendReply(conversation.id, 'This will fail');
 assert.strictEqual(failed.status, 'FAILED');
 assert.strictEqual(new ConversationRepository().get(conversation.id).needsResponse, true);
 
+// resolveConversation: same authorization tier as reply — assigned AGENT or ADMIN.
+email = 'other-agent@example.com';
+assert.throws(() => phase6().resolveConversation(conversation.id), error => error.code === 'FORBIDDEN');
+email = 'viewer@example.com';
+assert.throws(() => phase6().resolveConversation(conversation.id), error => error.code === 'FORBIDDEN');
+
+email = 'agent@example.com';
+const resolved = phase6().resolveConversation(conversation.id);
+assert.strictEqual(resolved.status, 'CLOSED');
+assert.strictEqual(new ConversationRepository().get(conversation.id).status, 'CLOSED');
+
 console.log('Phase 6 reply verification: PASS');

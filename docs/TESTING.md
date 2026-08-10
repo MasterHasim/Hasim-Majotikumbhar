@@ -65,8 +65,15 @@ exclusion under real concurrent webhook calls can only be verified live, against
 real Apps Script runtime, which no phase has done. This is a standing limitation, not
 a gap introduced by Phase 16.
 
-### Known gap: no conversation close/resolve workflow
+### Post-Phase-18 additions
 
-Flagged already in Phase 14's notes (`memory/DECISIONS.md`, `PROGRESS.md`) — there is
-nothing to test here because the feature doesn't exist yet. Not a Phase 16 finding,
-just noted for completeness.
+`tests/phase6-reply-verification.js` gained coverage for `resolveConversation`
+(assigned AGENT/ADMIN allowed, others denied). `tests/phase5-inbox-verification.js`
+gained coverage for a resolved conversation leaving `listConversations()` but still
+appearing in `listConversationsAllStatuses()`. `tests/phase13-search-notifications-verification.js`
+gained coverage for the same default-excludes-CLOSED-unless-requested behavior in
+search. `tests/phase14-dashboard-verification.js` gained a scoped-user scenario
+(a SUPERVISOR granted access to a number with zero data sees an empty dashboard even
+though the org has real data elsewhere). `tests/workspace-verification.js` (new)
+covers `WorkspaceApi.getConversationWorkspace`'s aggregation and its per-field
+hide-on-denied behavior for a role with partial access.

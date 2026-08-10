@@ -1,18 +1,19 @@
 /**
  * Phase 14 Dashboard & Analytics. Gated on `REPORTS_VIEW` — a permission Phase 1
  * already defined (SUPERVISOR, SITE_MANAGER, VIEWER, and ADMIN all have it; AGENT does
- * not) but nothing used until now. It's a flat, non-team-scoped permission in Phase 1's
- * existing model — a SUPERVISOR/SITE_MANAGER with `REPORTS_VIEW` sees org-wide metrics,
- * not just their own team's, matching the permission as already defined rather than
- * inventing a team-scoped variant unprompted (see memory/DECISIONS.md; rule #12 says
- * not to redesign previously approved authorization without approval).
+ * not) but nothing used until Phase 14.
+ *
+ * Scoping (2026-08-10, per explicit user decision — see memory/DECISIONS.md):
+ * metrics are scoped to the numbers the signed-in user actually has access to —
+ * ADMIN sees everything; SUPERVISOR/SITE_MANAGER/VIEWER see only their
+ * admin-granted numbers, same exact scoping `Phase5Api.listMyNumbers()` already
+ * enforces for the inbox. Reused directly rather than re-implemented here.
  *
  * All metrics are computed from existing entities — no new columns, no new tabs.
  *
- * "Resolved" conversations always report as 0: no phase has ever added a way to close
- * a conversation (`Conversations.status` is only ever written as `'OPEN'`, by Phase 4).
- * Rather than invent a close/resolve workflow under an analytics phase, this reports
- * the gap honestly and flags it in PROGRESS.md for the user to decide on.
+ * "Resolved" now reflects real data: `Phase6Api.resolveConversation` (added
+ * 2026-08-10, per explicit user decision) is the first writer of
+ * `Conversations.status: 'CLOSED'`.
  *
  * Template usage is parsed from `Messages.messageText`'s `"[Template: name]"` marker
  * (set by Phase6Api.sendTemplateReply) since `Messages` has no `templateId` column and
@@ -24,7 +25,7 @@ class Phase14Api {
     this.repository_ = new PropertiesRepository();
     this.audit_ = new AuditLogService(this.repository_);
     this.access_ = new AccessControl(this.repository_, new AuthService(this.audit_), this.audit_);
-    this.numbers_ = new NumberRepository();
+    this.phase5_ = new Phase5Api();
     this.conversations_ = new ConversationRepository();
     this.messages_ = new MessageRepository();
     this.customerStages_ = new CustomerStageRepository();
@@ -33,10 +34,14 @@ class Phase14Api {
 
   getDashboardMetrics() {
     this.access_.require(Phase1Permissions.REPORTS_VIEW);
-    var numbers = this.numbers_.list();
-    var conversations = this.conversations_.list();
-    var messages = this.messages_.list();
-    var users = this.repository_.list('users');
+    var numbers = this.phase5_.listMyNumbers(); // ADMIN: every number; else: only admin-granted numbers
+    var numberIds = {};
+    numbers.forEach(function (n) { numberIds[n.id] = true; });
+
+    var conversations = this.conversations_.list().filter(function (c) { return numberIds[c.numberId]; });
+    var messages = this.messages_.list().filter(function (m) { return numberIds[m.numberId]; });
+    var customerIds = {};
+    conversations.forEach(function (c) { customerIds[c.customerId] = true; });
 
     var summarize = function (list) {
       return {
@@ -53,19 +58,27 @@ class Phase14Api {
       return Object.assign({ numberId: number.id, displayName: number.displayName }, summarize(forNumber));
     });
 
-    var byAgent = users.filter(function (u) { return u.status === Phase1Constants.ACTIVE; }).map(function (user) {
-      var assigned = conversations.filter(function (c) { return c.assignedUserId === user.id; });
-      return { userId: user.id, displayName: user.displayName, open: assigned.filter(function (c) { return c.status === 'OPEN'; }).length, needsResponse: assigned.filter(function (c) { return c.status === 'OPEN' && c.needsResponse === true; }).length };
-    }).filter(function (row) { return row.open > 0 || row.needsResponse > 0; });
+    var self = this;
+    var byAgentMap = {};
+    conversations.forEach(function (c) {
+      if (!c.assignedUserId || c.status !== 'OPEN') return;
+      if (!byAgentMap[c.assignedUserId]) byAgentMap[c.assignedUserId] = { open: 0, needsResponse: 0 };
+      byAgentMap[c.assignedUserId].open++;
+      if (c.needsResponse) byAgentMap[c.assignedUserId].needsResponse++;
+    });
+    var byAgent = Object.keys(byAgentMap).map(function (userId) {
+      var user = self.repository_.get('users', userId);
+      return { userId: userId, displayName: user ? user.displayName : userId, open: byAgentMap[userId].open, needsResponse: byAgentMap[userId].needsResponse };
+    });
 
     return {
       conversations: summarize(conversations),
       byNumber: byNumber,
       byAgent: byAgent,
       responseTime: this.computeResponseTime_(conversations, messages),
-      stageDistribution: this.computeStageDistribution_(),
+      stageDistribution: this.computeStageDistribution_(customerIds),
       templateUsage: this.computeTemplateUsage_(messages),
-      leadConversion: this.computeLeadConversion_()
+      leadConversion: this.computeLeadConversion_(customerIds)
     };
   }
 
@@ -87,10 +100,11 @@ class Phase14Api {
     return { averageFirstResponseMinutes: average === null ? null : Math.round(average * 10) / 10, sampleSize: samples.length };
   }
 
-  computeStageDistribution_() {
+  computeStageDistribution_(customerIds) {
     var stages = this.stages_.list();
     var byStageId = {};
-    this.customerStages_.list().forEach(function (record) { byStageId[record.stageId] = (byStageId[record.stageId] || 0) + 1; });
+    this.customerStages_.list().filter(function (record) { return customerIds[record.customerId]; })
+      .forEach(function (record) { byStageId[record.stageId] = (byStageId[record.stageId] || 0) + 1; });
     return stages.map(function (stage) { return { stageId: stage.id, name: stage.name, count: byStageId[stage.id] || 0 }; });
   }
 
@@ -105,10 +119,10 @@ class Phase14Api {
     return Object.keys(counts).map(function (name) { return { name: name, count: counts[name] }; }).sort(function (a, b) { return b.count - a.count; });
   }
 
-  computeLeadConversion_() {
+  computeLeadConversion_(customerIds) {
     var stages = this.stages_.list();
     var wonStage = stages.filter(function (s) { return s.key === 'won'; })[0];
-    var stageRecords = this.customerStages_.list();
+    var stageRecords = this.customerStages_.list().filter(function (r) { return customerIds[r.customerId]; });
     var wonCount = wonStage ? stageRecords.filter(function (r) { return r.stageId === wonStage.id; }).length : 0;
     var totalWithStage = stageRecords.length;
     return { totalCustomersWithStage: totalWithStage, wonCount: wonCount, conversionRate: totalWithStage ? Math.round((wonCount / totalWithStage) * 1000) / 10 : null };

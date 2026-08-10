@@ -1,14 +1,15 @@
 # WhatsApp Multi-Number CRM — Progress Report
 
-**Last updated:** 2026-08-10 (working autonomously overnight per user's go-ahead — see `memory/DECISIONS.md`)
+**Last updated:** 2026-08-10 (overnight autonomous run through Phase 18, then a same-day live session with you actively testing and giving direct feedback — see `memory/DECISIONS.md`)
 **Purpose:** single source of truth for "what's done, what's left, and what needs you personally." Updated after every phase/transition. See `docs/ROADMAP.md` for full phase scope, `memory/CHANGELOG.md` for full per-phase detail (this file stays intentionally brief per phase), and `memory/DECISIONS.md` for architectural reasoning.
 
 ## Action needed from you right now
 
-- **Live-verify `sendText`** (Phase 6): code is written and Node-tested, but actually calling it means sending a real WhatsApp message with real cost — deliberately not done unattended. Once you're back: open the UI, reply to a conversation, and we'll check together whether it actually reaches the recipient and what Exotel's real response shape looks like (same live-verify-and-fix pattern as every other Exotel integration point).
-- **Try the Admin Panel's Backup section** (`?page=admin` → Backup): I added two new OAuth scopes for this (Phase 15), so you'll likely see a fresh Google consent screen the first time — expected, not a bug.
-- A **real security bug was found and fixed** overnight (Phase 16 QA): `getCustomerStage` had no authorization check at all. Already fixed, tested, and deployed — nothing for you to do, just flagging it since it's the kind of thing you'd want to know about.
-- Phases 12 through 18 are all done — a full Admin Panel, search/filters, a Reports dashboard, backups, a QA pass, and deployment/Zoho planning docs, all built, tested, and deployed while you slept. **Phases 19–21 are genuinely blocked on you** (Zoho credentials, real usage data, and the roadmap's own dependency ordering) — see the bottom of this file.
+- **Media sending is still broken** — you reported it, but I need specifics to fix it blind-safely: does `sendMediaReply` error out immediately, hang, or send-but-never-arrive? If you can grab the raw request/response from Apps Script → Executions for that call and share it, I can very likely fix it in one pass (same pattern as every other Exotel field-name mismatch this project has hit).
+- **Speed should be much better now** — diagnosed the real cause (8 server round-trips per conversation open) and fixed it (down to 1). Please confirm it actually feels faster in daily use.
+- **Resolve button** is live in the inbox detail header — any assigned agent or ADMIN can use it now.
+- **Reports are now scoped** to what each Supervisor/Site Manager actually has access to, per your instruction.
+- Next up (not started yet): a card-style number/org-select landing screen before the inbox, matching the Superfone screenshot you shared — see the bottom of this file.
 - See the **full wake-up task list** at the bottom of this file for everything else queued up.
 
 ## Phase status
@@ -40,6 +41,7 @@
 
 ## Recently shipped (brief — see `memory/CHANGELOG.md` for full detail)
 
+- **Post-Phase-18 follow-up** (your direct feedback after using the live system): **Resolve** — any assigned agent or ADMIN can now mark a conversation resolved (button in the detail header); resolved conversations leave the active list but are still findable via search. **Reports are now scoped** — Supervisors/Site Managers see only numbers/data they actually have access to, not the whole org (reverses this morning's earlier decision, per your explicit instruction). **Speed** — diagnosed and fixed the real cause: opening a conversation was firing 8 separate server calls; now it's 1, plus templates/quick replies are cached instead of re-fetched every time. Declined a full database migration for now (see `memory/DECISIONS.md`) since this addressed the actual measured cause — flag it again if things are still slow after real daily use. Media sending bug is still open — **need diagnostics from you** (see task list).
 - **Phase 17/18**: Wrote `docs/DEPLOYMENT.md` (current deployment/credential/scope state against the roadmap's go-live checklist — nothing here is a code gap, "going live" is entirely your decision) and `docs/ZOHO_PHASE_2.md` (the full entity mapping the roadmap calls for, plus 5 open questions only you can answer before Zoho integration itself can start — Lead vs. Contact, what "Won" maps to, the dedupe key, your Zoho edition/customizations, and sync conflict resolution). Also appended a Phase 15/16 section to `docs/SECURITY.md` tying together the audit-coverage mapping and the `getCustomerStage` fix. **Phases 19-21 are genuinely blocked** — 19 needs real Zoho credentials, 20 needs real usage data, and 21 (final handover docs) deliberately waits on 17/19/20 per the roadmap's own "don't build out of order" rule. This is as far as I can take the roadmap unattended.
 - **Phase 16**: Systematic QA pass. Added a consolidated test runner (`node tests/run-all.js`) and a coverage matrix (`docs/TESTING.md`). **Found and fixed a real security bug**: `getCustomerStage` had no authorization check at all — any signed-in Google account could read any customer's lead stage. It's fixed now (matches `setCustomerStage`'s own access rule) and there's a permanent automated check (`authorization-sweep-verification.js`) that would catch this class of bug again on any future endpoint. This already went through the same testing/deploy/commit process as every other phase — nothing further needed from you here, just flagging that it happened since it's a security-relevant fix.
 - **Phase 15**: Confirmed audit-event coverage and secrets hygiene are already solid (no new code needed — just documented the mapping). New: backup — "Back up now" (full spreadsheet copy into Drive) and an optional daily 2am automatic backup, both in the Admin Panel's new Backup section. **Needs your live click-through** — I added two new OAuth scopes to run this (`drive.file`, `script.scriptapp`), so the next execution will show a fresh Google consent screen; see task list.
@@ -66,22 +68,26 @@
 | — | Fill in provider fields for `Spreewalk - Raipur` / `ECHT Advisory` | ⬜ Open, whenever convenient |
 | — | Remove the ngrok callback URL from all 10 numbers in Exotel | ⬜ Open, whenever convenient |
 
-## Full wake-up task list (updated as the overnight session progresses)
+## Full wake-up task list (updated as the session progresses)
 
-1. **Live-verify Phase 6 sending** — reply to a real conversation in the UI, confirm the message actually arrives, check Exotel's real response shape with me so I can fix `extractOutboundProviderMessageId_` if the field name guess is wrong (same pattern as every other Exotel field-name fix this project has needed).
-2. **Round-robin won't actually assign anyone yet on your real numbers** — the engine (Phase 7) is done and tested, but no `Number_Assignment_Config`/`Number_Assignment_Users` records exist for your real 10 numbers (nobody's configured which agents participate). **This is now easy to fix yourself**: open the Admin Panel (`?page=admin`) → Assignment Rules → pick a number → enable round robin and add participants. Until that's done, real new leads just land in the unassigned queue.
-3. **Seed the default lead stages once** — either run `seedDefaultLeadStages()` via the Apps Script editor, or click "Seed default stages" in the new Admin Panel's Lead Stages section (same effect, now with a UI) — needed before the stage dropdown in the main inbox shows anything.
-4. **Templates**: if you want to actually create/submit a real WhatsApp template, use the Admin Panel's Templates section (create draft → Submit for review, which creates it on your real WABA pending Meta review) — or run `syncTemplatesFromProvider(wabaId)` there first to pull in templates that already exist on your account (e.g. the `otp_veri_code`/`otp` ones seen live in Phase 3) rather than recreating them.
-5. **Click through the new Admin Panel** (`?page=admin` on the same Web App URL) as `hasim@echt.co.in` — it's real, tested backend logic behind a brand-new UI I could never render/click myself (no local dev server for Apps Script `HtmlService`, same limitation as every other UI phase). This is also where items 2–4 above actually get done now.
-6. **Live-verify Phase 11 media sending** — same pattern as Phase 6: use the "Media…" button in the main inbox to send a real media message, confirm it arrives, and (ideally) get a customer to send a real media message back so we can check the Apps Script Executions panel for the real inbound webhook shape and fix `extractInboundMediaUrl_` if the field-name guess is wrong — no real inbound media webhook has ever been observed, only inbound text so far.
-7. Create at least one quick reply — Admin Panel → Quick Replies — so the compose box's "Quick reply…" dropdown has something in it; it's empty until an ADMIN adds one.
-8. Fill in `Spreewalk - Raipur` / `ECHT Advisory` provider fields — now doable via Admin Panel → Numbers → Edit (optional).
-9. Remove the ngrok callback URL from Exotel (optional).
-10. **Product decision needed: should conversations ever be "resolved/closed"?** Building Phase 14's dashboard surfaced a real gap — no phase has ever added a way to mark a conversation resolved/closed; `status` has only ever been `'OPEN'`. This isn't something I should invent unattended (it's a workflow/UX decision, not a bug), but it means Phase 14's "resolved" metric will always show 0 until you decide. If you want it, tell me what "closing" should mean (who can do it — any assigned agent? admin only? — and whether a closed conversation can be reopened by a new inbound message) and I'll build it properly next time.
-11. **Reports visibility is org-wide, not team-scoped** — `REPORTS_VIEW` (Phase 1's existing permission, now used by Phase 14) is a flat permission: a SUPERVISOR/SITE_MANAGER who has it sees dashboard metrics across the *entire* org, not just their own team, since Phase 1 never defined a team-scoped variant. If you'd rather Supervisors/Site Managers only see their own team's numbers, let me know and I'll add that scoping.
-12. Check out the new **Reports** link (top of the Numbers pane in the main inbox) — conversation totals, per-agent workload, response times, stage distribution, template usage, lead conversion.
-13. **Backups (Phase 15)** — open Admin Panel → Backup. Click "Back up now" once to confirm it actually works against your real spreadsheet (I could only test this against mocks, never the real Apps Script `SpreadsheetApp`/Drive APIs). You'll likely see a **new Google consent screen** the first time — I added two OAuth scopes (`drive.file`, `script.scriptapp`) needed for backups/triggers, so that's expected, not a bug. If it looks right, click "Enable daily backups" to turn on the automatic 2am copy.
-14. **Security fix happened (Phase 16)**: `getCustomerStage` had no access check at all — any signed-in Google account could read any customer's lead stage. It's fixed and deployed already; nothing for you to do here, just flagging it since it's security-relevant. See `memory/DECISIONS.md` for the incident note.
-15. **Read `docs/DEPLOYMENT.md`** — a go-live readiness checklist. Short version: this system has effectively been live since Phase 4, there's no separate "flip to production" switch, and the only real open items are business decisions (are you ready for all agents to use this daily? when do you want round-robin fully configured?), not code gaps.
-16. **Read `docs/ZOHO_PHASE_2.md` and answer its 5 open questions** whenever you're ready to think about Zoho — Lead vs. Contact, what "Won" means in Zoho terms, the dedupe key, your Zoho edition/customizations, and sync conflict handling. Nothing is built yet (correctly — Phase 19 needs real Zoho credentials I don't have), this just means Phase 19 can start from a real plan instead of guessing.
-17. *(This list will grow as I continue — check the bottom of this file for the latest.)*
+### Open
+
+1. **Media sending is broken (you reported this) — I need diagnostics.** Open Apps Script → Executions, find the `sendMediaReply` call, and share the raw request/response (or just describe exactly what happens: error, hang, or silent no-arrival). I haven't guessed a fix blind since the request shape has always been unverified and I'd rather fix it right the first time than guess again.
+2. **Live-verify Phase 6 `sendText`** — reply to a real conversation, confirm it arrives, check Exotel's real response shape with me so I can fix `extractOutboundProviderMessageId_` if needed.
+3. **Confirm speed actually feels better** — the 8-round-trips-per-conversation issue is fixed (down to 1), but I can't feel the real UX myself; let me know if it's still slow anywhere.
+4. **Card-style number/org-select landing screen** (like your Superfone screenshot) — not started yet; next planned UI work.
+5. Create at least one quick reply — Admin Panel → Quick Replies — so the compose box's dropdown has something in it.
+6. Fill in `Spreewalk - Raipur` / `ECHT Advisory` provider fields — Admin Panel → Numbers → Edit (optional).
+7. Remove the ngrok callback URL from Exotel (optional).
+8. **Read `docs/ZOHO_PHASE_2.md` and answer its 5 open questions** whenever you're ready to think about Zoho.
+
+### Done (kept for history)
+
+- ~~Round-robin needs Assignment Rules configured~~ — done via Admin Panel.
+- ~~Seed default lead stages~~ — done.
+- ~~Real security bug (`getCustomerStage` had no auth check)~~ — found and fixed, Phase 16.
+- ~~Should conversations be resolvable?~~ — yes, any assigned agent/ADMIN; built and deployed.
+- ~~Reports org-wide vs. team-scoped?~~ — scoped to admin-granted access; built and deployed.
+- ~~Backups~~ — built; **still needs your one-time click-through** in Admin Panel → Backup to confirm it works against the real spreadsheet (new OAuth consent screen expected).
+- ~~Read `docs/DEPLOYMENT.md`~~ — go-live readiness checklist, available whenever useful.
+- *(This list will keep evolving — check the bottom of this file for the latest.)*

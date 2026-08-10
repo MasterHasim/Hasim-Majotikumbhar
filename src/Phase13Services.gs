@@ -9,9 +9,11 @@
  * memory/DECISIONS.md.
  *
  * searchConversations deliberately does not re-implement AccessControl's authorization
- * rules — it composes Phase5Api.listMyNumbers()/listConversations(), which already
- * enforce the full role/team/assignment scoping, then filters/searches within that
- * already-authorized set. This keeps exactly one place (Phase 1's AccessControl, via
+ * rules — it composes Phase5Api.listMyNumbers()/listConversationsAllStatuses(), which
+ * already enforce the full role/team/assignment scoping, then filters/searches within
+ * that already-authorized set (defaulting to OPEN-only unless a specific `status` is
+ * requested, so a resolved conversation is still findable on request — see Phase 6's
+ * resolveConversation). This keeps exactly one place (Phase 1's AccessControl, via
  * Phase 5) deciding what a user is allowed to see.
  */
 class Phase13Api {
@@ -34,11 +36,15 @@ class Phase13Api {
     var numberIds = filters.numberId ? [filters.numberId] : this.phase5_.listMyNumbers().map(function (n) { return n.id; });
     var results = [];
     numberIds.forEach(function (numberId) {
-      self.phase5_.listConversations(numberId).forEach(function (conversation) { results.push(conversation); });
+      // Sourced from every status (not just the active-inbox listConversations()) so a
+      // resolved conversation is still findable — defaulted back to OPEN-only below
+      // when the caller doesn't ask for a specific status, matching the main list's
+      // own default.
+      self.phase5_.listConversationsAllStatuses(numberId).forEach(function (conversation) { results.push(conversation); });
     });
 
     if (filters.assignedUserId) results = results.filter(function (c) { return c.assignedUserId === filters.assignedUserId; });
-    if (filters.status) results = results.filter(function (c) { return c.status === filters.status; });
+    results = filters.status ? results.filter(function (c) { return c.status === filters.status; }) : results.filter(function (c) { return c.status === 'OPEN'; });
     if (filters.needsResponse) results = results.filter(function (c) { return c.needsResponse === true; });
     if (filters.unassigned) results = results.filter(function (c) { return !c.assignedUserId; });
     if (filters.dateFrom) results = results.filter(function (c) { return (c.lastMessageAt || '') >= filters.dateFrom; });

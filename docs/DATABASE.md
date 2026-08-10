@@ -199,12 +199,11 @@ allowed to see. `searchConversations` matches `Customers.name`/`.phone` and
 No new entities. `Phase14Api` (`src/Phase14Services.gs`) computes dashboard metrics
 entirely from existing data, gated on `REPORTS_VIEW` — a permission Phase 1 already
 defined (SUPERVISOR/SITE_MANAGER/VIEWER/ADMIN have it, AGENT does not) but nothing used
-before now. `resolved` always reports `0`: `Conversations.status` has never been
-written as anything but `'OPEN'` by any phase — no close/resolve workflow exists yet
-(see `memory/DECISIONS.md`). Template usage is parsed from `Messages.messageText`'s
-`"[Template: name]"` marker rather than a `templateId` column, since `Messages` already
-has real live data and gaining a new column isn't safe (the same constraint documented
-since Phase 8).
+before now. Template usage is parsed from `Messages.messageText`'s `"[Template: name]"`
+marker rather than a `templateId` column, since `Messages` already has real live data
+and gaining a new column isn't safe (the same constraint documented since Phase 8).
+`resolved` and the scoping rules below were both later revised — see "Post-Phase-18
+follow-up" at the end of this file.
 
 # Phase 15 data contracts
 
@@ -242,3 +241,38 @@ identity to authenticate (same reasoning as Phase 4's webhook ingestion; see
 `memory/DECISIONS.md`). Requires two new OAuth scopes added to `appsscript.json`
 (`drive.file`, `script.scriptapp`) — a real manifest change that will trigger a fresh
 consent screen the next time it runs.
+
+# Post-Phase-18 follow-up (2026-08-10, user-directed)
+
+No new entities. Two real behavior changes, both from explicit user decisions after
+reviewing the deployed system:
+
+- **`Phase6Api.resolveConversation(conversationId)`** is the first writer of
+  `Conversations.status: 'CLOSED'` — any assigned AGENT or ADMIN can mark a
+  conversation resolved once they feel it's handled (same `'reply'` authorization tier
+  as `sendReply`/`sendTemplateReply`/`sendMediaReply` — no new permission invented).
+  `Phase5Api.listConversations()` now excludes `CLOSED` conversations from the active
+  inbox, same as snoozed ones; `listConversationsAllStatuses()` (new) returns every
+  status, used by `Phase13Api.searchConversations` so a resolved conversation is still
+  findable (defaults back to `OPEN`-only unless a specific `status` filter is given).
+  No explicit "reopen" — a customer's next inbound message just starts a new `OPEN`
+  conversation, since ingestion has always only ever reused a conversation with
+  `status: 'OPEN'`.
+- **`Phase14Api.getDashboardMetrics()` is now scoped**, not org-wide: it composes
+  `Phase5Api.listMyNumbers()` (ADMIN sees every number; SUPERVISOR/SITE_MANAGER/VIEWER
+  see only their admin-granted numbers) and restricts every metric — conversation
+  totals, agent workload, response time, stage distribution, template usage, lead
+  conversion — to that set. Supersedes the original Phase 14 decision to leave
+  `REPORTS_VIEW` flat/org-wide; see `memory/DECISIONS.md` for both the original
+  reasoning and the reversal.
+
+Also new: **`WorkspaceApi.getConversationWorkspace(conversationId)`**
+(`src/WorkspaceServices.gs`) — a pure performance aggregator, not a new phase or new
+authorization concept. It composes `Phase5Api.getConversationDetail` +
+`Phase8Api.getCustomerStage`/`listRemarks` + `Phase9Api.listReminders`/
+`getSnoozeStatus` + `Phase7Api.listAssignableUsers` into a single response, catching
+per-field authorization denials into `null`/`[]` rather than failing the whole call
+(same hide-on-denied UX the individual panels already had). Added because opening one
+conversation in the UI was firing 8 separate `google.script.run` round-trips — each a
+full Apps Script execution with real cold-start latency — which was the actual
+reported cause of "slow transitions," not rendering. See `memory/DECISIONS.md`.

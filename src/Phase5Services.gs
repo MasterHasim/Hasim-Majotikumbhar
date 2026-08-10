@@ -32,7 +32,17 @@ class Phase5Api {
     return this.numbers_.list().filter(function (number) { return grantedNumberIds[number.id]; });
   }
 
+  /** The active inbox: OPEN, not-currently-snoozed conversations only. */
   listConversations(numberId) {
+    return this.listConversationsInternal_(numberId, true);
+  }
+
+  /** Every conversation regardless of status (including CLOSED/resolved), same authorization. Used by Phase 13's search so a resolved conversation can still be found — not exposed as its own endpoint since nothing needs it directly yet. */
+  listConversationsAllStatuses(numberId) {
+    return this.listConversationsInternal_(numberId, false);
+  }
+
+  listConversationsInternal_(numberId, activeOnly) {
     Phase1Validation.requiredString(numberId, 'numberId');
     var actor = this.access_.currentUser();
     // Upfront gate, matching the same tamper-protection AccessControl itself enforces
@@ -44,16 +54,19 @@ class Phase5Api {
     }
     var teamId = this.access_.resolveTeamIdForNumber(numberId);
     var self = this;
-    return this.conversations_.list().filter(function (conversation) { return conversation.numberId === numberId; })
-      .filter(function (conversation) { return !isConversationSnoozed_(conversation.id); }) // Phase 9: snoozed conversations temporarily leave the active list
-      .filter(function (conversation) {
-        try {
-          self.access_.requireConversationOperation('view', { numberId: numberId, teamId: teamId, assignedUserId: conversation.assignedUserId });
-          return true;
-        } catch (deniedOrInvalid) {
-          return false;
-        }
-      });
+    var results = this.conversations_.list().filter(function (conversation) { return conversation.numberId === numberId; });
+    if (activeOnly) {
+      results = results.filter(function (conversation) { return conversation.status === 'OPEN'; }) // resolved conversations (Phase6Api.resolveConversation) leave the active list, same as snoozed
+        .filter(function (conversation) { return !isConversationSnoozed_(conversation.id); }); // Phase 9: snoozed conversations temporarily leave the active list
+    }
+    return results.filter(function (conversation) {
+      try {
+        self.access_.requireConversationOperation('view', { numberId: numberId, teamId: teamId, assignedUserId: conversation.assignedUserId });
+        return true;
+      } catch (deniedOrInvalid) {
+        return false;
+      }
+    });
   }
 
   getConversationDetail(conversationId) {

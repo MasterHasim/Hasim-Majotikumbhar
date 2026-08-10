@@ -92,4 +92,13 @@ assert.strictEqual(phase5().listConversations(numberB.id).length, 1);
 // ...but not a number they have no team/number-access relationship to at all.
 assert.throws(() => phase5().listConversations(numberA.id), error => error.code === 'FORBIDDEN');
 
+// A resolved (CLOSED) conversation leaves the active list, same as a snoozed one, but
+// is still findable via listConversationsAllStatuses (used by Phase 13's search).
+email = 'admin@example.com';
+new ConversationRepository().update(conversationA.id, { status: 'CLOSED' });
+assert.strictEqual(phase5().listConversations(numberA.id).length, 0);
+assert.strictEqual(phase5().listConversationsAllStatuses(numberA.id).length, 1);
+assert.strictEqual(phase5().listConversationsAllStatuses(numberA.id)[0].status, 'CLOSED');
+new ConversationRepository().update(conversationA.id, { status: 'OPEN' });
+
 console.log('Phase 5 inbox verification: PASS');

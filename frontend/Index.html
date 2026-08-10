@@ -100,6 +100,8 @@
     var selectedConversationId = null;
     var selectedCustomerId = null;
     var cachedStages = null;
+    var cachedTemplates = null;
+    var cachedQuickReplies = null;
 
     function escapeHtml(value) {
       return String(value == null ? '' : value).replace(/[&<>"']/g, function (c) {
@@ -194,14 +196,19 @@
       selectedConversationId = conversationId;
       document.querySelectorAll('#conversationsList .list-item').forEach(function (el) { el.classList.toggle('active', el.dataset.id === conversationId); });
       document.getElementById('detailContent').innerHTML = '<div class="empty">Loading…</div>';
-      loadDetail();
+      loadWorkspace();
     }
 
-    function loadDetail() {
-      google.script.run.withSuccessHandler(renderDetail).withFailureHandler(renderError('detailContent')).getConversationDetail(selectedConversationId);
+    // Single round trip for everything the detail pane needs (WorkspaceApi,
+    // src/WorkspaceServices.gs) — this used to be 8 separate google.script.run calls,
+    // each its own Apps Script execution with real cold-start overhead, which was the
+    // actual cause of the reported slowness (not rendering/animation).
+    function loadWorkspace() {
+      google.script.run.withSuccessHandler(renderWorkspace).withFailureHandler(renderError('detailContent')).getConversationWorkspace(selectedConversationId);
     }
 
-    function renderDetail(detail) {
+    function renderWorkspace(workspace) {
+      var detail = workspace; // {conversation, customer, number, messages, stage, remarks, reminders, snoozeStatus, assignableUsers}
       selectedCustomerId = detail.customer && detail.customer.id;
       var customerName = (detail.customer && detail.customer.name) || (detail.customer && detail.customer.phone) || 'Unknown customer';
       var messagesHtml = detail.messages.map(function (message) {
@@ -209,6 +216,7 @@
           '<div class="text">' + escapeHtml(message.messageText) + '</div>' +
           '<div class="time">' + escapeHtml(message.timestamp) + (message.status === 'FAILED' ? ' • Failed to send' : '') + '</div></div>';
       }).join('');
+      var isClosed = detail.conversation.status === 'CLOSED';
 
       document.getElementById('detailContent').innerHTML =
         '<div class="detail-header"><h2>' + escapeHtml(customerName) + '</h2>' +
@@ -217,7 +225,8 @@
         ' • Status: ' + escapeHtml(detail.conversation.status) + '</div>' +
         '<select class="stage-select" id="stageSelect" onchange="changeStage()"><option value="">Stage: (loading…)</option></select>' +
         '<button class="snooze-btn" id="snoozeBtn" onclick="toggleSnooze()">Snooze…</button>' +
-        '<button class="snooze-btn" id="reassignBtn" onclick="toggleReassign()" style="display:none;">Reassign…</button>' +
+        '<button class="snooze-btn" id="reassignBtn" style="display:none;" onclick="toggleReassign()">Reassign…</button>' +
+        (isClosed ? '' : '<button class="snooze-btn" id="resolveBtn" onclick="resolveCurrentConversation()">Resolve</button>') +
         '</div>' +
         '<div id="snoozeBanner"></div>' +
         '<div class="remarks" id="remarksPane"><div class="remarks-title">Internal remarks (never sent to WhatsApp)</div><div class="empty">Loading…</div></div>' +
@@ -236,25 +245,20 @@
       var messagesList = document.getElementById('messagesList');
       messagesList.scrollTop = messagesList.scrollHeight;
 
-      loadStageControl();
-      loadRemarks();
-      loadReminders();
-      loadSnoozeStatus();
+      populateStageSelect(detail.stage);
+      renderRemarks(detail.remarks);
+      renderReminders(detail.reminders);
+      renderSnoozeStatus(detail.snoozeStatus);
+      renderReassignControl(detail.assignableUsers);
       loadTemplateSelect();
       loadQuickReplySelect();
-      loadReassignControl(detail.conversation.numberId);
     }
 
-    function loadReassignControl(numberId) {
-      google.script.run.withSuccessHandler(function (users) {
-        var btn = document.getElementById('reassignBtn');
-        if (!btn) return;
-        btn.style.display = '';
-        btn.dataset.users = JSON.stringify(users);
-      }).withFailureHandler(function () {
-        var btn = document.getElementById('reassignBtn');
-        if (btn) btn.style.display = 'none'; // no reassignment scope on this number — hide rather than show an error
-      }).listAssignableUsers(numberId);
+    function renderReassignControl(users) {
+      var btn = document.getElementById('reassignBtn');
+      if (!btn) return;
+      if (users && users.length) { btn.style.display = ''; btn.dataset.users = JSON.stringify(users); }
+      else { btn.style.display = 'none'; } // no reassignment scope on this number — hide rather than show an error
     }
 
     function toggleReassign() {
@@ -267,26 +271,34 @@
       var index = Number(choice) - 1;
       var user = users[index];
       if (!user) { alert('Invalid choice.'); return; }
-      google.script.run.withSuccessHandler(function () { loadDetail(); loadConversations(); })
+      google.script.run.withSuccessHandler(function () { loadWorkspace(); loadConversations(); })
         .withFailureHandler(function (error) { alert('Could not reassign: ' + (error && error.message)); })
         .reassignConversation(selectedConversationId, user.id);
     }
 
+    function resolveCurrentConversation() {
+      if (!confirm('Mark this conversation as resolved?')) return;
+      google.script.run.withSuccessHandler(function () { loadWorkspace(); loadConversations(); })
+        .withFailureHandler(function (error) { alert('Could not resolve: ' + (error && error.message)); })
+        .resolveConversation(selectedConversationId);
+    }
+
     function loadQuickReplySelect() {
-      google.script.run.withSuccessHandler(function (quickReplies) {
-        var select = document.getElementById('quickReplySelect');
-        if (!select) return;
-        select.innerHTML = '<option value="">Quick reply…</option>' +
-          quickReplies.map(function (q) { return '<option value="' + escapeHtml(q.id) + '">' + escapeHtml(q.shortcut) + '</option>'; }).join('');
-        select.dataset.quickReplies = JSON.stringify(quickReplies);
-      }).withFailureHandler(function () {}).listQuickReplies();
+      if (cachedQuickReplies) { populateQuickReplySelect(); return; }
+      google.script.run.withSuccessHandler(function (quickReplies) { cachedQuickReplies = quickReplies; populateQuickReplySelect(); }).withFailureHandler(function () {}).listQuickReplies();
+    }
+
+    function populateQuickReplySelect() {
+      var select = document.getElementById('quickReplySelect');
+      if (!select) return;
+      select.innerHTML = '<option value="">Quick reply…</option>' +
+        cachedQuickReplies.map(function (q) { return '<option value="' + escapeHtml(q.id) + '">' + escapeHtml(q.shortcut) + '</option>'; }).join('');
     }
 
     function insertQuickReply() {
       var select = document.getElementById('quickReplySelect');
       if (!select.value) return;
-      var quickReplies = JSON.parse(select.dataset.quickReplies || '[]');
-      var quickReply = quickReplies.filter(function (q) { return q.id === select.value; })[0];
+      var quickReply = (cachedQuickReplies || []).filter(function (q) { return q.id === select.value; })[0];
       if (quickReply) {
         var textarea = document.getElementById('composeText');
         textarea.value = (textarea.value ? textarea.value + ' ' : '') + quickReply.text;
@@ -304,27 +316,30 @@
       var button = document.getElementById('mediaSend');
       button.disabled = true;
       google.script.run
-        .withSuccessHandler(function () { button.disabled = false; loadDetail(); loadConversations(); })
+        .withSuccessHandler(function () { button.disabled = false; loadWorkspace(); loadConversations(); })
         .withFailureHandler(function (error) { button.disabled = false; alert('Could not send media: ' + (error && error.message)); })
         .sendMediaReply(selectedConversationId, mediaType, mediaUrl, caption);
     }
 
     function loadTemplateSelect() {
+      if (cachedTemplates) { populateTemplateSelect(); return; }
       google.script.run.withSuccessHandler(function (templates) {
-        var select = document.getElementById('templateSelect');
-        if (!select) return;
-        var approved = templates.filter(function (t) { return t.status === 'APPROVED'; });
-        select.innerHTML = '<option value="">Template… (' + approved.length + ' approved)</option>' +
-          approved.map(function (t) { return '<option value="' + escapeHtml(t.id) + '">' + escapeHtml(t.name) + '</option>'; }).join('');
-        select.dataset.templates = JSON.stringify(approved);
+        cachedTemplates = templates.filter(function (t) { return t.status === 'APPROVED'; });
+        populateTemplateSelect();
       }).withFailureHandler(function () {}).listTemplates();
+    }
+
+    function populateTemplateSelect() {
+      var select = document.getElementById('templateSelect');
+      if (!select) return;
+      select.innerHTML = '<option value="">Template… (' + cachedTemplates.length + ' approved)</option>' +
+        cachedTemplates.map(function (t) { return '<option value="' + escapeHtml(t.id) + '">' + escapeHtml(t.name) + '</option>'; }).join('');
     }
 
     function sendCurrentTemplate() {
       var select = document.getElementById('templateSelect');
       if (!select.value) return;
-      var templates = JSON.parse(select.dataset.templates || '[]');
-      var template = templates.filter(function (t) { return t.id === select.value; })[0];
+      var template = (cachedTemplates || []).filter(function (t) { return t.id === select.value; })[0];
       var body = template && template.components && template.components.filter(function (c) { return c.type === 'BODY'; })[0];
       var placeholders = body ? (body.text.match(/\{\{\d+\}\}/g) || []) : [];
       var variables = {};
@@ -337,13 +352,9 @@
       var button = document.getElementById('templateSend');
       button.disabled = true;
       google.script.run
-        .withSuccessHandler(function () { button.disabled = false; loadDetail(); loadConversations(); })
+        .withSuccessHandler(function () { button.disabled = false; loadWorkspace(); loadConversations(); })
         .withFailureHandler(function (error) { button.disabled = false; alert('Could not send template: ' + (error && error.message)); })
         .sendTemplateReply(selectedConversationId, template.id, variables);
-    }
-
-    function loadSnoozeStatus() {
-      google.script.run.withSuccessHandler(renderSnoozeStatus).withFailureHandler(function () {}).getSnoozeStatus(selectedConversationId);
     }
 
     function renderSnoozeStatus(status) {
@@ -361,27 +372,27 @@
 
     function toggleSnooze() {
       google.script.run.withSuccessHandler(function (status) {
-        if (status && status.snoozed) { loadSnoozeStatus(); return; }
-        // Currently not snoozed (or was just un-snoozed) — ask how long to snooze for.
+        if (status && status.snoozed) {
+          google.script.run.withSuccessHandler(function () { loadWorkspace(); loadConversations(); })
+            .withFailureHandler(function (error) { alert('Could not un-snooze: ' + (error && error.message)); })
+            .unsnoozeConversation(selectedConversationId);
+          return;
+        }
+        // Currently not snoozed — ask how long to snooze for.
         var hours = prompt('Snooze this conversation for how many hours?', '4');
         if (!hours) return;
         var until = new Date(Date.now() + Number(hours) * 3600000).toISOString();
-        google.script.run.withSuccessHandler(function () { loadSnoozeStatus(); loadConversations(); })
+        google.script.run.withSuccessHandler(function () { loadWorkspace(); loadConversations(); })
           .withFailureHandler(function (error) { alert('Could not snooze: ' + (error && error.message)); })
           .snoozeConversation(selectedConversationId, until);
       }).withFailureHandler(function () {}).getSnoozeStatus(selectedConversationId);
     }
 
-    function loadReminders() {
-      google.script.run.withSuccessHandler(renderReminders).withFailureHandler(function () {
-        var pane = document.getElementById('remindersPane');
-        if (pane) pane.style.display = 'none';
-      }).listReminders(selectedConversationId);
-    }
-
     function renderReminders(reminders) {
       var pane = document.getElementById('remindersPane');
       if (!pane) return;
+      if (reminders === null) { pane.style.display = 'none'; return; } // no reminder view access — hide rather than show an error
+      pane.style.display = '';
       var pending = reminders.filter(function (r) { return r.status === 'PENDING'; });
       var listHtml = pending.map(function (reminder) {
         return '<div class="reminder"><span>' + escapeHtml(reminder.text) + '<div class="reminder-due">Due ' + escapeHtml(reminder.dueAt) + '</div></span>' +
@@ -399,30 +410,27 @@
       var text = textInput.value.trim();
       if (!text || !dueInput.value) return;
       var dueAt = new Date(dueInput.value).toISOString();
-      google.script.run.withSuccessHandler(function () { textInput.value = ''; dueInput.value = ''; loadReminders(); })
+      google.script.run.withSuccessHandler(function () { loadWorkspace(); })
         .withFailureHandler(function (error) { alert('Could not add reminder: ' + (error && error.message)); })
         .createReminder(selectedConversationId, text, dueAt);
     }
 
     function completeReminder(reminderId) {
-      google.script.run.withSuccessHandler(loadReminders).withFailureHandler(function (error) { alert('Could not update reminder: ' + (error && error.message)); })
+      google.script.run.withSuccessHandler(function () { loadWorkspace(); }).withFailureHandler(function (error) { alert('Could not update reminder: ' + (error && error.message)); })
         .updateReminderStatus(reminderId, 'COMPLETED');
     }
 
-    function loadStageControl() {
-      if (cachedStages) { populateStageSelect(); return; }
-      google.script.run.withSuccessHandler(function (stages) { cachedStages = stages; populateStageSelect(); }).withFailureHandler(function () {}).listStages();
-    }
-
-    function populateStageSelect() {
+    function populateStageSelect(currentStage) {
+      if (!cachedStages) {
+        google.script.run.withSuccessHandler(function (stages) { cachedStages = stages; populateStageSelect(currentStage); }).withFailureHandler(function () {}).listStages();
+        return;
+      }
       var select = document.getElementById('stageSelect');
       if (!select) return;
-      google.script.run.withSuccessHandler(function (current) {
-        var currentStageId = current && current.stageId;
-        select.innerHTML = '<option value="">Stage: (none)</option>' + cachedStages.map(function (stage) {
-          return '<option value="' + escapeHtml(stage.id) + '"' + (stage.id === currentStageId ? ' selected' : '') + '>Stage: ' + escapeHtml(stage.name) + '</option>';
-        }).join('');
-      }).withFailureHandler(function () {}).getCustomerStage(selectedCustomerId);
+      var currentStageId = currentStage && currentStage.stageId;
+      select.innerHTML = '<option value="">Stage: (none)</option>' + cachedStages.map(function (stage) {
+        return '<option value="' + escapeHtml(stage.id) + '"' + (stage.id === currentStageId ? ' selected' : '') + '>Stage: ' + escapeHtml(stage.name) + '</option>';
+      }).join('');
     }
 
     function changeStage() {
@@ -431,16 +439,11 @@
       google.script.run.withFailureHandler(function (error) { alert('Could not change stage: ' + (error && error.message)); }).setCustomerStage(selectedCustomerId, select.value);
     }
 
-    function loadRemarks() {
-      google.script.run.withSuccessHandler(renderRemarks).withFailureHandler(function () {
-        var pane = document.getElementById('remarksPane');
-        if (pane) pane.style.display = 'none'; // e.g. VIEWER has no remarks access — hide rather than show an error here
-      }).listRemarks(selectedConversationId);
-    }
-
     function renderRemarks(remarks) {
       var pane = document.getElementById('remarksPane');
       if (!pane) return;
+      if (remarks === null) { pane.style.display = 'none'; return; } // e.g. VIEWER has no remarks access — hide rather than show an error here
+      pane.style.display = '';
       var listHtml = remarks.map(function (remark) {
         return '<div class="remark">' + escapeHtml(remark.text) + '<div class="remark-meta">' + escapeHtml(remark.createdAt) + '</div></div>';
       }).join('') || '<div class="empty">No remarks yet</div>';
@@ -453,7 +456,7 @@
       var input = document.getElementById('remarkText');
       var text = input.value.trim();
       if (!text) return;
-      google.script.run.withSuccessHandler(function () { input.value = ''; loadRemarks(); })
+      google.script.run.withSuccessHandler(function () { loadWorkspace(); })
         .withFailureHandler(function (error) { alert('Could not add remark: ' + (error && error.message)); })
         .addRemark(selectedConversationId, text);
     }
@@ -470,7 +473,7 @@
         .withSuccessHandler(function () {
           textarea.value = '';
           button.disabled = false;
-          loadDetail();
+          loadWorkspace();
           loadConversations();
         })
         .withFailureHandler(function (error) {

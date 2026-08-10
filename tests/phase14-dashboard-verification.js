@@ -45,8 +45,13 @@ const roleId = key => roles.find(role => role.key === key).id;
 
 const agent = phase1().createUser({ email: 'agent@example.com', displayName: 'Agent', roleIds: [roleId('AGENT')] });
 const viewer = phase1().createUser({ email: 'viewer@example.com', displayName: 'Viewer', roleIds: [roleId('VIEWER')] });
+const otherSupervisor = phase1().createUser({ email: 'other-supervisor@example.com', displayName: 'Other Supervisor', roleIds: [roleId('SUPERVISOR')] });
 
 const number = new NumberRepository().create({ id: 'number_1', displayName: 'Sales 1', phoneNumber: '079-1', provider: 'exotel', providerAccountId: '', wabaId: '', providerNumberId: '', active: true, createdAt: '', updatedAt: '' });
+const otherNumber = new NumberRepository().create({ id: 'number_2', displayName: 'Sales 2', phoneNumber: '079-2', provider: 'exotel', providerAccountId: '', wabaId: '', providerNumberId: '', active: true, createdAt: '', updatedAt: '' });
+phase1().grantNumberAccess({ userId: viewer.id, numberId: number.id });
+// otherSupervisor has REPORTS_VIEW but access only to a number with no data at all — demonstrates real scoping, not just permission gating.
+phase1().grantNumberAccess({ userId: otherSupervisor.id, numberId: otherNumber.id });
 const customer1 = new CustomerRepository().create({ id: 'customer_1', phone: '+919000000001', name: 'Customer One', email: '', company: '', source: 'whatsapp', createdAt: '', updatedAt: '' });
 const customer2 = new CustomerRepository().create({ id: 'customer_2', phone: '+919000000002', name: 'Customer Two', email: '', company: '', source: 'whatsapp', createdAt: '', updatedAt: '' });
 
@@ -101,8 +106,21 @@ assert.strictEqual(metrics.leadConversion.totalCustomersWithStage, 2);
 assert.strictEqual(metrics.leadConversion.wonCount, 1);
 assert.strictEqual(metrics.leadConversion.conversionRate, 50);
 
-// ADMIN (has every permission) also sees the dashboard.
+// ADMIN (has every permission) also sees the dashboard, org-wide.
 email = 'admin@example.com';
 assert.strictEqual(phase14().getDashboardMetrics().conversations.total, 2);
+
+// Scoping (2026-08-10, per explicit user decision): a SUPERVISOR only sees metrics for
+// numbers they're actually granted access to — otherSupervisor has REPORTS_VIEW but is
+// only granted otherNumber, which has zero conversations, so their dashboard is empty
+// even though the org overall has real data.
+email = 'other-supervisor@example.com';
+const scopedMetrics = phase14().getDashboardMetrics();
+assert.strictEqual(scopedMetrics.conversations.total, 0);
+assert.strictEqual(scopedMetrics.byNumber.length, 1);
+assert.strictEqual(scopedMetrics.byNumber[0].numberId, otherNumber.id);
+assert.strictEqual(scopedMetrics.byAgent.length, 0);
+assert.strictEqual(scopedMetrics.stageDistribution.every(s => s.count === 0), true);
+assert.strictEqual(scopedMetrics.leadConversion.totalCustomersWithStage, 0);
 
 console.log('Phase 14 dashboard verification: PASS');

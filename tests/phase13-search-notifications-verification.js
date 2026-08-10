@@ -92,6 +92,15 @@ assert.strictEqual(phase13().searchConversations({ numberId: numberA.id, unassig
 assert.strictEqual(phase13().searchConversations({ numberId: numberA.id, assignedUserId: agent.id }).length, 1);
 assert.strictEqual(phase13().searchConversations({ numberId: numberA.id, status: 'OPEN' }).length, 2);
 
+// Resolved (CLOSED) conversations are excluded by default, but still findable when
+// explicitly requested by status — matches listConversations()'s own default and
+// Phase 6's resolveConversation (src/Phase6Services.gs).
+new ConversationRepository().update(conv2.id, { status: 'CLOSED' });
+assert.strictEqual(phase13().searchConversations({ numberId: numberA.id }).length, 1, 'default search excludes the resolved conversation');
+assert.strictEqual(phase13().searchConversations({ numberId: numberA.id, status: 'CLOSED' }).length, 1);
+assert.strictEqual(phase13().searchConversations({ numberId: numberA.id, status: 'CLOSED' })[0].id, conv2.id);
+new ConversationRepository().update(conv2.id, { status: 'OPEN' });
+
 // Date range filter.
 assert.strictEqual(phase13().searchConversations({ numberId: numberA.id, dateFrom: '2026-08-03T00:00:00.000Z' }).length, 1);
 assert.strictEqual(phase13().searchConversations({ numberId: numberA.id, dateTo: '2026-08-02T00:00:00.000Z' }).length, 1);

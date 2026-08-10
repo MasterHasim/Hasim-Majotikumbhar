@@ -173,11 +173,32 @@ enable/disable control for the daily automatic backup trigger
 (`installDailyBackupTrigger()`/`removeDailyBackupTrigger()`, with current status shown
 via `getBackupTriggerStatus()`).
 
+## Post-Phase-18 follow-up (2026-08-10, user-directed)
+
+**Performance**: a single new endpoint, `getConversationWorkspace(conversationId)`
+(`WorkspaceApi`, `src/WorkspaceServices.gs`), replaced 8 separate `google.script.run`
+calls that used to fire every time a conversation was opened (detail, stage, remarks,
+reminders, snooze status, templates, quick replies, reassignment eligibility) — each
+one is a full Apps Script execution with real cold-start latency, which was the actual
+cause of reported slowness, not rendering. `frontend/Index.html`'s `selectConversation`
+now makes exactly one call; templates and quick replies (not conversation-specific)
+are cached client-side after their first load per page session, and stage
+definitions were already cached this way since Phase 8.
+
+**Resolve**: a "Resolve" button (`#resolveBtn`) appears in the detail header for any
+open conversation, calling the new `resolveConversation` (`Phase6Api`, same
+authorization as reply — assigned AGENT or ADMIN). A resolved conversation
+disappears from the active conversation list (same as a snoozed one) but is still
+reachable via search with an explicit `status: 'CLOSED'` filter.
+
+**Reports scoping**: superseded the original Phase 14 decision to leave `REPORTS_VIEW`
+org-wide — see `docs/DATABASE.md`'s "Post-Phase-18 follow-up" section for the reversal.
+
 ## Deliberately not yet in the UI
 
-No push/email notifications (Phase 13's own scoping decision — see above). No
-conversation close/resolve workflow (no phase has added one yet — Phase 14's
-"resolved" metric is honestly reported as always 0 until it does).
+No push/email notifications (Phase 13's own scoping decision — see above). No manual
+"reopen" action for a resolved conversation (a new inbound message from that customer
+naturally starts a fresh one instead — see above).
 
 ## Testing note
 

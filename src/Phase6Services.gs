@@ -77,6 +77,28 @@ class Phase6Api {
     return message;
   }
 
+  /**
+   * Marks a conversation resolved once an agent feels the query is handled (per
+   * explicit user decision, 2026-08-10 — see memory/DECISIONS.md). Reuses the same
+   * 'reply' authorization tier as sendReply/sendTemplateReply/sendMediaReply — ADMIN
+   * globally, the assigned AGENT only — since "who can act on this conversation" is
+   * already exactly that set; no new permission was invented for this.
+   *
+   * No explicit "reopen" action: a customer's next inbound message on a CLOSED
+   * conversation simply starts a new OPEN one (Phase4Api.ingestInboundMessage already
+   * only ever reuses a conversation with status: 'OPEN'), so reopening falls out of
+   * the existing ingestion logic for free.
+   */
+  resolveConversation(conversationId) {
+    var conversation = this.conversations_.get(conversationId);
+    if (!conversation) throw new Phase1Error('NOT_FOUND', 'Conversation was not found.');
+    var teamId = this.access_.resolveTeamIdForNumber(conversation.numberId);
+    var actor = this.access_.requireConversationOperation('reply', { numberId: conversation.numberId, teamId: teamId, assignedUserId: conversation.assignedUserId });
+    var record = this.conversations_.update(conversationId, { status: 'CLOSED' });
+    this.audit_.write(actor.id, 'conversation.resolved', 'conversation', conversationId, {});
+    return record;
+  }
+
   sendOutbound_(conversationId, messageType, displayText, sendFn) {
     var conversation = this.conversations_.get(conversationId);
     if (!conversation) throw new Phase1Error('NOT_FOUND', 'Conversation was not found.');
