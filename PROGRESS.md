@@ -5,6 +5,29 @@
 
 ## Action needed from you right now
 
+- **Real-time message delivery is built (@50), needs 2 more setup steps before it does anything.** New messages will appear the instant they arrive (no waiting for a refresh), via the browser talking to Firebase directly instead of through Apps Script. Two things needed, neither of which I can do myself:
+  1. **Firebase Web API Key** (public/safe, not a secret) — Firebase Console → ⚙️ Project Settings → General tab → "Your apps" → Web API Key (if no web app is registered yet, click Add app → Web first). Set it as Script Property `FIREBASE_WEB_API_KEY`.
+  2. **Firebase security rules** — Realtime Database → Rules tab, replace with:
+     ```json
+     {
+       "rules": {
+         "messages": {
+           ".indexOn": "conversationId",
+           "$messageId": {
+             ".read": "auth != null && auth.token.numberIds != null && auth.token.numberIds[data.child('numberId').val()] == true"
+           }
+         },
+         "conversations": {
+           "$conversationId": {
+             ".read": "auth != null && auth.token.numberIds != null && auth.token.numberIds[data.child('numberId').val()] == true"
+           }
+         }
+       }
+     }
+     ```
+     This makes sure an agent can only live-read numbers they're actually granted access to — same rule this app already enforces everywhere else. Writes stay completely blocked for this channel (all writes still go through Apps Script, unchanged).
+
+     Until both are set, this feature just silently does nothing — the app behaves exactly as it does today, no risk either way.
 - ~~"Sent reply not showing in the thread"~~ — confirmed working by you. Resolved.
 - ~~Authorize the Drive scope~~ — done, confirmed by you.
 - ~~Domain-restricted deployment~~ — checked, it's already "Anyone," not the cause of anything. Ruled out.
