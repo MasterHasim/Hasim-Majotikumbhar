@@ -27,6 +27,7 @@ global.Utilities = {
 // Mock backend: an in-memory Firebase database keyed by collection/id, plus a
 // canned OAuth2 token response, routed by URL.
 let tokenFetchCount = 0;
+let dataFetchCount = 0;
 const db = {};
 global.UrlFetchApp = {
   fetch: (url, options) => {
@@ -34,6 +35,7 @@ global.UrlFetchApp = {
       tokenFetchCount++;
       return { getResponseCode: () => 200, getContentText: () => JSON.stringify({ access_token: 'mock-token-' + tokenFetchCount, expires_in: 3600 }) };
     }
+    dataFetchCount++;
     const match = url.match(/firebasedatabase\.app\/([^/]+)(?:\/([^/.]+))?\.json/);
     const collection = match[1], id = match[2];
     db[collection] = db[collection] || {};
@@ -95,10 +97,12 @@ assert.strictEqual(repo.count(), 1);
 assert.strictEqual(repo.get('message_1'), null);
 assert.throws(() => repo.remove('message_1'), error => error.code === 'NOT_FOUND');
 
-// A 400+ response surfaces as EXTERNAL_ERROR, not a silent failure.
+// A 400+ response surfaces as EXTERNAL_ERROR, not a silent failure. Uses a fresh,
+// never-read collection so the read cache (added below) can't mask this behind a
+// cache hit — this must actually reach the network to prove the point.
 const originalFetch = global.UrlFetchApp.fetch;
 global.UrlFetchApp.fetch = (url, options) => url.indexOf('oauth2') !== -1 ? originalFetch(url, options) : { getResponseCode: () => 403, getContentText: () => 'Permission denied' };
-assert.throws(() => repo.list(), error => error.code === 'EXTERNAL_ERROR');
+assert.throws(() => new FirebaseRealtimeDbRepository('never_before_read_collection').list(), error => error.code === 'EXTERNAL_ERROR');
 global.UrlFetchApp.fetch = originalFetch;
 
 // Token caching: the token endpoint is hit once, then reused from the Script
@@ -107,10 +111,30 @@ const fetchCountBefore = tokenFetchCount;
 repo.list(); repo.list(); repo.list();
 assert.strictEqual(tokenFetchCount, fetchCountBefore); // no new token fetches — still cached
 
-// Once the cached token is expired, a fresh one is fetched.
+// Once the cached token is expired, a fresh one is fetched. Data cache is cleared
+// first so this read actually reaches the network instead of being served from the
+// data cache (which would skip token logic entirely, same reasoning as above).
 const cached = JSON.parse(properties.FIREBASE_TOKEN_CACHE);
 properties.FIREBASE_TOKEN_CACHE = JSON.stringify(Object.assign({}, cached, { expiresAt: Date.now() - 1000 }));
+delete FirebaseReadCache_['messages'];
 repo.list();
 assert.strictEqual(tokenFetchCount, fetchCountBefore + 1);
+
+// The actual bug being fixed: each service class builds its own repository
+// instance (new ConversationRepository() in Phase5Api, Phase7Api, Phase8Api,
+// Phase9Api, ...), so without a shared cache, one aggregated call was doing one
+// live network round-trip per instance for data that hadn't changed. Multiple
+// instances of the same collection must share one cached read.
+delete FirebaseReadCache_['messages'];
+const dataFetchesBefore = dataFetchCount;
+new FirebaseRealtimeDbRepository('messages').list();
+new FirebaseRealtimeDbRepository('messages').list();
+new FirebaseRealtimeDbRepository('messages').list();
+assert.strictEqual(dataFetchCount, dataFetchesBefore + 1); // 3 instances, 1 network read
+
+// A write correctly invalidates the cache — a read right after a write is never stale.
+// (message_2 survives from the replace() call earlier; message_1 was removed.)
+new FirebaseRealtimeDbRepository('messages').create({ id: 'message_3', conversationId: 'conversation_1', messageText: 'New', direction: 'INBOUND' });
+assert.strictEqual(new FirebaseRealtimeDbRepository('messages').count(), 2);
 
 console.log('Firebase repository verification: PASS');
