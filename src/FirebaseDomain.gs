@@ -71,6 +71,29 @@ var FirebaseConfig_ = {
     var body = JSON.parse(response.getContentText());
     if (!body.access_token) throw new Phase1Error('CONFIGURATION_ERROR', 'Firebase authentication failed: ' + response.getContentText());
     return body.access_token;
+  },
+  /**
+   * Mints a Firebase Auth "custom token" (2026-08-11, for real-time listening — see
+   * RealtimeListenServices.gs) — a different JWT shape/audience than the OAuth2
+   * service-account token above, but signed the same way with the same key. The
+   * browser can't use this directly; it exchanges it for a real Firebase ID token
+   * via signInWithCustomToken (client-side, needs the public Web API Key, not this).
+   * `claims` are embedded in the resulting ID token and checked by Realtime Database
+   * security rules — this is what scopes a given user's live-listen access to
+   * exactly the numbers they already have access to, not the whole database.
+   */
+  mintCustomToken_: function (uid, claims) {
+    var serviceAccount = this.serviceAccount_();
+    var now = Math.floor(Date.now() / 1000);
+    var header = base64UrlEncodeString_(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
+    var claimSet = base64UrlEncodeString_(JSON.stringify({
+      iss: serviceAccount.client_email, sub: serviceAccount.client_email,
+      aud: 'https://identitytoolkit.googleapis.com/google.identity.identitytoolkit.v1.IdentityToolkit',
+      iat: now, exp: now + 3600, uid: uid, claims: claims || {}
+    }));
+    var unsigned = header + '.' + claimSet;
+    var signature = base64UrlEncodeBytes_(Utilities.computeRsaSha256Signature(unsigned, serviceAccount.private_key));
+    return unsigned + '.' + signature;
   }
 };
 

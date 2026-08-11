@@ -648,6 +648,7 @@
       showPage('dashboard');
     }
     function showLanding() {
+      RealtimeListener.stop();
       document.getElementById('app').classList.remove('visible');
       document.getElementById('landingScreen').style.display = 'block';
       selectedNumberId = null;
@@ -837,6 +838,7 @@
       selectedConversationId = conversationId;
       window.__splitEl.querySelectorAll('.conv-item').forEach(function (el) { el.classList.toggle('active', el.dataset.id === conversationId); });
       loadWorkspace();
+      RealtimeListener.start(conversationId);
     }
 
     // ============================================================================
@@ -857,6 +859,72 @@
         .getConversationWorkspace(selectedConversationId);
     }
 
+    // ============================================================================
+    // Real-time listening (2026-08-11) — the browser connects to Firebase directly
+    // (not through Apps Script) so a new inbound/outbound message appears the
+    // instant it's written, instead of waiting for the next action-triggered
+    // refresh. All WRITES still go through Apps Script exactly as before; this is a
+    // read-only add-on. Scoped server-side to exactly the numbers the signed-in
+    // user has access to (see RealtimeListenServices.gs) — enforced by Firebase
+    // security rules that must be set in the Firebase console (see PROGRESS.md),
+    // not by this client code. If the token/key isn't configured yet, or the
+    // browser doesn't support EventSource, this silently does nothing — the app
+    // still works exactly as it did before, just without instant delivery.
+    var RealtimeListener = {
+      eventSource_: null,
+      conversationId_: null,
+      start: function (conversationId) {
+        this.stop();
+        if (typeof EventSource === 'undefined') return;
+        this.conversationId_ = conversationId;
+        var self = this;
+        scriptRun().withSuccessHandler(function (result) {
+          if (self.conversationId_ !== conversationId) return; // switched conversations before this returned
+          self.connect_(result, conversationId);
+        }).withFailureHandler(function () {}).getRealtimeListenToken();
+      },
+      connect_: function (tokenResult, conversationId) {
+        var self = this;
+        fetch('https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=' + encodeURIComponent(tokenResult.webApiKey), {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: tokenResult.token, returnSecureToken: true })
+        }).then(function (res) { return res.json(); }).then(function (auth) {
+          if (self.conversationId_ !== conversationId || !auth.idToken) return;
+          var url = tokenResult.databaseUrl + '/messages.json?auth=' + encodeURIComponent(auth.idToken) +
+            '&orderBy=' + encodeURIComponent('"conversationId"') + '&equalTo=' + encodeURIComponent('"' + conversationId + '"');
+          var es = new EventSource(url);
+          self.eventSource_ = es;
+          es.addEventListener('put', function (e) { self.handleEvent_(e); });
+          es.addEventListener('patch', function (e) { self.handleEvent_(e); });
+        }).catch(function () {});
+      },
+      handleEvent_: function (e) {
+        try {
+          var payload = JSON.parse(e.data);
+          var messages = {};
+          if (payload.path === '/') { messages = payload.data || {}; }
+          else if (payload.data) { messages[payload.path.replace(/^\//, '')] = payload.data; }
+          var self = this;
+          Object.keys(messages).forEach(function (id) { self.appendMessage_(messages[id]); });
+        } catch (ignored) {}
+      },
+      appendMessage_: function (message) {
+        if (!message || !window.__splitEl || selectedConversationId !== this.conversationId_) return;
+        var list = window.__splitEl.querySelector('#messagesList');
+        if (!list) return;
+        if (message.id && list.querySelector('[data-message-id="' + message.id + '"]')) return; // already rendered via a normal action refresh
+        var workspace = window.__currentWorkspace;
+        var customerName = (workspace && workspace.customer && (workspace.customer.name || workspace.customer.phone)) || 'Unknown customer';
+        list.insertAdjacentHTML('beforeend', renderOneMessage(message, initials(customerName)));
+        list.scrollTop = list.scrollHeight;
+        refreshActiveList(); // conversation list preview/badges should reflect the new message too
+      },
+      stop: function () {
+        if (this.eventSource_) { this.eventSource_.close(); this.eventSource_ = null; }
+        this.conversationId_ = null;
+      }
+    };
+
     function renderMessageMedia(media) {
       if (!media || !media.mediaUrl) return '';
       if (media.mediaType === 'image') return '<a href="' + escapeHtml(media.mediaUrl) + '" target="_blank"><img class="media-image" src="' + escapeHtml(media.mediaUrl) + '" alt="Image attachment"></a>';
@@ -864,22 +932,25 @@
       return '<a class="media-link" href="' + escapeHtml(media.mediaUrl) + '" target="_blank"><span>' + (icons[media.mediaType] || '📎') + '</span><span>Open ' + escapeHtml(media.mediaType) + '</span></a>';
     }
 
+    function renderOneMessage(message, customerInitials) {
+      var senderHtml = (message.direction === 'OUTBOUND' && message.senderName) ? '<div class="sender">' + escapeHtml(message.senderName) + '</div>' : '';
+      var mediaHtml = renderMessageMedia(message.media);
+      var textHtml = (message.media && message.media.mediaUrl)
+        ? (message.media.caption ? '<div class="text">' + escapeHtml(message.media.caption) + '</div>' : '')
+        : '<div class="text">' + escapeHtml(message.messageText) + '</div>';
+      var avatarHtml = message.direction === 'INBOUND' ? '<div class="msg-avatar">' + escapeHtml(customerInitials) + '</div>' : '';
+      return '<div class="message-row ' + escapeHtml(message.direction) + '" data-message-id="' + escapeHtml(message.id || '') + '">' + avatarHtml +
+        '<div class="message ' + escapeHtml(message.direction) + ' ' + escapeHtml(message.status === 'FAILED' ? 'FAILED' : '') + '">' +
+        senderHtml + mediaHtml + textHtml +
+        '<div class="time">' + escapeHtml((message.timestamp || '').slice(11, 16)) + (message.status === 'FAILED' ? ' • Failed to send' : message.status === 'READ' ? ' ✓✓' : message.direction === 'OUTBOUND' ? ' ✓' : '') + '</div></div></div>';
+    }
     function renderMessagesWithDates(messages, customerName) {
       var html = '', lastDate = null;
       var customerInitials = initials(customerName || '?');
       messages.forEach(function (message) {
         var day = (message.timestamp || '').slice(0, 10);
         if (day && day !== lastDate) { html += '<div class="date-divider"><span>' + escapeHtml(day) + '</span></div>'; lastDate = day; }
-        var senderHtml = (message.direction === 'OUTBOUND' && message.senderName) ? '<div class="sender">' + escapeHtml(message.senderName) + '</div>' : '';
-        var mediaHtml = renderMessageMedia(message.media);
-        var textHtml = (message.media && message.media.mediaUrl)
-          ? (message.media.caption ? '<div class="text">' + escapeHtml(message.media.caption) + '</div>' : '')
-          : '<div class="text">' + escapeHtml(message.messageText) + '</div>';
-        var avatarHtml = message.direction === 'INBOUND' ? '<div class="msg-avatar">' + escapeHtml(customerInitials) + '</div>' : '';
-        html += '<div class="message-row ' + escapeHtml(message.direction) + '">' + avatarHtml +
-          '<div class="message ' + escapeHtml(message.direction) + ' ' + escapeHtml(message.status === 'FAILED' ? 'FAILED' : '') + '">' +
-          senderHtml + mediaHtml + textHtml +
-          '<div class="time">' + escapeHtml((message.timestamp || '').slice(11, 16)) + (message.status === 'FAILED' ? ' • Failed to send' : message.status === 'READ' ? ' ✓✓' : message.direction === 'OUTBOUND' ? ' ✓' : '') + '</div></div></div>';
+        html += renderOneMessage(message, customerInitials);
       });
       return html;
     }

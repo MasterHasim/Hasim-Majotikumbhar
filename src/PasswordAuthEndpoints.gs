@@ -25,7 +25,7 @@ var PASSWORD_AUTH_API_ALLOWLIST_ = [
   'listMyReminders', 'listStages', 'listUsers', 'uploadConversationMedia', 'listRoles', 'resolveConversation',
   'setCustomerStage', 'snoozeConversation', 'submitTemplateForReview', 'updateAssignmentParticipant', 'createTeam',
   'getCustomerStage', 'getDashboardSummary', 'syncTemplatesFromProvider', 'unsnoozeConversation', 'addRemark',
-  'getSnoozeStatus', 'updateTeam', 'sendPasswordSetupLink', 'logout', 'setTemporaryPassword', 'changePassword', 'sendWelcomeEmail'
+  'getSnoozeStatus', 'updateTeam', 'sendPasswordSetupLink', 'logout', 'setTemporaryPassword', 'changePassword', 'sendWelcomeEmail', 'getRealtimeListenToken'
 ];
 
 // While mustChangePassword is set, every other allowlisted call is blocked server-
