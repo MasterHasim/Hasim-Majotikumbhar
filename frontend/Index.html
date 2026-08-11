@@ -859,7 +859,7 @@
         if (startRealtime) RealtimeListener.start(conversationId, workspace.realtime);
       })
         .withFailureHandler(function (error) { root.querySelector('.js-chat').innerHTML = '<div class="empty">Error: ' + escapeHtml(error && error.message) + '</div>'; })
-        .getConversationWorkspace(selectedConversationId);
+        .getConversationWorkspace(selectedConversationId, !!startRealtime);
     }
 
     // ============================================================================

@@ -163,8 +163,20 @@ class Phase6Api {
       direction: 'OUTBOUND', messageType: messageType, messageText: displayText, providerMessageId: providerMessageId, status: status, timestamp: now
     };
     this.messages_.create(message);
-    if (status === 'SENT') this.conversations_.update(conversationId, { needsResponse: false, lastMessageAt: now });
-    this.audit_.write(actor.id, status === 'SENT' ? 'message.sent' : 'message.sendFailed', 'message', message.id, { conversationId: conversationId });
+    // Once the message record itself is saved, the reply has to be reported as a
+    // success to the caller — the customer already received it (or the failure was
+    // already recorded), and the client's post-send refresh depends on this callback
+    // succeeding. Conversation metadata and the audit entry are secondary bookkeeping;
+    // if either throws (e.g. lock contention from a concurrent webhook write, since
+    // every collection currently shares one script-wide LockService lock), that must
+    // not turn an already-successful send into a reported failure — the agent's
+    // dashboard would stop auto-refreshing even though the message was actually saved.
+    try {
+      if (status === 'SENT') this.conversations_.update(conversationId, { needsResponse: false, lastMessageAt: now });
+      this.audit_.write(actor.id, status === 'SENT' ? 'message.sent' : 'message.sendFailed', 'message', message.id, { conversationId: conversationId });
+    } catch (bookkeepingError) {
+      console.error('sendOutbound_: message saved but conversation/audit bookkeeping failed', bookkeepingError);
+    }
     return message;
   }
 }

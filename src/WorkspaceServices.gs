@@ -22,6 +22,14 @@
  * competing with everything else a fresh page/conversation load fires (listTemplates,
  * listQuickReplies, listStages, etc.), which is the same "N separate round trips"
  * problem this whole aggregator exists to avoid.
+ *
+ * Only minted when includeRealtime is true (client passes this on the initial
+ * conversation-open call only, see loadWorkspace()/startRealtime in Index.html) —
+ * NOT on every action-triggered quiet refresh (reply/note/assign/resolve/etc, 8+
+ * call sites), which never uses the token anyway. Minting it unconditionally on
+ * every one of those calls added real per-call latency (RSA-signing a fresh
+ * custom token) to actions that don't need it, which is exactly the kind of added
+ * cost this aggregator exists to avoid.
  */
 class WorkspaceApi {
   constructor() {
@@ -34,7 +42,7 @@ class WorkspaceApi {
     this.realtime_ = new RealtimeListenApi();
   }
 
-  getConversationWorkspace(conversationId) {
+  getConversationWorkspace(conversationId, includeRealtime) {
     var detail = this.phase5_.getConversationDetail(conversationId);
     var assignedUser = detail.conversation.assignedUserId ? this.repository_.get('users', detail.conversation.assignedUserId) : null;
     var workspace = {
@@ -47,7 +55,9 @@ class WorkspaceApi {
     try { workspace.reminders = this.phase9_.listReminders(conversationId); } catch (ignored) { workspace.reminders = null; }
     try { workspace.snoozeStatus = this.phase9_.getSnoozeStatus(conversationId); } catch (ignored) { workspace.snoozeStatus = null; }
     try { workspace.assignableUsers = this.phase7_.listAssignableUsers(detail.conversation.numberId); } catch (ignored) { workspace.assignableUsers = []; }
-    try { workspace.realtime = this.realtime_.getRealtimeListenToken(); } catch (ignored) { workspace.realtime = null; }
+    if (includeRealtime) {
+      try { workspace.realtime = this.realtime_.getRealtimeListenToken(); } catch (ignored) { workspace.realtime = null; }
+    }
 
     return workspace;
   }
