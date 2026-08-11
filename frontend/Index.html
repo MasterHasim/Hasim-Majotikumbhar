@@ -804,11 +804,11 @@
     // Every list here is already scoped to selectedNumberId — the whole workspace
     // operates inside one number at a time (chosen on the landing screen), so there's
     // no separate per-list number filter to layer on top anymore.
-    function loadConvList(baseFilters) {
+    function loadConvList(baseFilters, quiet) {
       var root = window.__splitEl;
       if (!root || !selectedNumberId) return;
       var listEl = root.querySelector('.js-conv-list');
-      listEl.innerHTML = '<div class="empty">Loading…</div>';
+      if (!quiet) listEl.innerHTML = '<div class="empty">Loading…</div>';
       var filters = Object.assign({ numberId: selectedNumberId }, baseFilters);
       var query = root.querySelector('.js-search').value.trim();
       if (query) filters.query = query;
@@ -842,10 +842,16 @@
     // ============================================================================
     // Chat workspace (single conversation): header, messages, compose, detail panel
     // ============================================================================
-    function loadWorkspace() {
+    // quiet=true skips the "Loading…" blank-out — used when refreshing the SAME
+    // conversation after an action (reply/note/assign/etc.), where the old content
+    // staying on screen during the round trip reads as an instant update instead of
+    // a jarring flash-to-blank-then-repopulate that felt like the page reloading.
+    // The default (quiet not passed) still blanks first, for genuine navigation to a
+    // conversation with nothing on screen yet (openConversationFromAnywhere).
+    function loadWorkspace(quiet) {
       var root = window.__splitEl;
       if (!root) return;
-      root.querySelector('.js-chat').innerHTML = '<div class="empty">Loading…</div>';
+      if (!quiet) root.querySelector('.js-chat').innerHTML = '<div class="empty">Loading…</div>';
       scriptRun().withSuccessHandler(function (workspace) { renderWorkspace(root, workspace); })
         .withFailureHandler(function (error) { root.querySelector('.js-chat').innerHTML = '<div class="empty">Error: ' + escapeHtml(error && error.message) + '</div>'; })
         .getConversationWorkspace(selectedConversationId);
@@ -960,20 +966,20 @@
     }
     function submitAssign(userId) {
       if (!userId) return;
-      scriptRun().withSuccessHandler(function () { loadWorkspace(); refreshActiveList(); })
+      scriptRun().withSuccessHandler(function () { loadWorkspace(true); refreshActiveList(); })
         .withFailureHandler(function (error) { alert('Could not assign: ' + (error && error.message)); })
         .reassignConversation(selectedConversationId, userId);
     }
 
     function refreshActiveList() {
       if (!window.__splitEl) return;
-      loadConvList(window.__currentBaseFilters || {});
+      loadConvList(window.__currentBaseFilters || {}, true); // quiet — this runs after every action, list staying visible during the round trip is what stops it reading as a page refresh
       refreshBadges();
     }
 
     function resolveCurrentConversation() {
       if (!confirm('Mark this conversation as resolved?')) return;
-      scriptRun().withSuccessHandler(function () { loadWorkspace(); refreshActiveList(); })
+      scriptRun().withSuccessHandler(function () { loadWorkspace(true); refreshActiveList(); })
         .withFailureHandler(function (error) { alert('Could not resolve: ' + (error && error.message)); })
         .resolveConversation(selectedConversationId);
     }
@@ -988,14 +994,14 @@
     function toggleSnooze() {
       scriptRun().withSuccessHandler(function (status) {
         if (status && status.snoozed) {
-          scriptRun().withSuccessHandler(function () { loadWorkspace(); refreshActiveList(); })
+          scriptRun().withSuccessHandler(function () { loadWorkspace(true); refreshActiveList(); })
             .withFailureHandler(function (error) { alert('Could not un-snooze: ' + (error && error.message)); }).unsnoozeConversation(selectedConversationId);
           return;
         }
         var hours = prompt('Snooze this conversation for how many hours?', '4');
         if (!hours) return;
         var until = new Date(Date.now() + Number(hours) * 3600000).toISOString();
-        scriptRun().withSuccessHandler(function () { loadWorkspace(); refreshActiveList(); })
+        scriptRun().withSuccessHandler(function () { loadWorkspace(true); refreshActiveList(); })
           .withFailureHandler(function (error) { alert('Could not snooze: ' + (error && error.message)); }).snoozeConversation(selectedConversationId, until);
       }).withFailureHandler(function () {}).getSnoozeStatus(selectedConversationId);
     }
@@ -1038,7 +1044,7 @@
         if (value === null) return;
         variables[index] = value;
       }
-      scriptRun().withSuccessHandler(function () { loadWorkspace(); refreshActiveList(); })
+      scriptRun().withSuccessHandler(function () { loadWorkspace(true); refreshActiveList(); })
         .withFailureHandler(function (error) { alert('Could not send template: ' + (error && error.message)); }).sendTemplateReply(selectedConversationId, template.id, variables);
     }
     var pendingMediaFile = null;
@@ -1080,7 +1086,7 @@
       var el = document.getElementById('pendingMedia');
       if (el) el.textContent = 'Uploading…';
       scriptRun().withSuccessHandler(function (uploaded) {
-        scriptRun().withSuccessHandler(function () { pendingMediaFile = null; renderPendingMediaChip(); loadWorkspace(); refreshActiveList(); })
+        scriptRun().withSuccessHandler(function () { pendingMediaFile = null; renderPendingMediaChip(); loadWorkspace(true); refreshActiveList(); })
           .withFailureHandler(function (error) { renderPendingMediaChip(); alert('Uploaded but could not send: ' + (error && error.message)); })
           .sendMediaReply(selectedConversationId, file.mediaType, uploaded.url, caption);
       }).withFailureHandler(function (error) { renderPendingMediaChip(); alert('Could not upload: ' + (error && error.message)); })
@@ -1093,7 +1099,7 @@
       if (!text) return;
       button.disabled = true;
       setError('composeError', null);
-      scriptRun().withSuccessHandler(function () { textarea.value = ''; button.disabled = false; loadWorkspace(); refreshActiveList(); })
+      scriptRun().withSuccessHandler(function () { textarea.value = ''; button.disabled = false; loadWorkspace(true); refreshActiveList(); })
         .withFailureHandler(function (error) { button.disabled = false; setError('composeError', error); }).sendReply(selectedConversationId, text);
     }
     function addCurrentNote() {
@@ -1101,7 +1107,7 @@
       var text = textarea.value.trim();
       if (!text) return;
       textarea.disabled = true;
-      scriptRun().withSuccessHandler(function () { loadWorkspace(); })
+      scriptRun().withSuccessHandler(function () { loadWorkspace(true); })
         .withFailureHandler(function (error) { textarea.disabled = false; alert('Could not add note: ' + (error && error.message)); }).addRemark(selectedConversationId, text);
     }
 
@@ -1139,7 +1145,7 @@
         { key: 'email', label: 'Email', value: customer.email, inputType: 'email' },
         { key: 'company', label: 'Company', value: customer.company }
       ], function (values, showError, close) {
-        scriptRun().withSuccessHandler(function () { close(); loadWorkspace(); })
+        scriptRun().withSuccessHandler(function () { close(); loadWorkspace(true); })
           .withFailureHandler(showError).updateCustomer(customer.id, values);
       });
     }
