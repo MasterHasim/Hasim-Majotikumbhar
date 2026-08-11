@@ -837,8 +837,7 @@
       if (!window.__splitEl || !window.__splitEl.offsetParent) showPage('inbox'); // mounts the split via the router; falls back to the Inbox view
       selectedConversationId = conversationId;
       window.__splitEl.querySelectorAll('.conv-item').forEach(function (el) { el.classList.toggle('active', el.dataset.id === conversationId); });
-      loadWorkspace();
-      RealtimeListener.start(conversationId);
+      loadWorkspace(false, true);
     }
 
     // ============================================================================
@@ -850,11 +849,15 @@
     // a jarring flash-to-blank-then-repopulate that felt like the page reloading.
     // The default (quiet not passed) still blanks first, for genuine navigation to a
     // conversation with nothing on screen yet (openConversationFromAnywhere).
-    function loadWorkspace(quiet) {
+    function loadWorkspace(quiet, startRealtime) {
       var root = window.__splitEl;
       if (!root) return;
       if (!quiet) root.querySelector('.js-chat').innerHTML = '<div class="empty">Loading…</div>';
-      scriptRun().withSuccessHandler(function (workspace) { renderWorkspace(root, workspace); })
+      var conversationId = selectedConversationId;
+      scriptRun().withSuccessHandler(function (workspace) {
+        renderWorkspace(root, workspace);
+        if (startRealtime) RealtimeListener.start(conversationId, workspace.realtime);
+      })
         .withFailureHandler(function (error) { root.querySelector('.js-chat').innerHTML = '<div class="empty">Error: ' + escapeHtml(error && error.message) + '</div>'; })
         .getConversationWorkspace(selectedConversationId);
     }
@@ -870,18 +873,20 @@
     // not by this client code. If the token/key isn't configured yet, or the
     // browser doesn't support EventSource, this silently does nothing — the app
     // still works exactly as it did before, just without instant delivery.
+    //
+    // tokenResult comes from workspace.realtime (folded into getConversationWorkspace
+    // server-side) rather than its own separate google.script.run call — opening a
+    // conversation was firing this as a 6th concurrent execution alongside
+    // getConversationWorkspace/listTemplates/listQuickReplies/listStages, which is
+    // exactly the round-trip pileup WorkspaceApi already exists to avoid.
     var RealtimeListener = {
       eventSource_: null,
       conversationId_: null,
-      start: function (conversationId) {
+      start: function (conversationId, tokenResult) {
         this.stop();
-        if (typeof EventSource === 'undefined') return;
+        if (typeof EventSource === 'undefined' || !tokenResult) return;
         this.conversationId_ = conversationId;
-        var self = this;
-        scriptRun().withSuccessHandler(function (result) {
-          if (self.conversationId_ !== conversationId) return; // switched conversations before this returned
-          self.connect_(result, conversationId);
-        }).withFailureHandler(function () {}).getRealtimeListenToken();
+        this.connect_(tokenResult, conversationId);
       },
       connect_: function (tokenResult, conversationId) {
         var self = this;
@@ -889,14 +894,16 @@
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ token: tokenResult.token, returnSecureToken: true })
         }).then(function (res) { return res.json(); }).then(function (auth) {
-          if (self.conversationId_ !== conversationId || !auth.idToken) return;
+          if (self.conversationId_ !== conversationId) return; // switched conversations before this returned
+          if (!auth.idToken) { console.error('RealtimeListener: signInWithCustomToken failed', auth); return; }
           var url = tokenResult.databaseUrl + '/messages.json?auth=' + encodeURIComponent(auth.idToken) +
             '&orderBy=' + encodeURIComponent('"conversationId"') + '&equalTo=' + encodeURIComponent('"' + conversationId + '"');
           var es = new EventSource(url);
           self.eventSource_ = es;
           es.addEventListener('put', function (e) { self.handleEvent_(e); });
           es.addEventListener('patch', function (e) { self.handleEvent_(e); });
-        }).catch(function () {});
+          es.onerror = function (e) { console.error('RealtimeListener: EventSource error', e); };
+        }).catch(function (err) { console.error('RealtimeListener: connect failed', err); });
       },
       handleEvent_: function (e) {
         try {

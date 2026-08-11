@@ -14,6 +14,14 @@
  * AGENT with no team-reassignment scope has no assignableUsers) come back as
  * null/empty rather than failing the whole call — same "hide, don't error" UX the
  * individual panels already had.
+ *
+ * workspace.realtime (added 2026-08-11) folds in the Firebase listen token
+ * (RealtimeListenApi) instead of making the client fetch it as its own separate
+ * google.script.run call. Opening a conversation was already firing this call
+ * alongside getConversationWorkspace — one more concurrent Apps Script execution
+ * competing with everything else a fresh page/conversation load fires (listTemplates,
+ * listQuickReplies, listStages, etc.), which is the same "N separate round trips"
+ * problem this whole aggregator exists to avoid.
  */
 class WorkspaceApi {
   constructor() {
@@ -23,6 +31,7 @@ class WorkspaceApi {
     this.phase9_ = new Phase9Api();
     this.repository_ = new PropertiesRepository();
     this.messageMedia_ = new MessageMediaRepository();
+    this.realtime_ = new RealtimeListenApi();
   }
 
   getConversationWorkspace(conversationId) {
@@ -38,6 +47,7 @@ class WorkspaceApi {
     try { workspace.reminders = this.phase9_.listReminders(conversationId); } catch (ignored) { workspace.reminders = null; }
     try { workspace.snoozeStatus = this.phase9_.getSnoozeStatus(conversationId); } catch (ignored) { workspace.snoozeStatus = null; }
     try { workspace.assignableUsers = this.phase7_.listAssignableUsers(detail.conversation.numberId); } catch (ignored) { workspace.assignableUsers = []; }
+    try { workspace.realtime = this.realtime_.getRealtimeListenToken(); } catch (ignored) { workspace.realtime = null; }
 
     return workspace;
   }
