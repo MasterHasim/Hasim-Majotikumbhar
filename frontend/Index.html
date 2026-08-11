@@ -208,6 +208,14 @@
     .password-field input { padding-right: 34px; }
     .password-toggle { position: absolute; right: 6px; top: 0; height: 100%; margin-bottom: 8px; background: none; border: none; cursor: pointer; font-size: 15px; color: var(--text-secondary); display: flex; align-items: center; padding: 0 6px; }
     .password-toggle:hover { color: var(--text); }
+
+    /* ---- Reusable Edit modal (2026-08-11) — replaces sequential prompt() dialogs ---- */
+    #editModalOverlay { display: none; position: fixed; inset: 0; background: rgba(15,42,32,.45); z-index: 1000; align-items: center; justify-content: center; padding: 20px; }
+    #editModalOverlay.open { display: flex; }
+    #editModalCard { max-width: 420px; width: 100%; max-height: 85vh; overflow-y: auto; }
+    .modal-field { margin-bottom: 12px; }
+    .modal-field label { display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; }
+    .modal-field input, .modal-field select { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; box-sizing: border-box; }
   </style>
 </head>
 <body>
@@ -278,6 +286,18 @@
         <button type="button" class="password-toggle" onclick="togglePasswordVisibility('changePasswordConfirm', this)" tabindex="-1">👁</button>
       </div>
       <div class="form-row"><button class="btn primary" onclick="submitChangePassword()">Set password</button></div>
+    </div>
+  </div>
+
+  <div id="editModalOverlay" style="display:none;">
+    <div class="login-card" id="editModalCard">
+      <h2 class="section-title" style="margin-top:0;" id="editModalTitle">Edit</h2>
+      <div id="editModalBody"></div>
+      <div class="form-error" id="editModalError"></div>
+      <div class="form-row" style="justify-content:flex-end;">
+        <button class="btn" onclick="closeEditModal()">Cancel</button>
+        <button class="btn primary" onclick="submitEditModal()">Save</button>
+      </div>
     </div>
   </div>
 
@@ -569,9 +589,9 @@
       });
       return proxy;
     }
-    var cachedStages = null, cachedTemplates = null, cachedQuickReplies = null;
+    var cachedStages = null, cachedTemplates = null, cachedQuickReplies = null, cachedQuickRepliesAdmin = [], cachedStagesAdmin = [];
     var cachedUsers = [], cachedRoles = [], cachedTeams = [];
-    var selectedTeamId = null;
+    var selectedTeamId = null, cachedTeamMembers = [];
     var composeTab = 'reply';
 
     function escapeHtml(value) {
@@ -1114,15 +1134,14 @@
     function editCustomerFields() {
       var workspace = window.__currentWorkspace;
       var customer = workspace.customer || {};
-      var name = prompt('Name:', customer.name || '');
-      if (name === null) return;
-      var email = prompt('Email:', customer.email || '');
-      if (email === null) return;
-      var company = prompt('Company:', customer.company || '');
-      if (company === null) return;
-      scriptRun().withSuccessHandler(function () { loadWorkspace(); })
-        .withFailureHandler(function (error) { alert('Could not update customer: ' + (error && error.message)); })
-        .updateCustomer(customer.id, { name: name, email: email, company: company });
+      openEditModal('Edit customer details', [
+        { key: 'name', label: 'Name', value: customer.name },
+        { key: 'email', label: 'Email', value: customer.email, inputType: 'email' },
+        { key: 'company', label: 'Company', value: customer.company }
+      ], function (values, showError, close) {
+        scriptRun().withSuccessHandler(function () { close(); loadWorkspace(); })
+          .withFailureHandler(showError).updateCustomer(customer.id, values);
+      });
     }
 
     function loadPreviousConversations(customerId) {
@@ -1330,9 +1349,10 @@
     // ============================================================================
     function loadQuickRepliesPage() {
       scriptRun().withSuccessHandler(function (list) {
+        cachedQuickRepliesAdmin = list;
         document.getElementById('quickRepliesTable').querySelector('tbody').innerHTML = list.map(function (q) {
           return '<tr><td>' + escapeHtml(q.shortcut) + '</td><td>' + escapeHtml(q.text) + '</td><td><span class="pill">' + (q.active !== false ? 'active' : 'inactive') + '</span></td>' +
-            '<td><button class="btn" onclick="editQuickReply(\'' + q.id + '\', \'' + escapeHtml(q.text).replace(/'/g, "\\'") + '\')">Edit</button></td></tr>';
+            '<td><button class="btn" onclick="editQuickReply(\'' + q.id + '\')">Edit</button></td></tr>';
         }).join('') || '<tr><td colspan="4" class="empty">No quick replies yet</td></tr>';
       }).withFailureHandler(function (error) { setError('qrError', error); }).listQuickReplies();
     }
@@ -1344,11 +1364,16 @@
         document.getElementById('qrShortcut').value = ''; document.getElementById('qrText').value = ''; setError('qrError', null); loadQuickRepliesPage(); cachedQuickReplies = null;
       }).withFailureHandler(function (error) { setError('qrError', error); }).createQuickReply({ shortcut: shortcut, text: text });
     }
-    function editQuickReply(id, currentText) {
-      var text = prompt('Text:', currentText);
-      if (text === null) return;
-      var active = confirm('Keep this quick reply active? OK = active, Cancel = inactive');
-      scriptRun().withSuccessHandler(function () { loadQuickRepliesPage(); cachedQuickReplies = null; }).withFailureHandler(function (error) { alert('Could not update: ' + (error && error.message)); }).updateQuickReply(id, { text: text, active: active });
+    function editQuickReply(id) {
+      var qr = cachedQuickRepliesAdmin.find(function (q) { return q.id === id; });
+      if (!qr) return;
+      openEditModal('Edit quick reply: ' + qr.shortcut, [
+        { key: 'text', label: 'Text', value: qr.text },
+        { key: 'active', label: 'Status', type: 'select', value: qr.active !== false ? 'true' : 'false', options: [{ value: 'true', label: 'Active' }, { value: 'false', label: 'Inactive' }] }
+      ], function (values, showError, close) {
+        scriptRun().withSuccessHandler(function () { close(); loadQuickRepliesPage(); cachedQuickReplies = null; })
+          .withFailureHandler(showError).updateQuickReply(id, { text: values.text, active: values.active === 'true' });
+      });
     }
 
     // ============================================================================
@@ -1382,6 +1407,7 @@
     }
     function loadTeamMembers() {
       scriptRun().withSuccessHandler(function (members) {
+        cachedTeamMembers = members;
         var userName = function (id) { var u = cachedUsers.find(function (x) { return x.id === id; }); return u ? u.displayName : id; };
         document.getElementById('teamMembersTable').querySelector('tbody').innerHTML = members.map(function (m) {
           return '<tr><td>' + escapeHtml(userName(m.userId)) + '</td><td><span class="pill">' + escapeHtml(m.status) + '</span></td><td>' + escapeHtml((m.numberIds || []).join(', ')) + '</td>' +
@@ -1397,12 +1423,15 @@
       scriptRun().withSuccessHandler(function () { document.getElementById('memberNumberIds').value = ''; setError('teamMemberError', null); loadTeamMembers(); }).withFailureHandler(function (error) { setError('teamMemberError', error); }).addTeamMember({ teamId: selectedTeamId, userId: userId, numberIds: numberIds });
     }
     function editTeamMember(id) {
-      var status = prompt('Status (active/inactive):', 'active');
-      if (status === null) return;
-      var numberIdsRaw = prompt('numberIds (comma-separated, blank = all team numbers):', '');
-      var patch = { status: status };
-      if (numberIdsRaw !== null) patch.numberIds = numberIdsRaw ? numberIdsRaw.split(',').map(function (s) { return s.trim(); }).filter(Boolean) : [];
-      scriptRun().withSuccessHandler(loadTeamMembers).withFailureHandler(function (error) { alert('Could not update member: ' + (error && error.message)); }).updateTeamMember(id, patch);
+      var member = cachedTeamMembers.find(function (m) { return m.id === id; });
+      if (!member) return;
+      openEditModal('Edit team member', [
+        { key: 'status', label: 'Status', type: 'select', value: member.status, options: [{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }] },
+        { key: 'numberIds', label: 'Number IDs (comma-separated, blank = all team numbers)', value: (member.numberIds || []).join(', ') }
+      ], function (values, showError, close) {
+        var patch = { status: values.status, numberIds: values.numberIds ? values.numberIds.split(',').map(function (s) { return s.trim(); }).filter(Boolean) : [] };
+        scriptRun().withSuccessHandler(function () { close(); loadTeamMembers(); }).withFailureHandler(showError).updateTeamMember(id, patch);
+      });
     }
 
     // ============================================================================
@@ -1441,16 +1470,16 @@
     function editUser(id) {
       var user = cachedUsers.find(function (u) { return u.id === id; });
       if (!user) return;
-      var status = prompt('Status (active/inactive/suspended):', user.status);
-      if (status === null) return;
-      var roleKey = prompt('Role key to set as the only role (ADMIN/SUPERVISOR/SITE_MANAGER/AGENT/VIEWER), or leave blank to keep current roles:', '');
-      var patch = { status: status };
-      if (roleKey) {
-        var role = cachedRoles.find(function (r) { return r.key === roleKey.toUpperCase(); });
-        if (!role) { alert('Unknown role key'); return; }
-        patch.roleIds = [role.id];
-      }
-      scriptRun().withSuccessHandler(loadUsers).withFailureHandler(function (error) { alert('Could not update user: ' + (error && error.message)); }).updateUser(id, patch);
+      var currentRole = cachedRoles.find(function (r) { return user.roleIds.indexOf(r.id) !== -1; });
+      openEditModal('Edit user: ' + user.email, [
+        { key: 'status', label: 'Status', type: 'select', value: user.status, options: [
+          { value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }, { value: 'suspended', label: 'Suspended' }
+        ] },
+        { key: 'roleId', label: 'Role', type: 'select', value: currentRole ? currentRole.id : '', options: cachedRoles.map(function (r) { return { value: r.id, label: r.name }; }) }
+      ], function (values, showError, close) {
+        scriptRun().withSuccessHandler(function () { close(); loadUsers(); })
+          .withFailureHandler(showError).updateUser(id, { status: values.status, roleIds: [values.roleId] });
+      });
     }
     function submitSendPasswordSetupLink(id) {
       scriptRun().withSuccessHandler(function () { alert('Setup link emailed.'); })
@@ -1485,15 +1514,15 @@
     function editNumber(id) {
       var number = cachedNumbersAdmin.find(function (n) { return n.id === id; });
       if (!number) return;
-      var providerAccountId = prompt('providerAccountId:', number.providerAccountId || '');
-      if (providerAccountId === null) return;
-      var wabaId = prompt('wabaId:', number.wabaId || '');
-      if (wabaId === null) return;
-      var providerNumberId = prompt('providerNumberId:', number.providerNumberId || '');
-      if (providerNumberId === null) return;
-      var active = confirm('Keep this number active? OK = active, Cancel = inactive');
-      scriptRun().withSuccessHandler(loadNumbers).withFailureHandler(function (error) { alert('Could not update number: ' + (error && error.message)); })
-        .updateNumber(id, { providerAccountId: providerAccountId, wabaId: wabaId, providerNumberId: providerNumberId, active: active });
+      openEditModal('Edit number: ' + number.displayName, [
+        { key: 'providerAccountId', label: 'Provider account ID', value: number.providerAccountId },
+        { key: 'wabaId', label: 'WABA ID', value: number.wabaId },
+        { key: 'providerNumberId', label: 'Provider number ID', value: number.providerNumberId },
+        { key: 'active', label: 'Status', type: 'select', value: number.active ? 'true' : 'false', options: [{ value: 'true', label: 'Active' }, { value: 'false', label: 'Inactive' }] }
+      ], function (values, showError, close) {
+        scriptRun().withSuccessHandler(function () { close(); loadNumbers(); }).withFailureHandler(showError)
+          .updateNumber(id, { providerAccountId: values.providerAccountId, wabaId: values.wabaId, providerNumberId: values.providerNumberId, active: values.active === 'true' });
+      });
     }
 
     // ============================================================================
@@ -1593,9 +1622,10 @@
 
     function loadStages() {
       scriptRun().withSuccessHandler(function (stages) {
+        cachedStagesAdmin = stages;
         document.getElementById('stagesTable').querySelector('tbody').innerHTML = stages.map(function (s) {
           return '<tr><td>' + s.sequenceOrder + '</td><td>' + escapeHtml(s.key) + '</td><td>' + escapeHtml(s.name) + '</td><td><span class="pill">' + (s.active ? 'active' : 'inactive') + '</span></td>' +
-            '<td><button class="btn" onclick="editStage(\'' + s.id + '\', \'' + escapeHtml(s.name).replace(/'/g, "\\'") + '\', ' + s.sequenceOrder + ', ' + s.active + ')">Edit</button></td></tr>';
+            '<td><button class="btn" onclick="editStage(\'' + s.id + '\')">Edit</button></td></tr>';
         }).join('') || '<tr><td colspan="5" class="empty">No stages yet — seed the defaults above</td></tr>';
       }).withFailureHandler(function (error) { setError('stageError', error); }).listStages();
     }
@@ -1611,13 +1641,17 @@
         document.getElementById('stageKey').value = ''; document.getElementById('stageName').value = ''; document.getElementById('stageOrder').value = ''; setError('stageError', null); loadStages(); cachedStages = null;
       }).withFailureHandler(function (error) { setError('stageError', error); }).createStage({ key: key, name: name, sequenceOrder: order });
     }
-    function editStage(id, currentName, currentOrder, currentActive) {
-      var name = prompt('Stage name:', currentName);
-      if (name === null) return;
-      var order = prompt('Sequence order:', currentOrder);
-      if (order === null) return;
-      var active = confirm('Keep this stage active? OK = active, Cancel = inactive');
-      scriptRun().withSuccessHandler(function () { loadStages(); cachedStages = null; }).withFailureHandler(function (error) { alert('Could not update stage: ' + (error && error.message)); }).updateStage(id, { name: name, sequenceOrder: Number(order), active: active });
+    function editStage(id) {
+      var stage = cachedStagesAdmin.find(function (s) { return s.id === id; });
+      if (!stage) return;
+      openEditModal('Edit stage: ' + stage.key, [
+        { key: 'name', label: 'Display name', value: stage.name },
+        { key: 'sequenceOrder', label: 'Sequence order', value: stage.sequenceOrder, inputType: 'number' },
+        { key: 'active', label: 'Status', type: 'select', value: stage.active ? 'true' : 'false', options: [{ value: 'true', label: 'Active' }, { value: 'false', label: 'Inactive' }] }
+      ], function (values, showError, close) {
+        scriptRun().withSuccessHandler(function () { close(); loadStages(); cachedStages = null; }).withFailureHandler(showError)
+          .updateStage(id, { name: values.name, sequenceOrder: Number(values.sequenceOrder), active: values.active === 'true' });
+      });
     }
 
     function loadBackupStatus() {
@@ -1678,6 +1712,42 @@
       var showing = input.type === 'text';
       input.type = showing ? 'password' : 'text';
       btn.textContent = showing ? '👁' : '🙈';
+    }
+
+    // ============================================================================
+    // Reusable Edit modal (2026-08-11) — replaces sequential prompt()/confirm()
+    // dialogs across the admin pages with one dropdown/text-field form.
+    // fields: [{ key, label, type: 'select'|'text'|undefined, value, options: [{value,label}], inputType, placeholder }]
+    // onSubmit(values, showError, close) does its own server call and either calls
+    // close() on success or showError(error) to show an inline message and let the
+    // user retry without losing what they entered.
+    // ============================================================================
+    var editModalFields_ = [];
+    var editModalOnSubmit_ = null;
+    function openEditModal(title, fields, onSubmit) {
+      document.getElementById('editModalTitle').textContent = title;
+      document.getElementById('editModalBody').innerHTML = fields.map(function (f) {
+        var fieldId = 'editModal_' + f.key;
+        if (f.type === 'select') {
+          return '<div class="modal-field"><label>' + escapeHtml(f.label) + '</label><select id="' + fieldId + '">' +
+            f.options.map(function (o) { return '<option value="' + escapeHtml(o.value) + '"' + (String(o.value) === String(f.value) ? ' selected' : '') + '>' + escapeHtml(o.label) + '</option>'; }).join('') +
+            '</select></div>';
+        }
+        return '<div class="modal-field"><label>' + escapeHtml(f.label) + '</label><input id="' + fieldId + '" type="' + (f.inputType || 'text') + '" value="' + escapeHtml(f.value === undefined || f.value === null ? '' : f.value) + '"' + (f.placeholder ? ' placeholder="' + escapeHtml(f.placeholder) + '"' : '') + '></div>';
+      }).join('');
+      setError('editModalError', null);
+      editModalFields_ = fields;
+      editModalOnSubmit_ = onSubmit;
+      document.getElementById('editModalOverlay').classList.add('open');
+    }
+    function closeEditModal() {
+      document.getElementById('editModalOverlay').classList.remove('open');
+      editModalOnSubmit_ = null;
+    }
+    function submitEditModal() {
+      var values = {};
+      editModalFields_.forEach(function (f) { values[f.key] = document.getElementById('editModal_' + f.key).value; });
+      if (editModalOnSubmit_) editModalOnSubmit_(values, function (error) { setError('editModalError', error); }, closeEditModal);
     }
     function submitLogin() {
       var email = document.getElementById('loginEmail').value.trim();
