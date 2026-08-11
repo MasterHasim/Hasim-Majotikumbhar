@@ -60,6 +60,16 @@ assert.strictEqual(api().listTeamMembers(teamA.id).length, 3);
 // ADMIN global operations.
 assert.ok(api().listUsers().length >= 8);
 assert.ok(api().listNumberAccess().length >= 6);
+
+// reactivateNumberAccess: re-granting access needs its own path since
+// grantNumberAccess rejects any existing userId+numberId record outright, even an
+// inactive one (added for the Edit User modal's number-access checklist).
+var viewerGrant = api().listNumberAccess().find(g => g.userId === viewer.id && g.numberId === 'number-a');
+api().revokeNumberAccess(viewerGrant.id);
+assert.strictEqual(api().listNumberAccess().find(g => g.id === viewerGrant.id).status, 'inactive');
+assert.throws(() => api().grantNumberAccess({ userId: viewer.id, numberId: 'number-a' }), error => error.code === 'CONFLICT');
+api().reactivateNumberAccess(viewerGrant.id);
+assert.strictEqual(api().listNumberAccess().find(g => g.id === viewerGrant.id).status, 'active');
 // ADMIN has global reply/reassign scope too, not just view (regression: these action
 // branches originally had no ADMIN bypass, unlike 'view').
 assert.ok(api().access_.requireConversationOperation('reply', { numberId: 'number-a', teamId: null, assignedUserId: agentA.id }));

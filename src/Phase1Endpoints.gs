@@ -13,6 +13,7 @@ function addTeamMember(input) { return phase1Api_().addTeamMember(input); }
 function updateTeamMember(id, patch) { return phase1Api_().updateTeamMember(id, patch); }
 function grantNumberAccess(input) { return phase1Api_().grantNumberAccess(input); }
 function revokeNumberAccess(id) { return phase1Api_().revokeNumberAccess(id); }
+function reactivateNumberAccess(id) { return phase1Api_().reactivateNumberAccess(id); }
 function listNumberAccess() { return phase1Api_().listNumberAccess(); }
 function setAvailability(status) { return phase1Api_().setAvailability(status); }
 function setUserAvailability(userId, status) { return phase1Api_().setUserAvailability(userId, status); }

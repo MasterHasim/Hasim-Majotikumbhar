@@ -1471,15 +1471,42 @@
       var user = cachedUsers.find(function (u) { return u.id === id; });
       if (!user) return;
       var currentRole = cachedRoles.find(function (r) { return user.roleIds.indexOf(r.id) !== -1; });
-      openEditModal('Edit user: ' + user.email, [
-        { key: 'status', label: 'Status', type: 'select', value: user.status, options: [
-          { value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }, { value: 'suspended', label: 'Suspended' }
-        ] },
-        { key: 'roleId', label: 'Role', type: 'select', value: currentRole ? currentRole.id : '', options: cachedRoles.map(function (r) { return { value: r.id, label: r.name }; }) }
-      ], function (values, showError, close) {
-        scriptRun().withSuccessHandler(function () { close(); loadUsers(); })
-          .withFailureHandler(showError).updateUser(id, { status: values.status, roleIds: [values.roleId] });
-      });
+      scriptRun().withSuccessHandler(function (numbers) {
+        scriptRun().withSuccessHandler(function (grants) {
+          var userGrants = grants.filter(function (g) { return g.userId === id; });
+          var grantByNumber = {};
+          userGrants.forEach(function (g) { grantByNumber[g.numberId] = g; }); // last one wins if somehow duplicated; active grants matter most for display
+
+          openEditModal('Edit user: ' + user.email, [
+            { key: 'status', label: 'Status', type: 'select', value: user.status, options: [
+              { value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }, { value: 'suspended', label: 'Suspended' }
+            ] },
+            { key: 'roleId', label: 'Role', type: 'select', value: currentRole ? currentRole.id : '', options: cachedRoles.map(function (r) { return { value: r.id, label: r.name }; }) },
+            { key: 'numberIds', label: 'WhatsApp number access', type: 'checkboxList', options: numbers.map(function (n) {
+              var g = grantByNumber[n.id];
+              return { value: n.id, label: n.displayName, checked: !!(g && g.status === 'active') };
+            }) }
+          ], function (values, showError, close) {
+            var newlyChecked = values.numberIds || [];
+            var accessChanges = [];
+            numbers.forEach(function (n) {
+              var g = grantByNumber[n.id];
+              var wasActive = !!(g && g.status === 'active');
+              var nowChecked = newlyChecked.indexOf(n.id) !== -1;
+              if (nowChecked && !wasActive) accessChanges.push(g ? { fn: 'reactivateNumberAccess', args: [g.id] } : { fn: 'grantNumberAccess', args: [{ userId: id, numberId: n.id }] });
+              else if (!nowChecked && wasActive) accessChanges.push({ fn: 'revokeNumberAccess', args: [g.id] });
+            });
+            (function applyNext(i) {
+              if (i >= accessChanges.length) {
+                scriptRun().withSuccessHandler(function () { close(); loadUsers(); }).withFailureHandler(showError).updateUser(id, { status: values.status, roleIds: [values.roleId] });
+                return;
+              }
+              var change = accessChanges[i];
+              scriptRun().withSuccessHandler(function () { applyNext(i + 1); }).withFailureHandler(showError)[change.fn].apply(null, change.args);
+            })(0);
+          });
+        }).withFailureHandler(function (error) { alert('Could not load number access: ' + (error && error.message)); }).listNumberAccess();
+      }).withFailureHandler(function (error) { alert('Could not load numbers: ' + (error && error.message)); }).listNumbers();
     }
     function submitSendPasswordSetupLink(id) {
       scriptRun().withSuccessHandler(function () { alert('Setup link emailed.'); })
@@ -1733,6 +1760,14 @@
             f.options.map(function (o) { return '<option value="' + escapeHtml(o.value) + '"' + (String(o.value) === String(f.value) ? ' selected' : '') + '>' + escapeHtml(o.label) + '</option>'; }).join('') +
             '</select></div>';
         }
+        if (f.type === 'checkboxList') {
+          if (!f.options.length) return '<div class="modal-field"><label>' + escapeHtml(f.label) + '</label><div class="empty" style="padding:4px 0;">None available</div></div>';
+          return '<div class="modal-field"><label>' + escapeHtml(f.label) + '</label>' +
+            '<div style="max-height:160px; overflow-y:auto; border:1px solid var(--border); border-radius:6px; padding:8px;">' +
+            f.options.map(function (o) {
+              return '<label class="inline" style="display:flex; margin-bottom:6px;"><input type="checkbox" class="' + fieldId + '" value="' + escapeHtml(o.value) + '"' + (o.checked ? ' checked' : '') + ' style="margin-right:8px;">' + escapeHtml(o.label) + '</label>';
+            }).join('') + '</div></div>';
+        }
         return '<div class="modal-field"><label>' + escapeHtml(f.label) + '</label><input id="' + fieldId + '" type="' + (f.inputType || 'text') + '" value="' + escapeHtml(f.value === undefined || f.value === null ? '' : f.value) + '"' + (f.placeholder ? ' placeholder="' + escapeHtml(f.placeholder) + '"' : '') + '></div>';
       }).join('');
       setError('editModalError', null);
@@ -1746,7 +1781,13 @@
     }
     function submitEditModal() {
       var values = {};
-      editModalFields_.forEach(function (f) { values[f.key] = document.getElementById('editModal_' + f.key).value; });
+      editModalFields_.forEach(function (f) {
+        if (f.type === 'checkboxList') {
+          values[f.key] = Array.prototype.slice.call(document.querySelectorAll('.editModal_' + f.key + ':checked')).map(function (el) { return el.value; });
+        } else {
+          values[f.key] = document.getElementById('editModal_' + f.key).value;
+        }
+      });
       if (editModalOnSubmit_) editModalOnSubmit_(values, function (error) { setError('editModalError', error); }, closeEditModal);
     }
     function submitLogin() {

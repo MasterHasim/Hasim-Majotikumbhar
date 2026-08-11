@@ -122,6 +122,12 @@ class Phase1Api {
     this.repository_.create('numberAccess', record); this.audit_.write(actor.id, 'numberAccess.granted', 'numberAccess', record.id, { numberId: numberId }); return record;
   }
   revokeNumberAccess(id) { return this.updateEntity_('numberAccess', id, { status: Phase1Constants.INACTIVE, granted: false }, Phase1Permissions.NUMBERS_ADMIN, 'numberAccess.revoked'); }
+  // grantNumberAccess rejects a duplicate userId+numberId pair outright (even an
+  // inactive one), so re-granting access previously revoked needs its own path
+  // rather than calling grantNumberAccess again — added 2026-08-11 for the Edit
+  // User modal's number-access checklist, which needs to freely toggle access on
+  // and off.
+  reactivateNumberAccess(id) { return this.updateEntity_('numberAccess', id, { status: Phase1Constants.ACTIVE, granted: true }, Phase1Permissions.NUMBERS_ADMIN, 'numberAccess.reactivated'); }
   listNumberAccess() { this.access_.require(Phase1Permissions.NUMBERS_ADMIN); return this.repository_.list('numberAccess'); }
   setAvailability(status) {
     var actor = this.access_.require(Phase1Permissions.AVAILABILITY_MANAGE_SELF); status = Phase1Validation.enumValue(status, [Phase1Constants.AVAILABLE, Phase1Constants.BUSY, Phase1Constants.OFFLINE, Phase1Constants.ON_LEAVE], 'status');

@@ -13,7 +13,7 @@ function sendWelcomeEmail(userId) { return passwordAuthApi_().sendWelcomeEmail(u
 // paths, not meant to run through a password session at all.
 var PASSWORD_AUTH_API_ALLOWLIST_ = [
   'listRemarks', 'listTeams', 'listCustomers', 'listTeamMembers', 'addTeamMember', 'updateCustomer', 'updateTeamMember',
-  'grantNumberAccess', 'revokeNumberAccess', 'listNumberAccess', 'setAvailability', 'setUserAvailability', 'getAvailability',
+  'grantNumberAccess', 'revokeNumberAccess', 'reactivateNumberAccess', 'listNumberAccess', 'setAvailability', 'setUserAvailability', 'getAvailability',
   'getAssignmentEligibility', 'setAssignmentEligibility', 'authorizeConversationOperation', 'listAuditLog', 'whoAmI',
   'getConversationWorkspace', 'backupNow', 'createDraftTemplate', 'createNumber', 'createQuickReply', 'createReminder',
   'getDashboardMetrics', 'getNumberAssignmentConfig', 'listMyNumbers', 'reassignConversation', 'searchConversations',
