@@ -5,11 +5,11 @@
 
 ## Action needed from you right now
 
-- **"Sent reply not showing in the thread" — still open, top priority.** Not caching (ruled out, reverted). No server-side error. Still need: send a test reply, then immediately check the **browser's own JavaScript console** (F12 → Console tab — not Apps Script's Executions log) for any red error, and share it.
+- ~~"Sent reply not showing in the thread"~~ — confirmed working by you. Resolved.
 - ~~Authorize the Drive scope~~ — done, confirmed by you.
 - ~~Domain-restricted deployment~~ — checked, it's already "Anyone," not the cause of anything. Ruled out.
+- **Media delivered as generic binary ("Bin format"), not viewable — fixed, needs retest (@42).** Root cause: Drive's `export=download` link ignores the file's real type and serves everything as `application/octet-stream`, so WhatsApp couldn't tell it was an image. Switched to `export=view`, which serves the real Content-Type. Confirmed-by-reasoning for images; video/audio/document delivery through this same URL format is still unverified — flag it again if a non-image attachment still comes through wrong.
 - **Test "Add user" end-to-end (deployed @41).** Creating a user now automatically emails them a welcome message with a temporary password included directly (not a link) — no separate "send setup link" step needed. If the email doesn't arrive, the temp password still shows in an alert to you as a fallback, and the per-row "Send setup link"/"Generate temp password" buttons remain as manual alternatives.
-- **Media/Exotel delivery** — test now that the Drive scope is authorized.
 - **Firebase Realtime Database migration approved** (Messages/Conversations only) — not started yet, next major piece of work once the items above settle.
 - See the **full wake-up task list** at the bottom of this file for everything else queued up (template live-send verification, seeding lead stages, etc.)
 
