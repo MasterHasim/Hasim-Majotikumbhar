@@ -84,11 +84,39 @@ class PasswordAuthApi {
     var actor = access.require(Phase1Permissions.USERS_MANAGE);
     var user = this.repository_.get('users', userId);
     if (!user) throw new Phase1Error('NOT_FOUND', 'User was not found.');
-    var temporaryPassword = generateTemporaryPassword_();
-    var salt = generateSalt_();
-    this.repository_.update('users', user.id, { passwordSalt: salt, passwordHash: hashPassword_(temporaryPassword, salt), mustChangePassword: true });
+    var temporaryPassword = this.generateAndSetTemporaryPassword_(user.id);
     this.audit_.write(actor.id, 'passwordAuth.temporaryPasswordSet', 'user', user.id, {});
     return { temporaryPassword: temporaryPassword };
+  }
+
+  /**
+   * Called right after createUser so "Add user" is a single admin action instead of
+   * create-then-separately-send-credentials (2026-08-11, user-requested). Emails the
+   * temporary password directly (not a link) so the new user can sign in immediately
+   * with email + password. Still returns the plaintext password too, as a fallback
+   * if the email doesn't arrive — delivery is unverified, same caveat as every other
+   * email in this project.
+   */
+  sendWelcomeEmail(userId) {
+    var access = new AccessControl(this.repository_, new AuthService(this.audit_), this.audit_);
+    var actor = access.require(Phase1Permissions.USERS_MANAGE);
+    var user = this.repository_.get('users', userId);
+    if (!user) throw new Phase1Error('NOT_FOUND', 'User was not found.');
+    var temporaryPassword = this.generateAndSetTemporaryPassword_(user.id);
+    var url = ScriptApp.getService().getUrl();
+    MailApp.sendEmail(user.email, 'Your WhatsApp Panel account',
+      'Hi ' + user.displayName + ',\n\nYou now have access to the WhatsApp Panel.\n\n' +
+      'Sign in here: ' + url + '\nEmail: ' + user.email + '\nTemporary password: ' + temporaryPassword +
+      '\n\nYou will be asked to set your own password the first time you sign in.');
+    this.audit_.write(actor.id, 'passwordAuth.welcomeEmailSent', 'user', user.id, {});
+    return { temporaryPassword: temporaryPassword };
+  }
+
+  generateAndSetTemporaryPassword_(userId) {
+    var temporaryPassword = generateTemporaryPassword_();
+    var salt = generateSalt_();
+    this.repository_.update('users', userId, { passwordSalt: salt, passwordHash: hashPassword_(temporaryPassword, salt), mustChangePassword: true });
+    return temporaryPassword;
   }
 
   /** Called while already signed in (via callApi, so AccessControl.currentUser() resolves the caller from the session). */

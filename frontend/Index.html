@@ -1407,8 +1407,14 @@
       var displayName = document.getElementById('userDisplayName').value.trim();
       var roleId = document.getElementById('userRole').value;
       if (!email || !displayName || !roleId) return;
-      scriptRun().withSuccessHandler(function () { document.getElementById('userEmail').value = ''; document.getElementById('userDisplayName').value = ''; setError('userError', null); loadUsers(); })
-        .withFailureHandler(function (error) { setError('userError', error); }).createUser({ email: email, displayName: displayName, roleIds: [roleId] });
+      scriptRun().withSuccessHandler(function (newUser) {
+        document.getElementById('userEmail').value = ''; document.getElementById('userDisplayName').value = ''; setError('userError', null); loadUsers();
+        scriptRun().withSuccessHandler(function (result) {
+          alert('User created and a welcome email was sent to ' + email + '.\n\nTemporary password (in case the email does not arrive): ' + result.temporaryPassword);
+        }).withFailureHandler(function (error) {
+          alert('User created, but the welcome email could not be sent: ' + (error && error.message) + '\n\nUse "Send setup link" or "Generate temp password" on their row instead.');
+        }).sendWelcomeEmail(newUser.id);
+      }).withFailureHandler(function (error) { setError('userError', error); }).createUser({ email: email, displayName: displayName, roleIds: [roleId] });
     }
     function editUser(id) {
       var user = cachedUsers.find(function (u) { return u.id === id; });

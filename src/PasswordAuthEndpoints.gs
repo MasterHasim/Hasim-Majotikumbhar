@@ -6,6 +6,7 @@ function resetPassword(token, newPassword) { return passwordAuthApi_().resetPass
 function sendPasswordSetupLink(userId) { return passwordAuthApi_().sendPasswordSetupLink(userId); }
 function setTemporaryPassword(userId) { return passwordAuthApi_().setTemporaryPassword(userId); }
 function changePassword(currentPassword, newPassword) { return passwordAuthApi_().changePassword(currentPassword, newPassword); }
+function sendWelcomeEmail(userId) { return passwordAuthApi_().sendWelcomeEmail(userId); }
 
 // Every real public endpoint reachable via the password-session dispatcher below.
 // bootstrapPhase1/doGet are deliberately excluded — one-time setup and page-render
@@ -24,7 +25,7 @@ var PASSWORD_AUTH_API_ALLOWLIST_ = [
   'listMyReminders', 'listStages', 'listUsers', 'uploadConversationMedia', 'listRoles', 'resolveConversation',
   'setCustomerStage', 'snoozeConversation', 'submitTemplateForReview', 'updateAssignmentParticipant', 'createTeam',
   'getCustomerStage', 'getDashboardSummary', 'syncTemplatesFromProvider', 'unsnoozeConversation', 'addRemark',
-  'getSnoozeStatus', 'updateTeam', 'sendPasswordSetupLink', 'logout', 'setTemporaryPassword', 'changePassword'
+  'getSnoozeStatus', 'updateTeam', 'sendPasswordSetupLink', 'logout', 'setTemporaryPassword', 'changePassword', 'sendWelcomeEmail'
 ];
 
 // While mustChangePassword is set, every other allowlisted call is blocked server-

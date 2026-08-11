@@ -131,4 +131,16 @@ assert.deepStrictEqual(callApi(newbieLogin.token, 'listMyNumbers', []), []); // 
 assert.throws(() => auth().login('newbie@example.com', temp.temporaryPassword), error => error.code === 'UNAUTHENTICATED');
 assert.strictEqual(auth().login('newbie@example.com', 'brand-new-password').user.mustChangePassword, false);
 
+// sendWelcomeEmail: one action from "Add user" — creates the credential AND emails
+// it (rather than an admin having to separately click "Generate temp password").
+email = 'admin@example.com';
+sentEmails = [];
+const invitee = phase1().createUser({ email: 'invitee@example.com', displayName: 'Invitee', roleIds: [roleId('AGENT')] });
+const welcome = auth().sendWelcomeEmail(invitee.id);
+assert.strictEqual(sentEmails.length, 1);
+assert.strictEqual(sentEmails[0].to, 'invitee@example.com');
+assert.ok(sentEmails[0].body.indexOf(welcome.temporaryPassword) !== -1); // the actual password is IN the email, not just a link
+const inviteeLogin = auth().login('invitee@example.com', welcome.temporaryPassword);
+assert.strictEqual(inviteeLogin.user.mustChangePassword, true);
+
 console.log('Password auth verification: PASS');
