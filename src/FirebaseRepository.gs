@@ -79,6 +79,17 @@ class FirebaseRealtimeDbRepository {
     var url = FirebaseConfig_.databaseUrl_() + '/' + this.collectionName_ + path + '.json';
     var response = UrlFetchApp.fetch(url, options);
     var code = response.getResponseCode();
+    // A cached token can be stale (expired early, or — as happened live on
+    // 2026-08-11 — issued under a scope that was since corrected) without this
+    // code being able to tell in advance. One automatic retry with a forced-fresh
+    // token before giving up, rather than requiring a manual Script Property
+    // deletion every time this class of issue comes up.
+    if (code === 401) {
+      FirebaseConfig_.clearTokenCache_();
+      options.headers.Authorization = 'Bearer ' + FirebaseConfig_.accessToken_();
+      response = UrlFetchApp.fetch(url, options);
+      code = response.getResponseCode();
+    }
     var text = response.getContentText();
     if (code >= 400) throw new Phase1Error('EXTERNAL_ERROR', 'Firebase request failed (' + code + '): ' + text);
     return text ? JSON.parse(text) : null;

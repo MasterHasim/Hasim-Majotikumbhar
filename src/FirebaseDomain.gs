@@ -22,7 +22,11 @@ var FirebaseConfig_ = {
   DATABASE_URL_PROPERTY: 'FIREBASE_DATABASE_URL',
   SERVICE_ACCOUNT_PROPERTY: 'FIREBASE_SERVICE_ACCOUNT_B64',
   TOKEN_CACHE_PROPERTY: 'FIREBASE_TOKEN_CACHE',
-  TOKEN_SCOPE: 'https://www.googleapis.com/auth/firebase.database',
+  // 2026-08-11: firebase.database alone was rejected by Firebase with a 401
+  // "Unauthorized request" on the actual database call, even though the OAuth2
+  // token exchange itself succeeded — Google's documented service-account pattern
+  // for Realtime Database REST access pairs it with userinfo.email.
+  TOKEN_SCOPE: 'https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/firebase.database',
   TOKEN_URI: 'https://oauth2.googleapis.com/token',
   TOKEN_TTL_MS: 50 * 60 * 1000, // real token is valid 60 min; refresh a bit early to never use a stale one
 
@@ -46,6 +50,9 @@ var FirebaseConfig_ = {
     var token = this.fetchNewToken_();
     props.setProperty(this.TOKEN_CACHE_PROPERTY, JSON.stringify({ token: token, expiresAt: Date.now() + this.TOKEN_TTL_MS }));
     return token;
+  },
+  clearTokenCache_: function () {
+    PropertiesService.getScriptProperties().deleteProperty(this.TOKEN_CACHE_PROPERTY);
   },
   fetchNewToken_: function () {
     var serviceAccount = this.serviceAccount_();
