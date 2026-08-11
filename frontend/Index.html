@@ -201,9 +201,13 @@
     .settings-pane.active { display: block; }
 
     /* ---- Login / password reset (2026-08-10, alongside Google Sign-In) ---- */
-    #loginScreen, #resetPasswordScreen { max-width: 420px; margin: 80px auto; padding: 0 20px; }
+    #loginScreen, #resetPasswordScreen, #changePasswordScreen { max-width: 420px; margin: 80px auto; padding: 0 20px; }
     .login-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; padding: 24px; }
     .login-card input { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; margin-bottom: 8px; box-sizing: border-box; }
+    .password-field { position: relative; }
+    .password-field input { padding-right: 34px; }
+    .password-toggle { position: absolute; right: 6px; top: 0; height: 100%; margin-bottom: 8px; background: none; border: none; cursor: pointer; font-size: 15px; color: var(--text-secondary); display: flex; align-items: center; padding: 0 6px; }
+    .password-toggle:hover { color: var(--text); }
   </style>
 </head>
 <body>
@@ -218,7 +222,10 @@
       </div>
       <div class="form-error" id="loginError"></div>
       <input type="email" id="loginEmail" placeholder="Email" autocomplete="username">
-      <input type="password" id="loginPassword" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')submitLogin();">
+      <div class="password-field">
+        <input type="password" id="loginPassword" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')submitLogin();">
+        <button type="button" class="password-toggle" onclick="togglePasswordVisibility('loginPassword', this)" tabindex="-1">👁</button>
+      </div>
       <div class="form-row">
         <button class="btn primary" onclick="submitLogin()">Sign in</button>
         <button class="btn" onclick="location.reload()">Retry Google Sign-In</button>
@@ -239,8 +246,14 @@
         <div><h1>Set your password</h1><div class="subtitle">Choose a password to sign in with from now on.</div></div>
       </div>
       <div class="form-error" id="resetError"></div>
-      <input type="password" id="resetNewPassword" placeholder="New password (min 8 characters)" autocomplete="new-password">
-      <input type="password" id="resetNewPasswordConfirm" placeholder="Confirm password" autocomplete="new-password" onkeydown="if(event.key==='Enter')submitResetPassword();">
+      <div class="password-field">
+        <input type="password" id="resetNewPassword" placeholder="New password (min 8 characters)" autocomplete="new-password">
+        <button type="button" class="password-toggle" onclick="togglePasswordVisibility('resetNewPassword', this)" tabindex="-1">👁</button>
+      </div>
+      <div class="password-field">
+        <input type="password" id="resetNewPasswordConfirm" placeholder="Confirm password" autocomplete="new-password" onkeydown="if(event.key==='Enter')submitResetPassword();">
+        <button type="button" class="password-toggle" onclick="togglePasswordVisibility('resetNewPasswordConfirm', this)" tabindex="-1">👁</button>
+      </div>
       <div class="form-row"><button class="btn primary" onclick="submitResetPassword()">Set password</button></div>
     </div>
   </div>
@@ -252,9 +265,18 @@
         <div><h1>Change your password</h1><div class="subtitle">You're signed in with a temporary password — set your own before continuing.</div></div>
       </div>
       <div class="form-error" id="changePasswordError"></div>
-      <input type="password" id="changePasswordCurrent" placeholder="Temporary password" autocomplete="current-password">
-      <input type="password" id="changePasswordNew" placeholder="New password (min 8 characters)" autocomplete="new-password">
-      <input type="password" id="changePasswordConfirm" placeholder="Confirm new password" autocomplete="new-password" onkeydown="if(event.key==='Enter')submitChangePassword();">
+      <div class="password-field">
+        <input type="password" id="changePasswordCurrent" placeholder="Temporary password" autocomplete="current-password">
+        <button type="button" class="password-toggle" onclick="togglePasswordVisibility('changePasswordCurrent', this)" tabindex="-1">👁</button>
+      </div>
+      <div class="password-field">
+        <input type="password" id="changePasswordNew" placeholder="New password (min 8 characters)" autocomplete="new-password">
+        <button type="button" class="password-toggle" onclick="togglePasswordVisibility('changePasswordNew', this)" tabindex="-1">👁</button>
+      </div>
+      <div class="password-field">
+        <input type="password" id="changePasswordConfirm" placeholder="Confirm new password" autocomplete="new-password" onkeydown="if(event.key==='Enter')submitChangePassword();">
+        <button type="button" class="password-toggle" onclick="togglePasswordVisibility('changePasswordConfirm', this)" tabindex="-1">👁</button>
+      </div>
       <div class="form-row"><button class="btn primary" onclick="submitChangePassword()">Set password</button></div>
     </div>
   </div>
@@ -1650,6 +1672,12 @@
     function toggleForgotPassword() {
       var box = document.getElementById('forgotPasswordBox');
       box.style.display = box.style.display === 'none' ? 'block' : 'none';
+    }
+    function togglePasswordVisibility(inputId, btn) {
+      var input = document.getElementById(inputId);
+      var showing = input.type === 'text';
+      input.type = showing ? 'password' : 'text';
+      btn.textContent = showing ? '👁' : '🙈';
     }
     function submitLogin() {
       var email = document.getElementById('loginEmail').value.trim();
