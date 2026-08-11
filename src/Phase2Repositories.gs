@@ -7,6 +7,14 @@
  * Number_Assignment_Users are two related tabs (per-number round-robin config plus
  * its ordered participant list), so it composes two SheetRepository instances rather
  * than extending SheetRepository directly.
+ *
+ * ConversationRepository/MessageRepository moved to Firebase Realtime Database on
+ * 2026-08-11 (see FirebaseRepository.gs/FirebaseDomain.gs, memory/DECISIONS.md) —
+ * those two were the tables actually getting re-read repeatedly; everything else
+ * here stays on Sheets, no benefit to moving small rarely-touched reference tables.
+ * Existing data was copied across first via FirebaseMigrationTemp.gs while these
+ * classes still pointed at Sheets; the old Sheets tabs are left in place, untouched,
+ * as a rollback safety net.
  */
 class NumberRepository extends SheetRepository {
   constructor() { super('WhatsApp_Numbers', Phase2Schemas.WhatsApp_Numbers); }
@@ -23,16 +31,16 @@ class CustomerRepository extends SheetRepository {
   constructor() { super('Customers', Phase2Schemas.Customers); }
 }
 
-class ConversationRepository extends SheetRepository {
-  constructor() { super('Conversations', Phase2Schemas.Conversations); }
+class ConversationRepository extends FirebaseRealtimeDbRepository {
+  constructor() { super('conversations'); }
 }
 
 class AssignmentRepository extends SheetRepository {
   constructor() { super('Conversation_Assignments', Phase2Schemas.Conversation_Assignments); }
 }
 
-class MessageRepository extends SheetRepository {
-  constructor() { super('Messages', Phase2Schemas.Messages); }
+class MessageRepository extends FirebaseRealtimeDbRepository {
+  constructor() { super('messages'); }
 }
 
 class RemarkRepository extends SheetRepository {
