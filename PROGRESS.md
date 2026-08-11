@@ -5,29 +5,12 @@
 
 ## Action needed from you right now
 
-- **Real-time message delivery is built (@50), needs 2 more setup steps before it does anything.** New messages will appear the instant they arrive (no waiting for a refresh), via the browser talking to Firebase directly instead of through Apps Script. Two things needed, neither of which I can do myself:
-  1. **Firebase Web API Key** (public/safe, not a secret) — Firebase Console → ⚙️ Project Settings → General tab → "Your apps" → Web API Key (if no web app is registered yet, click Add app → Web first). Set it as Script Property `FIREBASE_WEB_API_KEY`.
-  2. **Firebase security rules** — Realtime Database → Rules tab, replace with:
-     ```json
-     {
-       "rules": {
-         "messages": {
-           ".indexOn": "conversationId",
-           "$messageId": {
-             ".read": "auth != null && auth.token.numberIds != null && auth.token.numberIds[data.child('numberId').val()] == true"
-           }
-         },
-         "conversations": {
-           "$conversationId": {
-             ".read": "auth != null && auth.token.numberIds != null && auth.token.numberIds[data.child('numberId').val()] == true"
-           }
-         }
-       }
-     }
-     ```
-     This makes sure an agent can only live-read numbers they're actually granted access to — same rule this app already enforces everywhere else. Writes stay completely blocked for this channel (all writes still go through Apps Script, unchanged).
+- **Real-time message delivery is live and confirmed working end-to-end (@55).** New messages now appear the instant they arrive, via the browser talking to Firebase directly instead of through Apps Script. Getting here needed three separate fixes beyond the original build (@50):
+  1. **Concurrency pileup (@51)** — opening a conversation was firing 5+ parallel Apps Script executions at once (workspace data, the listen token, templates, quick replies, stages); the Executions panel showed even unrelated Sheets-only calls stuck "Running" for 6-7s as a result. The listen token now rides inside the existing `getConversationWorkspace` call instead of its own round trip.
+  2. **Firebase Authentication was never enabled for the project** — `signInWithCustomToken` can't work at all until the Authentication product itself is initialized in the Firebase console, separately from Realtime Database and the registered web app. Enabled directly (Email/Password + Google providers, per your request).
+  3. **Security rules broke the live query** — `.read` was defined per-message (`$messageId`), but Firebase rejects an entire `orderBy`/`equalTo` query if the read rule depends on data below the queried location. Fixed using Firebase's query-based rules pattern (checks `query.orderByChild`/`query.equalTo` against a lookup on `/conversations/{id}/numberId`, evaluable without touching individual message records) — still scoped to exactly the numbers an agent has been granted, same as everywhere else in the app. Live-verified via a visible debug banner injected into the running app: confirmed `signIn OK` and `ES OPEN` (EventSource connected) before removing the debug scaffolding.
 
-     Until both are set, this feature just silently does nothing — the app behaves exactly as it does today, no risk either way.
+  Please do a final real-world check: open a conversation and have someone message it from WhatsApp without touching the panel — it should now appear without any refresh.
 - ~~"Sent reply not showing in the thread"~~ — confirmed working by you. Resolved.
 - ~~Authorize the Drive scope~~ — done, confirmed by you.
 - ~~Domain-restricted deployment~~ — checked, it's already "Anyone," not the cause of anything. Ruled out.
