@@ -135,7 +135,7 @@ assert.throws(() => phase6().uploadConversationMedia(conversation.id, 'YWJj', 'p
 
 email = 'agent@example.com';
 const uploaded = phase6().uploadConversationMedia(conversation.id, 'YWJj', 'photo.jpg', 'image/jpeg');
-assert.strictEqual(uploaded.url, 'https://drive.google.com/uc?export=download&id=' + uploaded.fileId);
+assert.strictEqual(uploaded.url, 'https://drive.google.com/uc?export=view&id=' + uploaded.fileId);
 assert.strictEqual(driveFilesCreated.length, 1);
 assert.deepStrictEqual(driveFilesCreated[0].shared, { access: 'ANYONE_WITH_LINK', permission: 'VIEW' });
 

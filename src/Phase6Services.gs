@@ -107,7 +107,14 @@ class Phase6Api {
     // appsscript.json now grants that instead; see the manifest and memory/DECISIONS.md.
     var file = DriveApp.createFile(blob);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-    return { url: 'https://drive.google.com/uc?export=download&id=' + file.getId(), fileId: file.getId() };
+    // 2026-08-11: export=download served everything as application/octet-stream
+    // regardless of the file's real type, so WhatsApp couldn't tell it was an
+    // image and delivered it as a generic binary attachment. export=view serves
+    // the file inline with its actual Content-Type instead — the standard fix for
+    // hotlinking Drive files. Confirmed working for images; unverified for
+    // video/audio/document (Drive's inline viewer behaves differently per type) —
+    // flag it again if a non-image attachment still arrives wrong.
+    return { url: 'https://drive.google.com/uc?export=view&id=' + file.getId(), fileId: file.getId() };
   }
 
   /**
