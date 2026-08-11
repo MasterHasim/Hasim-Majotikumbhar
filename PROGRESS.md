@@ -6,10 +6,10 @@
 ## Action needed from you right now
 
 - **"Sent reply not showing in the thread" — still open, top priority.** Not caching (ruled out, reverted). No server-side error. Still need: send a test reply, then immediately check the **browser's own JavaScript console** (F12 → Console tab — not Apps Script's Executions log) for any red error, and share it.
-- **Authorize the new Drive scope (once, by you).** Media upload needed the full `drive` scope, not `drive.file` — fixed in the manifest (@39/@40), but since the app runs "Execute as: Me," *you* need to grant it once: Apps Script editor → pick any function → Run → approve the permissions dialog. Until that's done, media upload will keep failing with the same permissions error.
-- **The domain-restricted deployment setting is likely blocking non-`echt.co.in` users entirely** — not a code issue, I can't fix this myself. Check Apps Script → Deploy → Manage Deployments → edit the active deployment → what does "Who has access" say? If domain-restricted, change to "Anyone" (your own `AccessControl` still gates all real actions).
-- **Test the login system** (deployed @40): two ways to get someone signed in now — "Send setup link" (email, unverified whether it arrives) or **"Generate temp password"** (new — no email needed, shows a one-time password for you to share directly; forces a password change on first login). Try the temp-password path first since it sidesteps the email-delivery question entirely.
-- **Media/Exotel delivery** — test after the Drive scope + deployment-access items above are sorted.
+- ~~Authorize the Drive scope~~ — done, confirmed by you.
+- ~~Domain-restricted deployment~~ — checked, it's already "Anyone," not the cause of anything. Ruled out.
+- **Test "Add user" end-to-end (deployed @41).** Creating a user now automatically emails them a welcome message with a temporary password included directly (not a link) — no separate "send setup link" step needed. If the email doesn't arrive, the temp password still shows in an alert to you as a fallback, and the per-row "Send setup link"/"Generate temp password" buttons remain as manual alternatives.
+- **Media/Exotel delivery** — test now that the Drive scope is authorized.
 - **Firebase Realtime Database migration approved** (Messages/Conversations only) — not started yet, next major piece of work once the items above settle.
 - See the **full wake-up task list** at the bottom of this file for everything else queued up (template live-send verification, seeding lead stages, etc.)
 
