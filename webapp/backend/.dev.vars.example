@@ -2,13 +2,18 @@
 # never commit real values. In production these are set with
 # `wrangler secret put <NAME>` instead (see README.md).
 
-# The full contents of the Firebase service account JSON file, as one line.
-# Same file already used by the Apps Script build (FIREBASE_SERVICE_ACCOUNT_B64
-# there is this same JSON, just base64-encoded — decode it once to get this).
+# The full contents of a Firebase service account JSON file, as one line —
+# generate a fresh one for this backend (Firebase Console -> Project Settings
+# -> Service accounts -> Generate new private key) rather than reusing the
+# Apps Script build's, so the two systems share nothing.
 FIREBASE_SERVICE_ACCOUNT_JSON={"type":"service_account","project_id":"...","private_key":"...","client_email":"..."}
 
 # Public/safe — same value as the Apps Script build's FIREBASE_WEB_API_KEY.
 FIREBASE_WEB_API_KEY=
+
+# The one identity allowed to call POST /api/bootstrap and become the first
+# ADMIN user — same role Apps Script's wap.phase1.bootstrapAdminEmail played.
+BOOTSTRAP_ADMIN_EMAIL=
 
 # Exotel WhatsApp API credentials (needed once we port the send/webhook phase).
 EXOTEL_API_KEY=

@@ -14,6 +14,8 @@ export interface Env {
   WEBHOOK_SECRET_TOKEN?: string;
   /** Comma-separated list of allowed frontend origins for CORS (e.g. "http://localhost:5173,https://panel.pages.dev"). */
   ALLOWED_ORIGINS?: string;
+  /** The one identity allowed to call POST /api/bootstrap and become the first ADMIN — same role Script Property `wap.phase1.bootstrapAdminEmail` played in the Apps Script build. */
+  BOOTSTRAP_ADMIN_EMAIL?: string;
 }
 
 export function parseServiceAccount(env: Env): FirebaseServiceAccount {

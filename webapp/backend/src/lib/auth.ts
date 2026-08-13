@@ -18,6 +18,11 @@ interface CachedKeys {
 
 let cachedKeys: CachedKeys | null = null;
 
+/** Test-only: each test mocks a fresh "Google" with its own throwaway keypair, so the 5-minute production cache (correct in real deployments, where Google's actual keys don't rotate that often) must not survive between test cases. */
+export function __resetKeyCacheForTests(): void {
+  cachedKeys = null;
+}
+
 function base64UrlDecode(value: string): Uint8Array {
   const padded = value.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(value.length / 4) * 4, '=');
   const binary = atob(padded);

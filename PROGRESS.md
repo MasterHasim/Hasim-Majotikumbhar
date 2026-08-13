@@ -28,19 +28,37 @@ one until it's fully validated — see the phase list further down.
   the same kind of real round-trip check that caught the Apps Script realtime
   bugs earlier, done now before any real feature logic is built on top.
 
+**Phase 1 (auth/roles/teams/number-access) ported and tested.** Direct port of
+`apps-script/src/Phase1{Domain,AccessControl,Services,Endpoints}.gs` — same
+five roles, same permission rules, same validation, only the storage layer
+(Realtime Database instead of Script Properties) and identity source
+(verified Firebase ID token instead of `Session.getActiveUser()`) changed.
+Verified two ways: live against a running `wrangler dev` server (every one of
+the 24 endpoints correctly routes and enforces auth), and with 18 automated
+tests against a mocked Firebase — real RSA JWT signing/verification included,
+not stubbed out — covering bootstrap edge cases, permission enforcement, and
+the core `requireConversationOperation` authorization gate across roles. One
+real bug was caught and fixed by these tests (a test-isolation issue in the
+Google-public-key cache, not a production bug). Run `npm test` in
+`webapp/backend/`.
+
 ### ✅ Action needed from you — new stack setup (one-time, ~15 minutes)
 
-1. **Create a free Cloudflare account** (if you don't have one):
-   https://dash.cloudflare.com/sign-up — no card required for the plan we're using.
-2. From `webapp/backend/`, run `npx wrangler login` — opens a browser to
-   authorize the CLI against your new Cloudflare account.
-3. **Get the Firebase service account JSON as plain text** (same file already
-   used by the Apps Script build, where it's stored base64-encoded as
-   `FIREBASE_SERVICE_ACCOUNT_B64`) — decode it back to JSON once, then from
-   `webapp/backend/` run `npx wrangler secret put FIREBASE_SERVICE_ACCOUNT_JSON`
-   and paste it in.
-4. Same way, set `FIREBASE_WEB_API_KEY` (same value as the Apps Script build's)
-   via `wrangler secret put`.
+1. ✅ Cloudflare account created, `wrangler login` done.
+2. ✅ `FIREBASE_WEB_API_KEY` secret set.
+3. **Generate a Firebase service account key for this backend** (a fresh one,
+   not the Apps Script build's — independent credentials): Firebase Console →
+   ⚙️ Project Settings → **Service accounts** → **Generate new private key**,
+   then from `webapp/backend/`:
+   ```
+   npx wrangler secret put FIREBASE_SERVICE_ACCOUNT_JSON < path\to\downloaded-file.json
+   ```
+4. **Set the bootstrap admin email** (the one identity allowed to become the
+   first ADMIN user in the new system):
+   ```
+   npx wrangler secret put BOOTSTRAP_ADMIN_EMAIL
+   ```
+   (enter your own email)
 5. For local development instead of live secrets: copy
    `webapp/backend/.dev.vars.example` → `.dev.vars` and
    `webapp/frontend/.env.example` → `.env.local`, fill in the same values.
@@ -53,8 +71,8 @@ actual code) I'm building without needing anything further from you, phase by
 phase, same order as the original build:
 
 1. ~~Foundation (backend + frontend scaffolding, auth pipeline proven)~~ ✅ done
-2. Phase 1 — auth, roles, teams, number access
-3. Messaging core — numbers, customers, conversations, messages, webhook, send (highest priority, since it's already Firebase-native)
+2. ~~Phase 1 — auth, roles, teams, number access~~ ✅ done, tested
+3. Messaging core — numbers, customers, conversations, messages, webhook, send (highest priority, since it's already Firebase-native) — **in progress**
 4. CRM core — assignment, remarks, reminders, stages
 5. Templates, quick replies, media
 6. Admin panel, notifications, dashboard, audit/backup
