@@ -14,6 +14,22 @@ var PasswordAuthConfig_ = {
   RESET_TOKEN_TTL_MS: 60 * 60 * 1000
 };
 
+/**
+ * ScriptApp.getService().getUrl() returns whichever deployment URL is CURRENTLY
+ * serving the executing request — including the /dev "test deployment" URL if the
+ * admin who triggered the email happened to be browsing the app via /dev at that
+ * moment (Apps Script editor > Test deployments), not the real published /exec URL.
+ * Real bug found live 2026-08-17: a "Send setup link" email went out with a /dev URL,
+ * which 403s for anyone but the script's own editors. Script Property WEB_APP_URL
+ * (set once to the real @HEAD deployment's /exec URL) makes emailed links stable
+ * regardless of which URL is open in the sender's own browser tab; falls back to
+ * getUrl() if unset so this doesn't hard-break for anyone who hasn't configured it.
+ */
+function webAppUrl_() {
+  var configured = PropertiesService.getScriptProperties().getProperty('WEB_APP_URL');
+  return configured || ScriptApp.getService().getUrl();
+}
+
 function generateSalt_() {
   return Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '');
 }

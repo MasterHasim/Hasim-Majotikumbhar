@@ -103,7 +103,7 @@ class PasswordAuthApi {
     var user = this.repository_.get('users', userId);
     if (!user) throw new Phase1Error('NOT_FOUND', 'User was not found.');
     var temporaryPassword = this.generateAndSetTemporaryPassword_(user.id);
-    var url = ScriptApp.getService().getUrl();
+    var url = webAppUrl_();
     MailApp.sendEmail(user.email, 'Your WhatsApp Panel account',
       'Hi ' + user.displayName + ',\n\nYou now have access to the WhatsApp Panel.\n\n' +
       'Sign in here: ' + url + '\nEmail: ' + user.email + '\nTemporary password: ' + temporaryPassword +
@@ -178,7 +178,7 @@ class PasswordAuthApi {
    * 2026-08-10 — expect a fresh consent screen on next authorization.
    */
   sendResetEmail_(user, token) {
-    var url = ScriptApp.getService().getUrl() + '?resetToken=' + encodeURIComponent(token);
+    var url = webAppUrl_() + '?resetToken=' + encodeURIComponent(token);
     MailApp.sendEmail(user.email, 'Set your WhatsApp Panel password',
       'Hi ' + user.displayName + ',\n\nUse this link to set your password (valid for 1 hour):\n' + url + '\n\nIf you did not request this, you can ignore this email.');
   }
