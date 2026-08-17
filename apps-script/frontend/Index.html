@@ -1612,8 +1612,7 @@
         document.getElementById('usersTable').querySelector('tbody').innerHTML = users.map(function (u) {
           return '<tr><td>' + escapeHtml(u.email) + '</td><td>' + escapeHtml(u.displayName) + '</td><td><span class="pill">' + escapeHtml(u.status) + '</span></td>' +
             '<td>' + u.roleIds.map(roleName).join(', ') + '</td><td><button class="btn" onclick="editUser(\'' + u.id + '\')">Edit</button> ' +
-            '<button class="btn" onclick="submitSendPasswordSetupLink(\'' + u.id + '\')" title="Emails a link to set/reset their password">Send setup link</button> ' +
-            '<button class="btn" onclick="submitSetTemporaryPassword(\'' + u.id + '\')" title="No email needed — shows a temporary password you share directly; they must change it on first login">Generate temp password</button></td></tr>';
+            '<button class="btn" onclick="submitSendPasswordSetupLink(\'' + u.id + '\')" title="Emails a link to set/reset their password">Reset password</button></td></tr>';
         }).join('') || '<tr><td colspan="5" class="empty">No users</td></tr>';
       }).withFailureHandler(function (error) { setError('userError', error); }).listUsers();
     }
@@ -1627,7 +1626,7 @@
         scriptRun().withSuccessHandler(function (result) {
           alert('User created and a welcome email was sent to ' + email + '.\n\nTemporary password (in case the email does not arrive): ' + result.temporaryPassword);
         }).withFailureHandler(function (error) {
-          alert('User created, but the welcome email could not be sent: ' + (error && error.message) + '\n\nUse "Send setup link" or "Generate temp password" on their row instead.');
+          alert('User created, but the welcome email could not be sent: ' + (error && error.message) + '\n\nUse "Reset password" on their row instead.');
         }).sendWelcomeEmail(newUser.id);
       }).withFailureHandler(function (error) { setError('userError', error); }).createUser({ email: email, displayName: displayName, roleIds: [roleId] });
     }
@@ -1677,12 +1676,6 @@
       scriptRun().withSuccessHandler(function () { alert('Setup link emailed.'); })
         .withFailureHandler(function (error) { alert('Could not send setup link: ' + (error && error.message)); }).sendPasswordSetupLink(id);
     }
-    function submitSetTemporaryPassword(id) {
-      scriptRun().withSuccessHandler(function (result) {
-        alert('Temporary password: ' + result.temporaryPassword + '\n\nShare this with them directly — it will not be shown again. They must change it the first time they sign in.');
-      }).withFailureHandler(function (error) { alert('Could not generate a temporary password: ' + (error && error.message)); }).setTemporaryPassword(id);
-    }
-
     // ============================================================================
     // WhatsApp Numbers page
     // ============================================================================

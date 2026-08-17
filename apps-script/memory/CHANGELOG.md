@@ -1,5 +1,8 @@
 ﻿# Changelog
 
+## 2026-08-17 (follow-up 6)
+- Collapsed the Users table's two password-recovery buttons ("Send setup link" + "Generate temp password") into one **Reset password** button, user-directed — email-a-reset-link only, no temp password shown to the admin at all. Removed the now-dead `submitSetTemporaryPassword` frontend function; the `setTemporaryPassword` backend endpoint is left intact/unused rather than deleted, in case a no-email fallback is needed again later. "Add user"'s combined create+welcome-email flow is unchanged (separate feature).
+
 ## 2026-08-17 (follow-up 5)
 - **Real bug found via live testing**: a "Send setup link" email 403'd for the recipient — the URL was `.../dev?resetToken=...` instead of `.../exec?resetToken=...`. `ScriptApp.getService().getUrl()` returns whatever deployment is serving the *current* request, so it captured a `/dev` test-deployment URL the admin happened to be browsing from at the time. Added `webAppUrl_()` (`src/PasswordAuthDomain.gs`) preferring a new `WEB_APP_URL` Script Property over `getUrl()`; updated both `sendWelcomeEmail` and `sendResetEmail_` (`src/PasswordAuthServices.gs`) to use it. All 24 suites pass.
 
