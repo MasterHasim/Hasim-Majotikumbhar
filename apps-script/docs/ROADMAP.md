@@ -94,9 +94,14 @@ Portfolio and credentials.
 | 5 | Entartica - Rajsamand — 079-485-02805 |
 | 6 | Entartica - Prayagraj — 079-485-02806 |
 | 7 | Spreewalk - Saraighat — 079-485-02807 |
-| 8 | Spreewalk - Raipur — 079-485-02808 |
-| 9 | ECHT Advisory — 079-485-02809 |
+| 8 | Coimbatore — 079-485-02808 (reassigned 2026-08-17, was "Spreewalk - Raipur") |
+| 9 | Entartica - Alibaug — 079-485-02809 (relabeled 2026-08-17, was "ECHT Advisory") |
 | 10 | Compliances — 079-485-02810 |
+
+Table above reflects the original Phase 3 registration; #8/#9 were relabeled directly in
+the live `WhatsApp_Numbers` sheet since (confirmed by the user 2026-08-17, in the context
+of Phase 22's location leads — see `memory/DECISIONS.md`). This doc isn't the source of
+truth for current live values — the app's Numbers admin panel / the sheet itself is.
 
 Do not hard-code Exotel throughout the application. Create a `WhatsAppProvider`
 abstraction (`sendText`, `sendMedia`, `sendTemplate`, `getTemplates`, `createTemplate`,
