@@ -180,9 +180,13 @@ assert.throws(() => phase22().addLeadRemark(rahulsOwnLead.id, 'x'), error => err
 
 // ---- Send WhatsApp from a lead: resolves the location's WhatsApp number by displayName ----
 email = 'admin@example.com';
+// active is the string 'TRUE', not the boolean true — regression test for a real bug
+// found live 2026-08-17: WhatsApp_Numbers rows hand-edited in the sheet round-trip a
+// typed "TRUE" as a string through the plain-text-formatted column, and findNumberForLocation_
+// originally used a strict `=== true` check that silently excluded every such row.
 const number = new NumberRepository().create({
   id: 'number_coimbatore', displayName: 'Entartica - Coimbatore', phoneNumber: '07948502808', provider: 'exotel',
-  providerAccountId: '', wabaId: '', providerNumberId: '', active: true, createdAt: '', updatedAt: ''
+  providerAccountId: '', wabaId: '', providerNumberId: '', active: 'TRUE', createdAt: '', updatedAt: ''
 });
 // No numberAccess granted yet — must be rejected, not silently create an inaccessible conversation.
 email = 'rahul@example.com';

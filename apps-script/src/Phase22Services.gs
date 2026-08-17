@@ -280,10 +280,21 @@ class Phase22Api {
     return record;
   }
 
-  /** Matches a location to a WhatsApp Number by displayName substring (case-insensitive) — e.g. "Entartica - Raipur" for location "Raipur". Deliberately not a stored field: brand/number assignments have already been relabeled once (memory/DECISIONS.md), and this avoids a second config surface to keep in sync. */
+  /**
+   * Matches a location to a WhatsApp Number by displayName substring (case-insensitive)
+   * — e.g. "Entartica - Raipur" for location "Raipur". Deliberately not a stored field:
+   * brand/number assignments have already been relabeled once (memory/DECISIONS.md),
+   * and this avoids a second config surface to keep in sync.
+   *
+   * `!== false` (not `=== true`) for the same reason Phase3Services.gs/Phase11Services.gs
+   * use it — WhatsApp_Numbers rows have been hand-edited directly in the sheet before
+   * (memory/DECISIONS.md), and a manually-typed "TRUE" round-trips through a plain-text
+   * (`@`-formatted, see Phase2Persistence.gs) cell as the string "TRUE", not a real
+   * boolean — `=== true` would then silently exclude every number.
+   */
   findNumberForLocation_(location) {
     var needle = location.toLowerCase();
-    return this.numbers_.list().filter(function (n) { return n.active === true; })
+    return this.numbers_.list().filter(function (n) { return n.active !== false; })
       .find(function (n) { return (n.displayName || '').toLowerCase().indexOf(needle) !== -1; }) || null;
   }
 

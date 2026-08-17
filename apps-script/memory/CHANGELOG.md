@@ -1,5 +1,8 @@
 ﻿# Changelog
 
+## 2026-08-17 (follow-up 7)
+- **Real bug found via live testing**: "Send WhatsApp" on a Raipur lead failed with "No WhatsApp number is configured for location 'Raipur'" even though "Entartica - Raipur" clearly existed and was selected in the sidebar. Root cause: `findNumberForLocation_` (`src/Phase22Services.gs`) filtered on `n.active === true` (strict), but `WhatsApp_Numbers` rows have been hand-edited directly in the sheet before (memory/DECISIONS.md) — a manually-typed "TRUE" round-trips through the plain-text-formatted `active` column as the *string* `"TRUE"`, not a boolean, so the strict check silently excluded every number. Fixed to `!== false`, matching the same lenient convention `Phase3Services.gs`/`Phase11Services.gs` already use for exactly this reason. Added a regression test using `active: 'TRUE'` (string) to catch this class of bug going forward. All 24 suites pass.
+
 ## 2026-08-17 (follow-up 6)
 - Collapsed the Users table's two password-recovery buttons ("Send setup link" + "Generate temp password") into one **Reset password** button, user-directed — email-a-reset-link only, no temp password shown to the admin at all. Removed the now-dead `submitSetTemporaryPassword` frontend function; the `setTemporaryPassword` backend endpoint is left intact/unused rather than deleted, in case a no-email fallback is needed again later. "Add user"'s combined create+welcome-email flow is unchanged (separate feature).
 
