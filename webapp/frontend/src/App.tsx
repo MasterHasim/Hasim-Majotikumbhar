@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { onAuthStateChanged, signInWithPopup, signOut, type User } from 'firebase/auth';
+import { getRedirectResult, onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut, type User } from 'firebase/auth';
 import { auth, googleProvider } from './lib/firebase';
 import { apiFetch, ApiClientError } from './lib/api';
 
@@ -7,6 +7,22 @@ interface WhoAmI {
   uid: string;
   email: string | null;
   claims: Record<string, unknown>;
+}
+
+async function signIn() {
+  try {
+    await signInWithPopup(auth, googleProvider);
+  } catch (err) {
+    // Popups are blocked by some browsers/extensions by default (and by
+    // sandboxed automation contexts) — redirect-based sign-in works
+    // everywhere popup-based sign-in does, so it's the safer default to fall
+    // back to rather than leaving affected users stuck with no explanation.
+    if (err instanceof Error && 'code' in err && err.code === 'auth/popup-blocked') {
+      await signInWithRedirect(auth, googleProvider);
+    } else {
+      throw err;
+    }
+  }
 }
 
 /**
@@ -20,6 +36,10 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [whoAmI, setWhoAmI] = useState<WhoAmI | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    getRedirectResult(auth).catch((err) => setError(String(err)));
+  }, []);
 
   useEffect(() => onAuthStateChanged(auth, (u) => { setUser(u); setAuthLoading(false); }), []);
 
@@ -37,7 +57,8 @@ export default function App() {
     return (
       <div style={{ padding: 24, fontFamily: 'sans-serif' }}>
         <h1>WhatsApp Panel — New Stack</h1>
-        <button onClick={() => signInWithPopup(auth, googleProvider)}>Sign in with Google</button>
+        <button onClick={() => void signIn()}>Sign in with Google</button>
+        {error && <p style={{ color: 'crimson' }}>{error}</p>}
       </div>
     );
   }
