@@ -123,9 +123,11 @@ assert.strictEqual(phase22().listLeads({}).find(l => l.id === rahulsOwnLead.id).
 email = 'priya@example.com';
 assert.throws(() => phase22().initiateCall(rahulsOwnLead.id), error => error.code === 'FORBIDDEN', 'a lead not assigned to the caller must be rejected');
 
-// A location with its own caller ID (a separate ExoPhone per brand) overrides the default.
+// A location with its own caller ID (a separate ExoPhone per brand) overrides the
+// default, and dashes pasted straight from a display table are stripped on save.
 email = 'admin@example.com';
-phase22().setLocationConfig('Prayagraj', { callerId: '07948502806' });
+const savedConfig = phase22().setLocationConfig('Prayagraj', { callerId: '079-485-02806' });
+assert.strictEqual(savedConfig.callerId, '07948502806', 'dashes stripped on save');
 email = 'rahul@example.com';
 const prayagrajLead = rahulsLeads.find(lead => lead.assignedUserId === rahul.id && lead.location === 'Prayagraj');
 const prayagrajCall = phase22().initiateCall(prayagrajLead.id);

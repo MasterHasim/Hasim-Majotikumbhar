@@ -94,7 +94,7 @@ class Phase22Api {
     });
     if (safePatch.mode) Phase22Validation.mode(safePatch.mode);
     if (safePatch.singleUserId && !this.repository_.get('users', safePatch.singleUserId)) throw new Phase1Error('NOT_FOUND', 'singleUserId does not reference a user.');
-    if (safePatch.callerId) safePatch.callerId = safePatch.callerId.toString().trim();
+    if (safePatch.callerId) safePatch.callerId = Phase22Validation.callerId(safePatch.callerId);
     var existing = this.locationAssignment_.config.findOne(function (record) { return record.location === location; });
     var now = Phase1Ids.now(), record;
     if (existing) {

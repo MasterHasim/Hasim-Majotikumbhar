@@ -35,5 +35,7 @@ var Phase22Validation = {
     return normalized;
   },
   location: function (value) { return Phase1Validation.enumValue(value, Phase22Locations, 'location'); },
-  mode: function (value) { return Phase1Validation.enumValue(value, Phase22AssignmentModeValues, 'mode'); }
+  mode: function (value) { return Phase1Validation.enumValue(value, Phase22AssignmentModeValues, 'mode'); },
+  /** ExoPhone caller IDs get pasted from a display table like "079-485-02804" — strip formatting the same way lead phone numbers are, no strict length check (landline ExoPhones vary). */
+  callerId: function (value) { return value.toString().replace(/[\s-]/g, '').trim(); }
 };

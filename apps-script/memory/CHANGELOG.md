@@ -1,5 +1,8 @@
 ﻿# Changelog
 
+## 2026-08-17 (follow-up 2)
+- User confirmed the full location→ExoPhone mapping: Raipur 02804, Rajsamand 02805, Prayagraj 02806, Saraighat 02807, Coimbatore 02808, Alibaug 02809. Added `Phase22Validation.callerId` (strips spaces/dashes, no strict length check — landline ExoPhones vary) so pasting straight from a "079-485-02804"-style display table into the admin Caller ID field doesn't send dashes to Exotel's API. `setLocationConfig` now normalizes on save. Extended `tests/phase22-leads-verification.js` to assert the dash-stripping. All 24 suites pass.
+
 ## 2026-08-17 (follow-up)
 - Added per-location caller ID support to Phase 22: `Location_Assignment_Config` gained a `callerId` column, `ExotelVoiceProvider.connectCall` takes an optional third `callerId` argument (falls back to `EXOTEL_VOICE_CALLER_ID` when omitted), `Phase22Api.initiateCall` passes the lead's location's caller ID through, and the Assignment Rules admin panel gained a Caller ID input per location. Driven by the user having a separate ExoPhone per brand/location rather than one shared caller ID. Extended `tests/phase22-leads-verification.js` to cover both the fallback-to-default and location-override cases. All 24 backend suites pass.
 
