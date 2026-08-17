@@ -134,7 +134,11 @@ class Phase7Api {
 
   getEligibleAgentIds_(numberId) {
     var self = this;
-    var participants = this.numberAssignment_.users.list().filter(function (participant) { return participant.numberId === numberId && participant.active === true; })
+    // `!== false`, not `=== true` — Number_Assignment_Users is Sheets-backed, and a
+    // manually-typed "TRUE" round-trips through the plain-text-formatted `active`
+    // column as the string "TRUE", not a boolean (same real bug found live 2026-08-17
+    // on WhatsApp_Numbers, see memory/DECISIONS.md; fixed here proactively).
+    var participants = this.numberAssignment_.users.list().filter(function (participant) { return participant.numberId === numberId && participant.active !== false; })
       .sort(function (a, b) { return a.sequenceOrder - b.sequenceOrder; });
     return participants.filter(function (participant) {
       var user = self.repository_.get('users', participant.userId);

@@ -1,5 +1,8 @@
 ﻿# Changelog
 
+## 2026-08-17 (follow-up 9)
+- User approved fixing the flagged `Number_Assignment_Users.active === true` risk in Phase 7's `getEligibleAgentIds_` (`src/Phase7Services.gs`) — same `!== false` fix already applied to `WhatsApp_Numbers` and `Location_Assignment_Users` today. All 24 suites pass, including `phase7-assignment-verification.js` and `phase12-admin-panel-verification.js` (which exercises deactivating a participant) unchanged.
+
 ## 2026-08-17 (follow-up 8)
 - Proactive audit after the two `=== true`/`getUrl()` bugs found this session: swept the codebase for the same `=== true` fragility on other Sheets-backed tables. Fixed `Location_Assignment_Users.active === true` → `!== false` in `selectNextLocationAgent_` (`src/Phase22Services.gs`) — my own table, same latent risk as the `WhatsApp_Numbers` bug if ever hand-edited in the sheet. Left `Phase7Services.gs`'s identical pattern on `Number_Assignment_Users.active` alone — same latent risk, but that's pre-existing, live-verified, production code outside this session's scope; flagged for the user to decide rather than silently changed. All 24 suites pass.
 
