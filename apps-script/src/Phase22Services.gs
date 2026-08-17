@@ -86,7 +86,7 @@ class Phase22Api {
   setLocationConfig(location, patch) {
     var actor = this.access_.require(Phase1Permissions.LEADS_MANAGE);
     Phase22Validation.location(location);
-    var allowed = ['mode', 'singleUserId', 'active'];
+    var allowed = ['mode', 'singleUserId', 'active', 'callerId'];
     var safePatch = {};
     Object.keys(patch || {}).forEach(function (key) {
       if (allowed.indexOf(key) === -1) throw new Phase1Error('VALIDATION_ERROR', 'Field cannot be updated: ' + key);
@@ -94,12 +94,13 @@ class Phase22Api {
     });
     if (safePatch.mode) Phase22Validation.mode(safePatch.mode);
     if (safePatch.singleUserId && !this.repository_.get('users', safePatch.singleUserId)) throw new Phase1Error('NOT_FOUND', 'singleUserId does not reference a user.');
+    if (safePatch.callerId) safePatch.callerId = safePatch.callerId.toString().trim();
     var existing = this.locationAssignment_.config.findOne(function (record) { return record.location === location; });
     var now = Phase1Ids.now(), record;
     if (existing) {
       record = this.locationAssignment_.config.update(existing.id, safePatch);
     } else {
-      record = Object.assign({ id: Phase1Ids.create('locconfig'), location: location, mode: Phase22AssignmentModes.MANUAL, singleUserId: '', lastAssignedUserId: '', active: true, createdAt: now, updatedAt: now }, safePatch);
+      record = Object.assign({ id: Phase1Ids.create('locconfig'), location: location, mode: Phase22AssignmentModes.MANUAL, singleUserId: '', lastAssignedUserId: '', active: true, callerId: '', createdAt: now, updatedAt: now }, safePatch);
       this.locationAssignment_.config.create(record);
     }
     this.audit_.write(actor.id, 'locationAssignmentConfig.updated', 'locationAssignmentConfig', record.id, { location: location });
@@ -149,7 +150,8 @@ class Phase22Api {
     }
     var agentPhone = (actor.phone || '').toString().trim();
     if (!agentPhone) throw new Phase1Error('VALIDATION_ERROR', 'Your profile has no phone number on file — ask an admin to add one.');
-    var result = new ExotelVoiceProvider().connectCall(agentPhone, lead.phone);
+    var locationConfig = this.locationAssignment_.config.findOne(function (record) { return record.location === lead.location; });
+    var result = new ExotelVoiceProvider().connectCall(agentPhone, lead.phone, locationConfig && locationConfig.callerId);
     var now = Phase1Ids.now();
     var record = { id: Phase1Ids.create('call'), leadId: leadId, agentUserId: actor.id, exotelCallSid: result.callSid || '', agentPhone: agentPhone, leadPhone: lead.phone, callerId: result.callerId || '', status: result.status || 'INITIATED', initiatedAt: now, updatedAt: now };
     this.callLog_.create(record);

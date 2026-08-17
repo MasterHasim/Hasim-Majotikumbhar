@@ -44,7 +44,7 @@ var Phase2Schemas = {
   // above — see memory/DECISIONS.md. Enums/validation live in Phase22Domain.gs; the
   // column arrays live here per this file's own established convention (Phase 8/9/11).
   Leads: ['name', 'phone', 'location', 'status', 'assignedUserId', 'assignedAt', 'uploadBatchId', 'uploadedBy', 'createdAt', 'updatedAt'],
-  Location_Assignment_Config: ['location', 'mode', 'singleUserId', 'lastAssignedUserId', 'active', 'createdAt', 'updatedAt'],
+  Location_Assignment_Config: ['location', 'mode', 'singleUserId', 'lastAssignedUserId', 'active', 'callerId', 'createdAt', 'updatedAt'],
   Location_Assignment_Users: ['location', 'userId', 'sequenceOrder', 'active', 'createdAt', 'updatedAt'],
   Call_Log: ['leadId', 'agentUserId', 'exotelCallSid', 'agentPhone', 'leadPhone', 'callerId', 'status', 'initiatedAt', 'updatedAt']
 };

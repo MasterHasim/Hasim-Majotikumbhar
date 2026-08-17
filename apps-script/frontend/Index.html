@@ -1758,7 +1758,7 @@
         .withFailureHandler(function (error) { body.innerHTML = '<div class="form-error">' + escapeHtml(error && error.message) + '</div>'; }).getLocationAssignmentConfig(location);
     }
     function renderLeadAssignmentConfig(location, config) {
-      config = config || { mode: 'manual', singleUserId: '', active: true };
+      config = config || { mode: 'manual', singleUserId: '', active: true, callerId: '' };
       var userOptions = '<option value="">(none)</option>' + cachedUsers.map(function (u) { return '<option value="' + u.id + '"' + (u.id === config.singleUserId ? ' selected' : '') + '>' + escapeHtml(u.displayName) + '</option>'; }).join('');
       document.getElementById('leadAssignmentRulesBody').innerHTML =
         '<div class="card"><h2 class="section-title" style="margin-top:0;">Assignment rule for ' + escapeHtml(location) + '</h2>' +
@@ -1766,6 +1766,7 @@
         ['single', 'round_robin', 'manual'].map(function (m) { return '<option value="' + m + '"' + (m === config.mode ? ' selected' : '') + '>' + (m === 'single' ? 'Single agent (always the same person)' : m === 'round_robin' ? 'Round robin (rotate through the pool below)' : 'Manual (admin assigns each lead by hand)') + '</option>'; }).join('') +
         '</select></div>' +
         '<div class="form-row">Single-mode agent: <select id="leadRuleSingleUser">' + userOptions + '</select></div>' +
+        '<div class="form-row">Caller ID (ExoPhone) for this location — leave blank to use the account default: <input id="leadRuleCallerId" value="' + escapeHtml(config.callerId || '') + '" placeholder="e.g. 07948502804" style="width:160px;"></div>' +
         '<div class="form-row"><label class="inline"><input type="checkbox" id="leadRuleActive"' + (config.active !== false ? ' checked' : '') + '> Active</label></div>' +
         '<button class="btn primary" onclick="submitLeadAssignmentConfig(\'' + location + '\')">Save config</button>' +
         '<div class="form-error" id="leadAssignConfigError"></div></div>' +
@@ -1777,7 +1778,7 @@
       loadLeadParticipants(location);
     }
     function submitLeadAssignmentConfig(location) {
-      var patch = { mode: document.getElementById('leadRuleMode').value, singleUserId: document.getElementById('leadRuleSingleUser').value, active: document.getElementById('leadRuleActive').checked };
+      var patch = { mode: document.getElementById('leadRuleMode').value, singleUserId: document.getElementById('leadRuleSingleUser').value, active: document.getElementById('leadRuleActive').checked, callerId: document.getElementById('leadRuleCallerId').value.trim() };
       scriptRun().withSuccessHandler(function () { setError('leadAssignConfigError', null); loadLeadAssignmentRules(); }).withFailureHandler(function (error) { setError('leadAssignConfigError', error); }).setLocationAssignmentConfig(location, patch);
     }
     function loadLeadParticipants(location) {

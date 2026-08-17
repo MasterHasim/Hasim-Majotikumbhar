@@ -111,14 +111,24 @@ assert.ok(rahulsLeads.length > 0);
 // Permission denial: AGENT cannot upload leads (LEADS_MANAGE is ADMIN/SITE_MANAGER only).
 assert.throws(() => phase22().uploadLeads([{ name: 'X', phone: '9000000000', location: 'Alibaug' }]), error => error.code === 'FORBIDDEN');
 
-// Click-to-call: only for a lead assigned to the calling agent.
-const rahulsOwnLead = rahulsLeads.find(lead => lead.assignedUserId === rahul.id);
+// Click-to-call: only for a lead assigned to the calling agent, and uses the account-
+// wide default caller ID when the location has none configured (Coimbatore).
+const rahulsOwnLead = rahulsLeads.find(lead => lead.assignedUserId === rahul.id && lead.location === 'Coimbatore');
 const call = phase22().initiateCall(rahulsOwnLead.id);
 assert.strictEqual(call.agentPhone, '9111111111');
 assert.ok(call.exotelCallSid.indexOf('call_sid_') === 0);
+assert.strictEqual(call.callerId, '07900000000', 'falls back to the account-wide EXOTEL_VOICE_CALLER_ID');
 assert.strictEqual(phase22().listLeads({}).find(l => l.id === rahulsOwnLead.id).status, 'CALLED');
 
 email = 'priya@example.com';
 assert.throws(() => phase22().initiateCall(rahulsOwnLead.id), error => error.code === 'FORBIDDEN', 'a lead not assigned to the caller must be rejected');
+
+// A location with its own caller ID (a separate ExoPhone per brand) overrides the default.
+email = 'admin@example.com';
+phase22().setLocationConfig('Prayagraj', { callerId: '07948502806' });
+email = 'rahul@example.com';
+const prayagrajLead = rahulsLeads.find(lead => lead.assignedUserId === rahul.id && lead.location === 'Prayagraj');
+const prayagrajCall = phase22().initiateCall(prayagrajLead.id);
+assert.strictEqual(prayagrajCall.callerId, '07948502806', 'uses the location-specific caller ID, not the account default');
 
 console.log('Phase 22 leads verification: PASS');

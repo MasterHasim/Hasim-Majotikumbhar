@@ -36,19 +36,27 @@ class ExotelVoiceProvider {
     this.config_ = Phase22ExotelVoiceConfig.require_();
   }
 
-  /** Rings agentPhone first; once answered, Exotel connects the call to leadPhone. Returns { callSid, status }. */
-  connectCall(agentPhone, leadPhone) {
+  /**
+   * Rings agentPhone first; once answered, Exotel connects the call to leadPhone.
+   * `callerId` is optional — pass a location's own ExoPhone (Phase22 supports one per
+   * location, e.g. each brand's own number) to have the lead see that brand's number
+   * instead of the account-wide default; falls back to `EXOTEL_VOICE_CALLER_ID` when
+   * omitted, so single-caller-ID setups need no per-location configuration at all.
+   * Returns { callSid, status, callerId }.
+   */
+  connectCall(agentPhone, leadPhone, callerId) {
+    var effectiveCallerId = callerId || this.config_.callerId;
     var response = this.request_('Calls/connect.json', {
       From: agentPhone,
       To: leadPhone,
-      CallerId: this.config_.callerId,
+      CallerId: effectiveCallerId,
       CallType: 'trans' // UNVERIFIED — assumed value for a real-time (non-recorded-prompt) connect call
     });
     var call = response && response.Call; // UNVERIFIED envelope shape
     return {
       callSid: (call && (call.Sid || call.CallSid)) || null,
       status: (call && call.Status) || 'UNKNOWN',
-      callerId: this.config_.callerId,
+      callerId: effectiveCallerId,
       raw: response
     };
   }
