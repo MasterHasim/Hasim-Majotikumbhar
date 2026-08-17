@@ -1,5 +1,8 @@
 ﻿# Changelog
 
+## 2026-08-17 (follow-up 8)
+- Proactive audit after the two `=== true`/`getUrl()` bugs found this session: swept the codebase for the same `=== true` fragility on other Sheets-backed tables. Fixed `Location_Assignment_Users.active === true` → `!== false` in `selectNextLocationAgent_` (`src/Phase22Services.gs`) — my own table, same latent risk as the `WhatsApp_Numbers` bug if ever hand-edited in the sheet. Left `Phase7Services.gs`'s identical pattern on `Number_Assignment_Users.active` alone — same latent risk, but that's pre-existing, live-verified, production code outside this session's scope; flagged for the user to decide rather than silently changed. All 24 suites pass.
+
 ## 2026-08-17 (follow-up 7)
 - **Real bug found via live testing**: "Send WhatsApp" on a Raipur lead failed with "No WhatsApp number is configured for location 'Raipur'" even though "Entartica - Raipur" clearly existed and was selected in the sidebar. Root cause: `findNumberForLocation_` (`src/Phase22Services.gs`) filtered on `n.active === true` (strict), but `WhatsApp_Numbers` rows have been hand-edited directly in the sheet before (memory/DECISIONS.md) — a manually-typed "TRUE" round-trips through the plain-text-formatted `active` column as the *string* `"TRUE"`, not a boolean, so the strict check silently excluded every number. Fixed to `!== false`, matching the same lenient convention `Phase3Services.gs`/`Phase11Services.gs` already use for exactly this reason. Added a regression test using `active: 'TRUE'` (string) to catch this class of bug going forward. All 24 suites pass.
 

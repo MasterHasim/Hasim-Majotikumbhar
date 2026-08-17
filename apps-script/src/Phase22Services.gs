@@ -335,7 +335,7 @@ class Phase22Api {
 
   selectNextLocationAgent_(location, config) {
     var self = this;
-    var eligible = this.locationAssignment_.users.list().filter(function (p) { return p.location === location && p.active === true; })
+    var eligible = this.locationAssignment_.users.list().filter(function (p) { return p.location === location && p.active !== false; })
       .sort(function (a, b) { return a.sequenceOrder - b.sequenceOrder; })
       .filter(function (p) { var user = self.repository_.get('users', p.userId); return user && user.status === Phase1Constants.ACTIVE; })
       .map(function (p) { return p.userId; });
