@@ -25,7 +25,11 @@ var PASSWORD_AUTH_API_ALLOWLIST_ = [
   'listMyReminders', 'listStages', 'listUsers', 'uploadConversationMedia', 'listRoles', 'resolveConversation',
   'setCustomerStage', 'snoozeConversation', 'submitTemplateForReview', 'updateAssignmentParticipant', 'createTeam',
   'getCustomerStage', 'getDashboardSummary', 'syncTemplatesFromProvider', 'unsnoozeConversation', 'addRemark',
-  'getSnoozeStatus', 'updateTeam', 'sendPasswordSetupLink', 'logout', 'setTemporaryPassword', 'changePassword', 'sendWelcomeEmail', 'getRealtimeListenToken'
+  'getSnoozeStatus', 'updateTeam', 'sendPasswordSetupLink', 'logout', 'setTemporaryPassword', 'changePassword', 'sendWelcomeEmail', 'getRealtimeListenToken',
+  // Phase 22: location leads upload, assignment rules, click-to-call.
+  'listLeadLocations', 'uploadLeads', 'listLeads', 'reassignLead', 'getLocationAssignmentConfig', 'setLocationAssignmentConfig',
+  'listLocationAssignmentParticipants', 'addLocationAssignmentParticipant', 'updateLocationAssignmentParticipant',
+  'initiateLeadCall', 'listLeadCallLog'
 ];
 
 // While mustChangePassword is set, every other allowlisted call is blocked server-

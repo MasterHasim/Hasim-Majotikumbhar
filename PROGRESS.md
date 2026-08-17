@@ -1,7 +1,37 @@
 # WhatsApp Multi-Number CRM — Progress Report
 
-**Last updated:** 2026-08-10 (overnight autonomous run through Phase 18, then a full day of live testing/direct feedback — see `memory/DECISIONS.md` and `memory/CHANGELOG.md`)
+**Last updated:** 2026-08-17 (Phase 22 added to the live `apps-script/` build — see below; webapp migration status below that is unchanged since 2026-08-10)
 **Purpose:** single source of truth for "what's done, what's left, and what needs you personally." Updated after every phase/transition. See `docs/ROADMAP.md` for full phase scope, `memory/CHANGELOG.md` for full per-phase detail (this file stays intentionally brief per phase), and `memory/DECISIONS.md` for architectural reasoning.
+
+## ✅ New: Phase 22 — Location Leads Upload, Assignment Rules & Exotel Click-to-Call (2026-08-17)
+
+Built into the live `apps-script/` build (not the webapp — see migration section below).
+Admins can now upload a spreadsheet of call leads (name/phone/location) for Raipur,
+Rajsamand, Coimbatore, Prayagraj, Alibaug, and Saraighat; each lead auto-assigns to a
+site agent by a per-location rule (single agent / round robin / manual, configurable
+under the new **Location Leads → Assignment Rules** admin tab). Agents see their own
+leads under a new **My Leads** page with a one-click **Call** button.
+
+**Action needed from you before click-to-call works:**
+1. Set four Script Properties in the Apps Script editor (Project Settings → Script
+   Properties): `EXOTEL_VOICE_ACCOUNT_SID`, `EXOTEL_VOICE_API_KEY`,
+   `EXOTEL_VOICE_API_TOKEN`, `EXOTEL_VOICE_CALLER_ID` (the ExoPhone the calls should
+   come from). If your Exotel Voice API uses the same account as your existing WhatsApp
+   integration, these can be the same Account SID/Key/Token you already set for
+   `EXOTEL_*` — just the CallerId is new.
+2. For each agent, open **Users → Edit** and fill in their **Phone** field — this is the
+   number Exotel rings first before connecting the call to the lead.
+3. Place one real test call once the above are set — the exact Exotel Voice API
+   request/response shape is flagged UNVERIFIED in `src/Phase22ExotelVoice.gs` (modeled
+   on public docs, not yet exercised against a real account), same as how the WhatsApp
+   provider's less-common methods started out.
+4. Upload a test batch of leads and set an assignment rule per location before agents
+   go looking for their leads — a location with no rule configured leaves leads
+   `UNASSIGNED` in the admin table until manually assigned.
+
+All 24 backend test suites pass (`cd apps-script && node tests/<name>.js` for any one,
+or see `memory/CHANGELOG.md` for the full list), including the pre-existing suites —
+nothing else in the app regressed.
 
 ## 🚧 Migration in progress: moving off Apps Script to a free, faster stack
 

@@ -78,3 +78,22 @@ class MessageMediaRepository extends SheetRepository {
 class AuditLogRepository extends SheetRepository {
   constructor() { super('Audit_Log', Phase2Schemas.Audit_Log); }
 }
+
+// Phase 22: Leads is its own tab, composed the same way ConversationRepository etc.
+// are — plain SheetRepository, no extra logic here (that lives in Phase22Api).
+class LeadRepository extends SheetRepository {
+  constructor() { super('Leads', Phase2Schemas.Leads); }
+}
+
+// Two related tabs (per-location assignment config plus its ordered participant
+// list) composed together, same shape as AccessRepository above for Number_Assignment_*.
+class LocationAssignmentRepository {
+  constructor() {
+    this.config = new SheetRepository('Location_Assignment_Config', Phase2Schemas.Location_Assignment_Config);
+    this.users = new SheetRepository('Location_Assignment_Users', Phase2Schemas.Location_Assignment_Users);
+  }
+}
+
+class CallLogRepository extends SheetRepository {
+  constructor() { super('Call_Log', Phase2Schemas.Call_Log); }
+}

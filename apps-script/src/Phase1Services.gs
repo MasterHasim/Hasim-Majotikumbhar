@@ -85,7 +85,7 @@ class Phase1Api {
     if (this.repository_.findOne('users', function (user) { return user.email === email; })) throw new Phase1Error('CONFLICT', 'A user with this email exists.');
     var roleIds = Phase1Validation.stringArray(input.roleIds || [], 'roleIds'); this.assertRoleIds_(roleIds);
     var record = { id: Phase1Ids.create('user'), email: email, displayName: Phase1Validation.requiredString(input.displayName, 'displayName'),
-      status: input.status || Phase1Constants.ACTIVE, roleIds: roleIds, createdAt: now, updatedAt: now };
+      status: input.status || Phase1Constants.ACTIVE, roleIds: roleIds, phone: (input.phone || '').toString().trim(), createdAt: now, updatedAt: now };
     Phase1Validation.enumValue(record.status, [Phase1Constants.ACTIVE, Phase1Constants.INACTIVE, Phase1Constants.SUSPENDED], 'status'); this.repository_.create('users', record);
     this.audit_.write(actor.id, 'user.created', 'user', record.id, { email: record.email }); return record;
   }
@@ -174,7 +174,7 @@ class Phase1Api {
   }
   validatePatch_(collection, patch) {
     var allowed = {
-      users: ['email', 'displayName', 'status', 'roleIds'], roles: ['key', 'name', 'permissions', 'status'], teams: ['name', 'status'],
+      users: ['email', 'displayName', 'status', 'roleIds', 'phone'], roles: ['key', 'name', 'permissions', 'status'], teams: ['name', 'status'],
       teamMembers: ['status', 'numberIds'], numberAccess: ['status', 'granted']
     }[collection];
     if (!allowed) throw new Phase1Error('VALIDATION_ERROR', 'Collection cannot be updated.');

@@ -270,6 +270,32 @@ latency, Exotel API latency, concurrent users, message volume — then optimize.
 future evolution: Google Sheets → repository abstraction → real database, without
 rewriting frontend/business logic.
 
+## PHASE 22 — Location Leads Upload, Assignment Rules & Exotel Click-to-Call (added 2026-08-17)
+
+Added on top of the already-"done" 21-phase roadmap, user-directed — a second, independent
+assignment workflow alongside Phase 7's per-WhatsApp-number round robin. Admins upload a
+spreadsheet of call leads (`name`, `phone`, `location`) for six fixed locations (Raipur,
+Rajsamand, Coimbatore, Prayagraj, Alibaug, Saraighat); each lead auto-assigns to a site
+agent per a per-location rule: `single` (always the same agent), `round_robin` (rotates
+through an ordered pool, same locking/self-healing rotation as Phase 7's engine), or
+`manual` (admin assigns by hand). Leads are their own `Leads` tab, deliberately not
+merged into `Customers` — a call lead is not a WhatsApp conversation, and two of the six
+locations (Coimbatore, Alibaug) don't correspond to any existing WhatsApp number.
+
+New entities: `Leads`, `Location_Assignment_Config`, `Location_Assignment_Users`,
+`Call_Log` (schemas live in `Phase2Schemas`, `src/Phase2Domain.gs`, per that file's own
+established convention for later-phase tabs). New permissions: `LEADS_MANAGE` (ADMIN +
+SITE_MANAGER), `LEADS_VIEW_ASSIGNED` / `LEADS_CALL` (AGENT). Users gained an optional
+`phone` field for click-to-call.
+
+Click-to-call: `ExotelVoiceProvider` (`src/Phase22ExotelVoice.gs`) rings the agent's own
+phone first, then connects to the lead via Exotel's Voice API — a separate product/domain
+(`api.exotel.com`) and separate Script Properties from the existing WhatsApp
+`ExotelProvider`. Flagged UNVERIFIED pending a real test call, same convention as Phase
+3's own still-unverified methods.
+
+See `memory/DECISIONS.md` (2026-08-17 entries) and `memory/CHANGELOG.md` for full detail.
+
 ## PHASE 21 — Final Documentation & Handover
 
 Final `docs/`: `REQUIREMENTS.md`, `ARCHITECTURE.md`, `DATABASE.md`, `API.md`,

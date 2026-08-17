@@ -481,6 +481,50 @@
           <table class="data-table" id="numbersTable"><thead><tr><th>Display name</th><th>Phone</th><th>Provider account</th><th>WABA</th><th>Active</th><th></th></tr></thead><tbody></tbody></table>
         </div>
 
+        <div class="page" id="page-leads">
+          <h1 class="page-title">Location Leads</h1>
+          <div class="settings-tabs">
+            <div class="settings-tab active" data-leadtab="upload" onclick="showLeadsTab('upload')">Upload</div>
+            <div class="settings-tab" data-leadtab="rules" onclick="showLeadsTab('rules')">Assignment Rules</div>
+            <div class="settings-tab" data-leadtab="all" onclick="showLeadsTab('all')">All Leads</div>
+          </div>
+
+          <div class="settings-pane active" id="leadspane-upload">
+            <div class="card">
+              <h2 class="section-title" style="margin-top:0;">Upload leads</h2>
+              <div class="form-row">Paste rows as <code>Name, Phone, Location</code> (one per line) or choose a CSV file with those three columns.</div>
+              <div class="form-row"><textarea id="leadsPasteArea" rows="6" style="width:100%;" placeholder="Ramesh Kumar, 9876543210, Raipur"></textarea></div>
+              <div class="form-row"><input type="file" id="leadsFileInput" accept=".csv,text/csv" onchange="handleLeadsFile(event)"> <button class="btn" onclick="parseLeadsPaste()">Preview pasted rows</button></div>
+              <div class="form-error" id="leadsUploadError"></div>
+            </div>
+            <div class="card" id="leadsPreviewCard" style="display:none;">
+              <h2 class="section-title" style="margin-top:0;">Preview (<span id="leadsPreviewCount">0</span> rows)</h2>
+              <table class="data-table" id="leadsPreviewTable"><thead><tr><th>Name</th><th>Phone</th><th>Location</th></tr></thead><tbody></tbody></table>
+              <button class="btn primary" onclick="submitUploadLeads()">Confirm upload</button>
+              <div id="leadsUploadResult" class="empty"></div>
+            </div>
+          </div>
+
+          <div class="settings-pane" id="leadspane-rules">
+            <div class="form-row"><select id="ruleLocationSelect" onchange="loadLeadAssignmentRules()"></select></div>
+            <div id="leadAssignmentRulesBody" class="empty">Select a location</div>
+          </div>
+
+          <div class="settings-pane" id="leadspane-all">
+            <div class="form-row">
+              <select id="leadsFilterLocation"><option value="">All locations</option></select>
+              <select id="leadsFilterStatus"><option value="">All statuses</option><option value="NEW">New</option><option value="ASSIGNED">Assigned</option><option value="UNASSIGNED">Unassigned</option><option value="CALLED">Called</option></select>
+              <button class="btn" onclick="loadLeadsTable()">Filter</button>
+            </div>
+            <table class="data-table" id="leadsTable"><thead><tr><th>Name</th><th>Phone</th><th>Location</th><th>Status</th><th>Assigned to</th><th></th></tr></thead><tbody></tbody></table>
+          </div>
+        </div>
+
+        <div class="page" id="page-myLeads">
+          <h1 class="page-title">My Leads</h1>
+          <table class="data-table" id="myLeadsTable"><thead><tr><th>Name</th><th>Phone</th><th>Location</th><th>Status</th><th></th></tr></thead><tbody></tbody></table>
+        </div>
+
         <div class="page" id="page-settings">
           <h1 class="page-title">Settings</h1>
           <div class="settings-tabs">
@@ -673,6 +717,8 @@
       { key: 'teams', icon: '🧑‍🤝‍🧑', label: 'Teams', adminOnly: true },
       { key: 'users', icon: '👤', label: 'Users', adminOnly: true },
       { key: 'numbers', icon: '📱', label: 'WhatsApp Numbers', adminOnly: true },
+      { key: 'leads', icon: '📍', label: 'Location Leads', adminOnly: true },
+      { key: 'myLeads', icon: '☎️', label: 'My Leads' },
       { key: 'settings', icon: '⚙️', label: 'Settings', adminOnly: true },
       { key: 'auditLog', icon: '🛡️', label: 'Audit Log', adminOnly: true }
     ];
@@ -716,6 +762,8 @@
       else if (key === 'teams') loadTeams();
       else if (key === 'users') loadUsers();
       else if (key === 'numbers') loadNumbers();
+      else if (key === 'leads') loadLeadsPage();
+      else if (key === 'myLeads') loadMyLeads();
       else if (key === 'settings') loadSettingsPage();
       else if (key === 'auditLog') loadAuditLog();
     }
@@ -1566,6 +1614,7 @@
               { value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }, { value: 'suspended', label: 'Suspended' }
             ] },
             { key: 'roleId', label: 'Role', type: 'select', value: currentRole ? currentRole.id : '', options: cachedRoles.map(function (r) { return { value: r.id, label: r.name }; }) },
+            { key: 'phone', label: 'Phone (for click-to-call, agent\'s own mobile)', value: user.phone || '' },
             { key: 'numberIds', label: 'WhatsApp number access', type: 'checkboxList', options: numbers.map(function (n) {
               var g = grantByNumber[n.id];
               return { value: n.id, label: n.displayName, checked: !!(g && g.status === 'active') };
@@ -1582,7 +1631,7 @@
             });
             (function applyNext(i) {
               if (i >= accessChanges.length) {
-                scriptRun().withSuccessHandler(function () { close(); loadUsers(); }).withFailureHandler(showError).updateUser(id, { status: values.status, roleIds: [values.roleId] });
+                scriptRun().withSuccessHandler(function () { close(); loadUsers(); }).withFailureHandler(showError).updateUser(id, { status: values.status, roleIds: [values.roleId], phone: values.phone });
                 return;
               }
               var change = accessChanges[i];
@@ -1634,6 +1683,168 @@
         scriptRun().withSuccessHandler(function () { close(); loadNumbers(); }).withFailureHandler(showError)
           .updateNumber(id, { providerAccountId: values.providerAccountId, wabaId: values.wabaId, providerNumberId: values.providerNumberId, active: values.active === 'true' });
       });
+    }
+
+    // ============================================================================
+    // Location Leads page (Upload / per-location Assignment Rules / All Leads)
+    // ============================================================================
+    var cachedLeadLocations = [], cachedLeadsAdmin = [];
+
+    function loadLeadsPage() {
+      scriptRun().withSuccessHandler(function (users) { cachedUsers = users; }).withFailureHandler(function () {}).listUsers();
+      scriptRun().withSuccessHandler(function (locations) {
+        cachedLeadLocations = locations;
+        var options = locations.map(function (loc) { return '<option value="' + escapeHtml(loc) + '">' + escapeHtml(loc) + '</option>'; }).join('');
+        document.getElementById('ruleLocationSelect').innerHTML = '<option value="">Select a location…</option>' + options;
+        document.getElementById('leadsFilterLocation').innerHTML = '<option value="">All locations</option>' + options;
+      }).withFailureHandler(function (error) { setError('leadsUploadError', error); }).listLeadLocations();
+      showLeadsTab(window.__lastLeadsTab || 'upload');
+    }
+    function showLeadsTab(tab) {
+      window.__lastLeadsTab = tab;
+      document.querySelectorAll('#page-leads .settings-tab').forEach(function (el) { el.classList.toggle('active', el.dataset.leadtab === tab); });
+      document.querySelectorAll('#page-leads .settings-pane').forEach(function (el) { el.classList.toggle('active', el.id === 'leadspane-' + tab); });
+      if (tab === 'all') loadLeadsTable();
+    }
+
+    // ---- Upload ----
+    function parseCsvText_(text) {
+      return text.split(/\r?\n/).map(function (line) { return line.trim(); }).filter(function (line) { return line.length; })
+        .map(function (line) { return line.split(','); })
+        .filter(function (cols) { return cols.length >= 3; })
+        .map(function (cols) { return { name: cols[0].trim(), phone: cols[1].trim(), location: cols[2].trim() }; })
+        .filter(function (row) { return row.name.toLowerCase() !== 'name'; }); // drop an optional header row
+    }
+    function parseLeadsPaste() {
+      var text = document.getElementById('leadsPasteArea').value;
+      renderLeadsPreview(parseCsvText_(text));
+    }
+    function handleLeadsFile(event) {
+      var file = event.target.files[0];
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function () { renderLeadsPreview(parseCsvText_(String(reader.result || ''))); };
+      reader.readAsText(file);
+    }
+    function renderLeadsPreview(rows) {
+      window.__leadsPreviewRows = rows;
+      setError('leadsUploadError', rows.length ? null : { message: 'No valid rows found — expected Name, Phone, Location per line.' });
+      document.getElementById('leadsPreviewCard').style.display = rows.length ? '' : 'none';
+      document.getElementById('leadsPreviewCount').textContent = rows.length;
+      document.getElementById('leadsPreviewTable').querySelector('tbody').innerHTML = rows.map(function (r) {
+        return '<tr><td>' + escapeHtml(r.name) + '</td><td>' + escapeHtml(r.phone) + '</td><td>' + escapeHtml(r.location) + '</td></tr>';
+      }).join('');
+      document.getElementById('leadsUploadResult').textContent = '';
+    }
+    function submitUploadLeads() {
+      var rows = window.__leadsPreviewRows || [];
+      if (!rows.length) return;
+      scriptRun().withSuccessHandler(function (result) {
+        document.getElementById('leadsUploadResult').textContent = 'Uploaded: ' + result.created + ' created, ' + result.skipped + ' duplicate skipped, ' + result.errors.length + ' invalid.';
+        document.getElementById('leadsPasteArea').value = '';
+        document.getElementById('leadsFileInput').value = '';
+        document.getElementById('leadsPreviewCard').style.display = 'none';
+        window.__leadsPreviewRows = [];
+      }).withFailureHandler(function (error) { setError('leadsUploadError', error); }).uploadLeads(rows);
+    }
+
+    // ---- Assignment rules (per location — mirrors WhatsApp Number round-robin config above) ----
+    function loadLeadAssignmentRules() {
+      var location = document.getElementById('ruleLocationSelect').value;
+      var body = document.getElementById('leadAssignmentRulesBody');
+      if (!location) { body.innerHTML = '<div class="empty">Select a location</div>'; return; }
+      body.innerHTML = '<div class="empty">Loading…</div>';
+      scriptRun().withSuccessHandler(function (config) { renderLeadAssignmentConfig(location, config); })
+        .withFailureHandler(function (error) { body.innerHTML = '<div class="form-error">' + escapeHtml(error && error.message) + '</div>'; }).getLocationAssignmentConfig(location);
+    }
+    function renderLeadAssignmentConfig(location, config) {
+      config = config || { mode: 'manual', singleUserId: '', active: true };
+      var userOptions = '<option value="">(none)</option>' + cachedUsers.map(function (u) { return '<option value="' + u.id + '"' + (u.id === config.singleUserId ? ' selected' : '') + '>' + escapeHtml(u.displayName) + '</option>'; }).join('');
+      document.getElementById('leadAssignmentRulesBody').innerHTML =
+        '<div class="card"><h2 class="section-title" style="margin-top:0;">Assignment rule for ' + escapeHtml(location) + '</h2>' +
+        '<div class="form-row">Mode: <select id="leadRuleMode">' +
+        ['single', 'round_robin', 'manual'].map(function (m) { return '<option value="' + m + '"' + (m === config.mode ? ' selected' : '') + '>' + (m === 'single' ? 'Single agent (always the same person)' : m === 'round_robin' ? 'Round robin (rotate through the pool below)' : 'Manual (admin assigns each lead by hand)') + '</option>'; }).join('') +
+        '</select></div>' +
+        '<div class="form-row">Single-mode agent: <select id="leadRuleSingleUser">' + userOptions + '</select></div>' +
+        '<div class="form-row"><label class="inline"><input type="checkbox" id="leadRuleActive"' + (config.active !== false ? ' checked' : '') + '> Active</label></div>' +
+        '<button class="btn primary" onclick="submitLeadAssignmentConfig(\'' + location + '\')">Save config</button>' +
+        '<div class="form-error" id="leadAssignConfigError"></div></div>' +
+        '<h2 class="section-title">Round-robin pool (rotation order — used only when mode = round robin)</h2>' +
+        '<div class="form-row"><select id="leadParticipantUser">' + cachedUsers.map(function (u) { return '<option value="' + u.id + '">' + escapeHtml(u.displayName) + '</option>'; }).join('') + '</select>' +
+        '<input id="leadParticipantOrder" type="number" placeholder="Order" style="width:70px;"><button class="btn primary" onclick="submitAddLeadParticipant(\'' + location + '\')">Add to pool</button></div>' +
+        '<div class="form-error" id="leadParticipantError"></div>' +
+        '<table class="data-table" id="leadParticipantsTable"><thead><tr><th>Order</th><th>User</th><th>Active</th><th></th></tr></thead><tbody></tbody></table>';
+      loadLeadParticipants(location);
+    }
+    function submitLeadAssignmentConfig(location) {
+      var patch = { mode: document.getElementById('leadRuleMode').value, singleUserId: document.getElementById('leadRuleSingleUser').value, active: document.getElementById('leadRuleActive').checked };
+      scriptRun().withSuccessHandler(function () { setError('leadAssignConfigError', null); loadLeadAssignmentRules(); }).withFailureHandler(function (error) { setError('leadAssignConfigError', error); }).setLocationAssignmentConfig(location, patch);
+    }
+    function loadLeadParticipants(location) {
+      scriptRun().withSuccessHandler(function (participants) {
+        var userName = function (id) { var u = cachedUsers.find(function (x) { return x.id === id; }); return u ? u.displayName : id; };
+        document.getElementById('leadParticipantsTable').querySelector('tbody').innerHTML = participants.map(function (p) {
+          return '<tr><td>' + p.sequenceOrder + '</td><td>' + escapeHtml(userName(p.userId)) + '</td><td><span class="pill">' + (p.active ? 'active' : 'inactive') + '</span></td>' +
+            '<td><button class="btn" onclick="toggleLeadParticipant(\'' + p.id + '\', ' + (!p.active) + ', \'' + location + '\')">' + (p.active ? 'Deactivate' : 'Activate') + '</button></td></tr>';
+        }).join('') || '<tr><td colspan="4" class="empty">No agents in the pool yet</td></tr>';
+      }).withFailureHandler(function (error) { setError('leadParticipantError', error); }).listLocationAssignmentParticipants(location);
+    }
+    function submitAddLeadParticipant(location) {
+      var userId = document.getElementById('leadParticipantUser').value;
+      var order = Number(document.getElementById('leadParticipantOrder').value) || 1;
+      if (!userId) return;
+      scriptRun().withSuccessHandler(function () { setError('leadParticipantError', null); loadLeadParticipants(location); }).withFailureHandler(function (error) { setError('leadParticipantError', error); }).addLocationAssignmentParticipant(location, userId, order);
+    }
+    function toggleLeadParticipant(id, active, location) {
+      scriptRun().withSuccessHandler(function () { loadLeadParticipants(location); }).withFailureHandler(function (error) { alert('Could not update participant: ' + (error && error.message)); }).updateLocationAssignmentParticipant(id, { active: active });
+    }
+
+    // ---- All Leads (admin) ----
+    function loadLeadsTable() {
+      var filters = { location: document.getElementById('leadsFilterLocation').value, status: document.getElementById('leadsFilterStatus').value };
+      scriptRun().withSuccessHandler(function (leads) {
+        cachedLeadsAdmin = leads;
+        var userName = function (id) { var u = cachedUsers.find(function (x) { return x.id === id; }); return u ? u.displayName : '—'; };
+        document.getElementById('leadsTable').querySelector('tbody').innerHTML = leads.map(function (l) {
+          return '<tr><td>' + escapeHtml(l.name) + '</td><td>' + escapeHtml(l.phone) + '</td><td>' + escapeHtml(l.location) + '</td>' +
+            '<td><span class="pill">' + escapeHtml(l.status) + '</span></td><td>' + escapeHtml(l.assignedUserId ? userName(l.assignedUserId) : '—') + '</td>' +
+            '<td><button class="btn" onclick="openReassignLeadModal(\'' + l.id + '\')">Reassign</button></td></tr>';
+        }).join('') || '<tr><td colspan="6" class="empty">No leads match these filters</td></tr>';
+      }).withFailureHandler(function (error) { alert('Could not load leads: ' + (error && error.message)); }).listLeads(filters);
+    }
+    function openReassignLeadModal(leadId) {
+      var lead = cachedLeadsAdmin.find(function (l) { return l.id === leadId; });
+      if (!lead) return;
+      openEditModal('Reassign lead: ' + lead.name, [
+        { key: 'userId', label: 'Assign to', type: 'select', value: lead.assignedUserId || '', options: cachedUsers.map(function (u) { return { value: u.id, label: u.displayName }; }) }
+      ], function (values, showError, close) {
+        if (!values.userId) { showError({ message: 'Choose an agent.' }); return; }
+        scriptRun().withSuccessHandler(function () { close(); loadLeadsTable(); }).withFailureHandler(showError).reassignLead(leadId, values.userId);
+      });
+    }
+
+    // ---- My Leads (agent) ----
+    function loadMyLeads() {
+      scriptRun().withSuccessHandler(function (leads) {
+        document.getElementById('myLeadsTable').querySelector('tbody').innerHTML = leads.map(function (l) {
+          return '<tr id="myLeadRow-' + l.id + '"><td>' + escapeHtml(l.name) + '</td><td>' + escapeHtml(l.phone) + '</td><td>' + escapeHtml(l.location) + '</td>' +
+            '<td><span class="pill">' + escapeHtml(l.status) + '</span></td>' +
+            '<td><button class="btn primary" onclick="submitCallLead(\'' + l.id + '\')">📞 Call</button></td></tr>';
+        }).join('') || '<tr><td colspan="5" class="empty">No leads assigned to you yet</td></tr>';
+      }).withFailureHandler(function (error) { alert('Could not load your leads: ' + (error && error.message)); }).listLeads({});
+    }
+    function submitCallLead(leadId) {
+      var row = document.getElementById('myLeadRow-' + leadId);
+      var button = row && row.querySelector('button');
+      if (button) { button.disabled = true; button.textContent = 'Calling…'; }
+      scriptRun().withSuccessHandler(function (call) {
+        if (button) { button.disabled = false; button.textContent = '📞 Call'; }
+        alert('Call initiated (' + call.status + '). Your phone will ring first, then connect to the lead.');
+        loadMyLeads();
+      }).withFailureHandler(function (error) {
+        if (button) { button.disabled = false; button.textContent = '📞 Call'; }
+        alert('Could not place the call: ' + (error && error.message));
+      }).initiateLeadCall(leadId);
     }
 
     // ============================================================================

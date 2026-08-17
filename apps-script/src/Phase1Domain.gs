@@ -10,7 +10,9 @@ var Phase1Permissions = {
   CONVERSATIONS_REASSIGN_TEAM: 'conversations.reassign.team',
   TEAMS_MANAGE_ALL: 'teams.manage.all', TEAMS_OPERATE_ASSIGNED: 'teams.operate.assigned', TEAMS_CONTROL_OWN: 'teams.control.own',
   AVAILABILITY_MANAGE_SELF: 'availability.manageSelf', AVAILABILITY_MANAGE_ALL: 'availability.manageAll',
-  ELIGIBILITY_MANAGE_ALL: 'eligibility.manageAll', ELIGIBILITY_MANAGE_TEAM: 'eligibility.manageTeam', AUDIT_READ: 'audit.read'
+  ELIGIBILITY_MANAGE_ALL: 'eligibility.manageAll', ELIGIBILITY_MANAGE_TEAM: 'eligibility.manageTeam', AUDIT_READ: 'audit.read',
+  // Phase 22: location-wise call leads, independent of WhatsApp conversation assignment above.
+  LEADS_MANAGE: 'leads.manage', LEADS_VIEW_ASSIGNED: 'leads.view.assigned', LEADS_CALL: 'leads.call'
 };
 
 var Phase1Roles = { ADMIN: 'ADMIN', SUPERVISOR: 'SUPERVISOR', SITE_MANAGER: 'SITE_MANAGER', AGENT: 'AGENT', VIEWER: 'VIEWER' };
@@ -22,8 +24,8 @@ var Phase1Constants = {
 var Phase1RoleDefinitions = {
   ADMIN: { name: 'Administrator', permissions: Phase1Constants.ALL_PERMISSIONS },
   SUPERVISOR: { name: 'Supervisor', permissions: [Phase1Permissions.TEAMS_OPERATE_ASSIGNED, Phase1Permissions.REPORTS_VIEW, Phase1Permissions.REMINDERS_MANAGE, Phase1Permissions.REMARKS_VIEW, Phase1Permissions.CONVERSATIONS_VIEW_TEAM, Phase1Permissions.CONVERSATIONS_REASSIGN_TEAM] },
-  SITE_MANAGER: { name: 'Site manager', permissions: [Phase1Permissions.TEAMS_CONTROL_OWN, Phase1Permissions.REPORTS_VIEW, Phase1Permissions.REMINDERS_MANAGE, Phase1Permissions.REMARKS_MANAGE, Phase1Permissions.CONVERSATIONS_VIEW_TEAM, Phase1Permissions.CONVERSATIONS_REASSIGN_TEAM, Phase1Permissions.ELIGIBILITY_MANAGE_TEAM] },
-  AGENT: { name: 'Agent', permissions: [Phase1Permissions.AVAILABILITY_MANAGE_SELF, Phase1Permissions.TEMPLATES_USE, Phase1Permissions.REMARKS_MANAGE, Phase1Permissions.REMINDERS_MANAGE, Phase1Permissions.LEAD_STAGES_MANAGE, Phase1Permissions.CONVERSATIONS_VIEW_ASSIGNED, Phase1Permissions.CONVERSATIONS_REPLY_ASSIGNED] },
+  SITE_MANAGER: { name: 'Site manager', permissions: [Phase1Permissions.TEAMS_CONTROL_OWN, Phase1Permissions.REPORTS_VIEW, Phase1Permissions.REMINDERS_MANAGE, Phase1Permissions.REMARKS_MANAGE, Phase1Permissions.CONVERSATIONS_VIEW_TEAM, Phase1Permissions.CONVERSATIONS_REASSIGN_TEAM, Phase1Permissions.ELIGIBILITY_MANAGE_TEAM, Phase1Permissions.LEADS_MANAGE] },
+  AGENT: { name: 'Agent', permissions: [Phase1Permissions.AVAILABILITY_MANAGE_SELF, Phase1Permissions.TEMPLATES_USE, Phase1Permissions.REMARKS_MANAGE, Phase1Permissions.REMINDERS_MANAGE, Phase1Permissions.LEAD_STAGES_MANAGE, Phase1Permissions.CONVERSATIONS_VIEW_ASSIGNED, Phase1Permissions.CONVERSATIONS_REPLY_ASSIGNED, Phase1Permissions.LEADS_VIEW_ASSIGNED, Phase1Permissions.LEADS_CALL] },
   VIEWER: { name: 'Viewer', permissions: [Phase1Permissions.CUSTOMERS_VIEW, Phase1Permissions.REPORTS_VIEW, Phase1Permissions.CONVERSATIONS_VIEW_AUTHORIZED] }
 };
 

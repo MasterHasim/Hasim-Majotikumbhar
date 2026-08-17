@@ -39,5 +39,12 @@ var Phase2Schemas = {
   // Phase 11: media attached to a message. Its own tab, same rationale — Messages
   // already has real live data and has no mediaUrl column.
   Message_Media: ['messageId', 'mediaType', 'mediaUrl', 'caption'],
-  Audit_Log: ['occurredAt', 'actorUserId', 'action', 'targetType', 'targetId', 'metadata']
+  Audit_Log: ['occurredAt', 'actorUserId', 'action', 'targetType', 'targetId', 'metadata'],
+  // Phase 22: location-wise call leads, a separate concept from Customers/Conversations
+  // above — see memory/DECISIONS.md. Enums/validation live in Phase22Domain.gs; the
+  // column arrays live here per this file's own established convention (Phase 8/9/11).
+  Leads: ['name', 'phone', 'location', 'status', 'assignedUserId', 'assignedAt', 'uploadBatchId', 'uploadedBy', 'createdAt', 'updatedAt'],
+  Location_Assignment_Config: ['location', 'mode', 'singleUserId', 'lastAssignedUserId', 'active', 'createdAt', 'updatedAt'],
+  Location_Assignment_Users: ['location', 'userId', 'sequenceOrder', 'active', 'createdAt', 'updatedAt'],
+  Call_Log: ['leadId', 'agentUserId', 'exotelCallSid', 'agentPhone', 'leadPhone', 'callerId', 'status', 'initiatedAt', 'updatedAt']
 };
