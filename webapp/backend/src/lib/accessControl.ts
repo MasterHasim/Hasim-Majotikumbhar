@@ -126,6 +126,13 @@ export class AccessControl {
     return !!access;
   }
 
+  /** Same upfront gate apps-script/src/Phase5Services.gs's listConversationsInternal_ applies before its own per-conversation filter — an explicit FORBIDDEN for a completely inaccessible numberId, not a silently empty list (which the per-conversation filter alone would otherwise produce, indistinguishable from "no conversations yet"). */
+  async requireGrantedNumberOrAdmin(numberId: string): Promise<User> {
+    const user = await this.currentUser();
+    if ((await this.hasRole(user, Roles.ADMIN)) || (await this.hasGrantedNumber(user.id, numberId))) return user;
+    return this.denied(user, 'number', numberId, 'NUMBER_ACCESS');
+  }
+
   private async denied(user: User, targetType: string, targetId: string, reason: string): Promise<never> {
     await this.audit(user.id, 'authorization.denied', targetType, targetId, { reason });
     throw new ApiError(403, 'FORBIDDEN', 'Access is denied.');

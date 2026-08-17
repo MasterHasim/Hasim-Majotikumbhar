@@ -19,6 +19,12 @@ export interface MockFirebaseContext {
   store: Record<string, Record<string, unknown>>;
   signIdToken(payload: { sub: string; email: string; extraClaims?: Record<string, unknown> }): Promise<string>;
   restore(): void;
+  /** Mock Exotel account, matching the shape src/services/exotelProvider.ts's requireExotelConfig() expects. */
+  exotelConfig: { EXOTEL_API_KEY: string; EXOTEL_API_TOKEN: string; EXOTEL_ACCOUNT_SID: string; EXOTEL_SUBDOMAIN: string };
+  /** Every call made to the mock Exotel endpoint, for assertions. */
+  exotelCalls: { method: string; path: string; body: unknown }[];
+  /** Override the next Exotel response (status + body) — defaults to a 200 with a fake sid. */
+  setNextExotelResponse(status: number, body: unknown): void;
 }
 
 function base64UrlFromBuffer(bytes: ArrayBuffer): string {
@@ -59,9 +65,28 @@ export async function setupMockFirebase(projectId = 'test-project'): Promise<Moc
     return `${signingInput}.${base64UrlFromBuffer(signature)}`;
   }
 
+  const exotelSubdomain = 'test-exotel.example.com';
+  const exotelConfig = { EXOTEL_API_KEY: 'test-key', EXOTEL_API_TOKEN: 'test-token', EXOTEL_ACCOUNT_SID: 'test-sid', EXOTEL_SUBDOMAIN: exotelSubdomain };
+  const exotelCalls: { method: string; path: string; body: unknown }[] = [];
+  let nextExotelResponse: { status: number; body: unknown } | null = null;
+  let exotelSidCounter = 0;
+
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+
+    if (url.startsWith(`https://${exotelSubdomain}/v2/accounts/`)) {
+      const path = url.split(`/v2/accounts/${exotelConfig.EXOTEL_ACCOUNT_SID}/`)[1] ?? '';
+      const body = init?.body ? JSON.parse(init.body as string) : null;
+      exotelCalls.push({ method: (init?.method ?? 'GET').toUpperCase(), path, body });
+      if (nextExotelResponse) {
+        const { status, body: respBody } = nextExotelResponse;
+        nextExotelResponse = null;
+        return new Response(JSON.stringify(respBody), { status });
+      }
+      exotelSidCounter += 1;
+      return new Response(JSON.stringify({ whatsapp: { messages: [{ sid: `mock-sid-${exotelSidCounter}` }] } }), { status: 200 });
+    }
 
     if (url === 'https://oauth2.googleapis.com/token') {
       return new Response(JSON.stringify({ access_token: 'mock-access-token', expires_in: 3600 }), { status: 200 });
@@ -102,6 +127,9 @@ export async function setupMockFirebase(projectId = 'test-project'): Promise<Moc
     databaseUrl,
     store,
     signIdToken,
+    exotelConfig,
+    exotelCalls,
+    setNextExotelResponse: (status: number, body: unknown) => { nextExotelResponse = { status, body }; },
     restore: () => {
       globalThis.fetch = originalFetch;
     },

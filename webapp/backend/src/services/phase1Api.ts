@@ -10,6 +10,7 @@ import { Repository } from '../lib/repository';
 import { AccessControl, type Phase1Repositories } from '../lib/accessControl';
 import { AuditLogService } from '../lib/auditLog';
 import { FirebaseDb } from '../lib/firebaseAdmin';
+import { buildPhase1Repositories } from '../lib/phase1Repositories';
 
 // The Apps Script build's sanitizeUserRecord_ stripped passwordHash/passwordSalt
 // before any user record reached the client (see Phase1Services.gs) — not needed
@@ -66,13 +67,7 @@ export class Phase1Api {
   private eligibilityRepo: Repository<AssignmentEligibility>;
 
   constructor(db: FirebaseDb, identityEmail: string) {
-    this.repos = {
-      users: new Repository<User>(db, 'users'),
-      roles: new Repository<Role>(db, 'roles'),
-      teams: new Repository<Team>(db, 'teams'),
-      teamMembers: new Repository<TeamMember>(db, 'teamMembers'),
-      numberAccess: new Repository<NumberAccess>(db, 'numberAccess'),
-    };
+    this.repos = buildPhase1Repositories(db);
     this.audit = new AuditLogService(db);
     this.access = new AccessControl(this.repos, this.audit, identityEmail);
     this.teamMembers = this.repos.teamMembers;

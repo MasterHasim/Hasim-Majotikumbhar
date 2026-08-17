@@ -108,7 +108,7 @@ export async function mintCustomToken(serviceAccount: FirebaseServiceAccount, ui
 }
 
 export class FirebaseDb {
-  constructor(private serviceAccount: FirebaseServiceAccount, private databaseUrl: string) {}
+  constructor(public readonly serviceAccount: FirebaseServiceAccount, public readonly databaseUrl: string) {}
 
   private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
     const token = await getAccessToken(this.serviceAccount);

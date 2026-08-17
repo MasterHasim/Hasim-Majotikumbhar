@@ -72,38 +72,59 @@ real bug was caught and fixed by these tests (a test-isolation issue in the
 Google-public-key cache, not a production bug). Run `npm test` in
 `webapp/backend/`.
 
-### ✅ Action needed from you — new stack setup (one-time, ~15 minutes)
+**Messaging core (numbers/customers/conversations/messages/webhook/send)
+ported, tested, and live.** Direct port of `apps-script/src/Phase{3,4,5,6}
+Services.gs` + `WorkspaceServices.gs` — numbers CRUD, the Exotel webhook
+ingestion pipeline (confirmed-live payload parsing carried over as-is),
+authorized conversation listing/detail, sendReply with the bookkeeping-
+isolation fix from the Apps Script build carried over, and the workspace
+aggregator (now gating the realtime token behind `includeRealtime` from the
+start, instead of learning that lesson the hard way again). 35 automated
+tests total (17 new), including a mocked Exotel endpoint proving both the
+success path (SENT, needsResponse cleared) and the failure path (FAILED
+status saved, no throw, needsResponse untouched). Deployed live and smoke-
+tested — every route, the webhook's shared-secret auth, and the "always
+200, real status in the body" behavior all confirmed working on the actual
+deployed URL, not just locally.
+
+Deferred to later phases on purpose (matches the task breakdown): round-robin
+auto-assignment on new conversations (CRM core), snooze filtering (CRM core),
+sendTemplateReply/sendMediaReply/file upload (templates & media — needs a
+Drive-equivalent host, likely Cloudflare R2, not set up yet).
+
+### ✅ Action needed from you — new stack setup
 
 1. ✅ Cloudflare account created, `wrangler login` done.
 2. ✅ `FIREBASE_WEB_API_KEY` secret set.
-3. **Generate a Firebase service account key for this backend** (a fresh one,
-   not the Apps Script build's — independent credentials): Firebase Console →
-   ⚙️ Project Settings → **Service accounts** → **Generate new private key**,
-   then from `webapp/backend/`:
+3. ✅ `FIREBASE_SERVICE_ACCOUNT_JSON` secret set (fresh key, independent from the Apps Script build's).
+4. ✅ `BOOTSTRAP_ADMIN_EMAIL` secret set.
+5. **Set Exotel credentials** (needed before `sendReply` or the webhook can actually reach WhatsApp — same account as the Apps Script build):
    ```
-   npx wrangler secret put FIREBASE_SERVICE_ACCOUNT_JSON < path\to\downloaded-file.json
+   npx wrangler secret put EXOTEL_API_KEY
+   npx wrangler secret put EXOTEL_API_TOKEN
+   npx wrangler secret put EXOTEL_ACCOUNT_SID
+   npx wrangler secret put EXOTEL_SUBDOMAIN
    ```
-4. **Set the bootstrap admin email** (the one identity allowed to become the
-   first ADMIN user in the new system):
+6. **Set a webhook secret token** (generate a new random value — don't reuse the Apps Script one, keep the two systems independent):
    ```
-   npx wrangler secret put BOOTSTRAP_ADMIN_EMAIL
+   npx wrangler secret put WEBHOOK_SECRET_TOKEN
    ```
-   (enter your own email)
-5. For local development instead of live secrets: copy
+   Once set, the new webhook URL is `https://whatsapp-panel-backend.hasim-c9e.workers.dev/webhook/exotel?token=<that value>` — **don't point Exotel at this yet**; that's a live cutover step for later, not now (see the phase list below).
+7. For local development instead of live secrets: copy
    `webapp/backend/.dev.vars.example` → `.dev.vars` and
    `webapp/frontend/.env.example` → `.env.local`, fill in the same values.
    Both files are gitignored.
 
 Full details are in `webapp/backend/README.md` and `webapp/frontend/README.md`.
-I can't do these specific steps myself — they need your Cloudflare account and
-the credential values only you have access to. Everything else (all the
-actual code) I'm building without needing anything further from you, phase by
-phase, same order as the original build:
+I can't do these specific steps myself — they need credential values only you
+have access to. Everything else (all the actual code) I'm building without
+needing anything further from you, phase by phase, same order as the original
+build:
 
 1. ~~Foundation (backend + frontend scaffolding, auth pipeline proven)~~ ✅ done
 2. ~~Phase 1 — auth, roles, teams, number access~~ ✅ done, tested
-3. Messaging core — numbers, customers, conversations, messages, webhook, send (highest priority, since it's already Firebase-native) — **in progress**
-4. CRM core — assignment, remarks, reminders, stages
+3. ~~Messaging core — numbers, customers, conversations, messages, webhook, send~~ ✅ done, tested, live
+4. CRM core — assignment, remarks, reminders, stages — **next**
 5. Templates, quick replies, media
 6. Admin panel, notifications, dashboard, audit/backup
 7. Parallel-run validation, then cutover (Apps Script stays live and untouched the entire time)

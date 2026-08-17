@@ -1,0 +1,93 @@
+import type { IRequest, RouterType } from 'itty-router';
+import type { Env } from '../types';
+import { ApiError, parseServiceAccount } from '../types';
+import { buildContext } from '../lib/requestContext';
+import { FirebaseDb } from '../lib/firebaseAdmin';
+import { Phase3Api } from '../services/phase3Api';
+import { Phase4Api } from '../services/phase4Api';
+import { Phase5Api } from '../services/phase5Api';
+import { Phase6Api } from '../services/phase6Api';
+import { WorkspaceApi } from '../services/workspaceApi';
+import { ExotelProvider, requireExotelConfig } from '../services/exotelProvider';
+
+async function json(request: IRequest): Promise<Record<string, unknown>> {
+  return (await request.json().catch(() => ({}))) as Record<string, unknown>;
+}
+function param(request: IRequest, name: string): string {
+  const value = request.params[name];
+  if (!value) throw new ApiError(400, 'VALIDATION_ERROR', `Missing path parameter: ${name}`);
+  return value;
+}
+
+export function registerMessagingRoutes(router: RouterType) {
+  // --- Numbers (Phase3Api) ---
+  router.post('/api/numbers', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    return Response.json(await new Phase3Api(ctx.db, ctx.identityEmail).createNumber(await json(request) as never));
+  });
+  router.patch('/api/numbers/:id', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    return Response.json(await new Phase3Api(ctx.db, ctx.identityEmail).updateNumber(param(request, 'id'), await json(request)));
+  });
+  router.get('/api/numbers', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    return Response.json(await new Phase3Api(ctx.db, ctx.identityEmail).listNumbers());
+  });
+  router.get('/api/my-numbers', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    return Response.json(await new Phase5Api(ctx.db, ctx.identityEmail).listMyNumbers());
+  });
+
+  // --- Conversations (Phase5Api) ---
+  router.get('/api/conversations', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    const numberId = new URL(request.url).searchParams.get('numberId') ?? '';
+    const allStatuses = new URL(request.url).searchParams.get('allStatuses') === 'true';
+    const phase5 = new Phase5Api(ctx.db, ctx.identityEmail);
+    return Response.json(allStatuses ? await phase5.listConversationsAllStatuses(numberId) : await phase5.listConversations(numberId));
+  });
+  router.get('/api/conversations/:id', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    return Response.json(await new Phase5Api(ctx.db, ctx.identityEmail).getConversationDetail(param(request, 'id')));
+  });
+
+  // --- Workspace aggregator ---
+  router.get('/api/workspace/:conversationId', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    const includeRealtime = new URL(request.url).searchParams.get('includeRealtime') === 'true';
+    return Response.json(await new WorkspaceApi(ctx.db, ctx.identityEmail, env).getConversationWorkspace(param(request, 'conversationId'), includeRealtime));
+  });
+
+  // --- Send / resolve (Phase6Api) ---
+  router.post('/api/conversations/:id/reply', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    const body = (await json(request)) as { text: string };
+    return Response.json(await new Phase6Api(ctx.db, ctx.identityEmail, env).sendReply(param(request, 'id'), body.text));
+  });
+  router.post('/api/conversations/:id/resolve', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    return Response.json(await new Phase6Api(ctx.db, ctx.identityEmail, env).resolveConversation(param(request, 'id')));
+  });
+
+  // --- Exotel webhook (no Firebase auth — shared secret token instead, same as apps-script/src/Phase4Webhook.gs) ---
+  router.post('/webhook/exotel', async (request: IRequest, env: Env) => {
+    const url = new URL(request.url);
+    const token = url.searchParams.get('token');
+    if (!env.WEBHOOK_SECRET_TOKEN || token !== env.WEBHOOK_SECRET_TOKEN) {
+      return Response.json({ status: 'error', message: 'unauthorized' });
+    }
+    let outcome: unknown;
+    try {
+      const payload = await request.json();
+      const serviceAccount = parseServiceAccount(env);
+      const db = new FirebaseDb(serviceAccount, env.FIREBASE_DATABASE_URL);
+      const normalized = new ExotelProvider(requireExotelConfig(env)).processWebhook(payload as never);
+      const result = await new Phase4Api(db).ingestInboundMessage(normalized);
+      outcome = { status: 'ok', result };
+    } catch (err) {
+      outcome = { status: 'error', message: err instanceof Error ? err.message : String(err) };
+    }
+    console.log('webhook/exotel', JSON.stringify(outcome));
+    return Response.json(outcome);
+  });
+}

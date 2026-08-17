@@ -59,3 +59,53 @@ export interface AssignmentEligibility extends Record_ {
   eligible: boolean;
   updatedAt: string;
 }
+
+// --- Messaging core (port of apps-script/src/Phase2Domain.gs's Phase2Schemas) ---
+
+export interface WhatsAppNumber extends Record_ {
+  displayName: string;
+  phoneNumber: string;
+  provider: string;
+  providerAccountId: string;
+  wabaId: string;
+  providerNumberId: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Customer extends Record_ {
+  phone: string;
+  name: string;
+  email: string;
+  company: string;
+  source: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Conversation extends Record_ {
+  customerId: string;
+  numberId: string;
+  assignedUserId: string;
+  status: 'OPEN' | 'CLOSED';
+  needsResponse: boolean;
+  lastMessageAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type MessageDirection = 'INBOUND' | 'OUTBOUND';
+export type MessageStatus = 'RECEIVED' | 'SENT' | 'DELIVERED' | 'READ' | 'FAILED' | 'UNKNOWN';
+
+export interface Message extends Record_ {
+  conversationId: string;
+  numberId: string;
+  senderUserId: string;
+  direction: MessageDirection;
+  messageType: string;
+  messageText: string;
+  providerMessageId: string;
+  status: MessageStatus;
+  timestamp: string;
+}
