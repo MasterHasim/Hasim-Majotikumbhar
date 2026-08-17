@@ -97,3 +97,11 @@ class LocationAssignmentRepository {
 class CallLogRepository extends SheetRepository {
   constructor() { super('Call_Log', Phase2Schemas.Call_Log); }
 }
+
+class LeadStageAssignmentRepository extends SheetRepository {
+  constructor() { super('Lead_Stage_Assignment', Phase2Schemas.Lead_Stage_Assignment); }
+}
+
+class LeadRemarkRepository extends SheetRepository {
+  constructor() { super('Lead_Remarks', Phase2Schemas.Lead_Remarks); }
+}

@@ -216,6 +216,13 @@
     .modal-field { margin-bottom: 12px; }
     .modal-field label { display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; }
     .modal-field input, .modal-field select { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; box-sizing: border-box; }
+
+    /* ---- Lead detail modal (2026-08-17) — stage/comments/call/WhatsApp for one lead ---- */
+    #leadDetailModalOverlay { display: none; position: fixed; inset: 0; background: rgba(15,42,32,.45); z-index: 1000; align-items: center; justify-content: center; padding: 20px; }
+    #leadDetailModalOverlay.open { display: flex; }
+    #leadDetailModalCard { max-width: 480px; width: 100%; max-height: 85vh; overflow-y: auto; background: var(--card-bg); border-radius: 10px; padding: 20px; }
+    .lead-remark-item { padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+    .lead-remark-meta { color: var(--text-secondary); font-size: 11px; margin-top: 2px; }
   </style>
 </head>
 <body>
@@ -297,6 +304,25 @@
       <div class="form-row" style="justify-content:flex-end;">
         <button class="btn" onclick="closeEditModal()">Cancel</button>
         <button class="btn primary" onclick="submitEditModal()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="leadDetailModalOverlay">
+    <div id="leadDetailModalCard">
+      <h2 class="section-title" style="margin-top:0;" id="leadDetailTitle">Lead</h2>
+      <div class="form-row">Stage: <select id="leadDetailStageSelect"><option value="">Stage…</option></select> <button class="btn" onclick="submitLeadDetailStage()">Save</button></div>
+      <div class="form-row">
+        <button class="btn primary" onclick="submitLeadDetailCall()">📞 Call</button>
+        <button class="btn primary" onclick="submitLeadDetailWhatsApp()">💬 Send WhatsApp</button>
+      </div>
+      <div class="form-error" id="leadDetailError"></div>
+      <h2 class="section-title">Comments</h2>
+      <div id="leadDetailRemarksList" class="empty">Loading…</div>
+      <div class="form-row"><textarea id="leadDetailRemarkText" rows="2" style="width:100%; box-sizing:border-box;" placeholder="Add a comment…"></textarea></div>
+      <div class="form-row" style="justify-content:space-between;">
+        <button class="btn primary" onclick="submitLeadDetailRemark()">Add comment</button>
+        <button class="btn" onclick="closeLeadDetailModal()">Close</button>
       </div>
     </div>
   </div>
@@ -1246,7 +1272,8 @@
         '<div class="cust-header"><div class="cust-avatar">' + escapeHtml(initials(customerName)) + '</div><div class="cust-name">' + escapeHtml(customerName) + '</div>' +
         '<select class="btn" id="stageSelect" style="margin-top:8px;" onchange="changeStage()"><option value="">Stage…</option></select></div>' +
         '<div class="cust-fields">' +
-        '<div class="field-row"><span class="field-label">Phone</span><span class="field-value">' + escapeHtml(customer.phone || '—') + '</span></div>' +
+        '<div class="field-row"><span class="field-label">Phone</span><span class="field-value">' + escapeHtml(customer.phone || '—') +
+        (customer.phone ? ' <button class="btn" style="padding:2px 8px; font-size:11px;" onclick="submitConversationCall()">📞 Call</button>' : '') + '</span></div>' +
         '<div class="field-row"><span class="field-label">Email</span><span class="field-value">' + escapeHtml(customer.email || '—') + '</span></div>' +
         '<div class="field-row"><span class="field-label">Company</span><span class="field-value">' + escapeHtml(customer.company || '—') + '</span></div>' +
         '<div class="field-row"><span class="field-label">Customer since</span><span class="field-value">' + escapeHtml((customer.createdAt || '').slice(0, 10) || '—') + '</span></div>' +
@@ -1263,6 +1290,11 @@
       loadRemindersSection();
     }
 
+    function submitConversationCall() {
+      scriptRun().withSuccessHandler(function (call) {
+        alert('Call initiated (' + call.status + '). Your phone will ring first, then connect to the customer.');
+      }).withFailureHandler(function (error) { alert('Could not place the call: ' + (error && error.message)); }).initiateConversationCall(selectedConversationId);
+    }
     function editCustomerFields() {
       var workspace = window.__currentWorkspace;
       var customer = workspace.customer || {};
@@ -1688,7 +1720,7 @@
     // ============================================================================
     // Location Leads page (Upload / per-location Assignment Rules / All Leads)
     // ============================================================================
-    var cachedLeadLocations = [], cachedLeadsAdmin = [];
+    var cachedLeadLocations = [], cachedLeadsAdmin = [], cachedMyLeads = [], cachedLeadStagesOptions = null;
 
     function loadLeadsPage() {
       scriptRun().withSuccessHandler(function (users) { cachedUsers = users; }).withFailureHandler(function () {}).listUsers();
@@ -1809,7 +1841,8 @@
         document.getElementById('leadsTable').querySelector('tbody').innerHTML = leads.map(function (l) {
           return '<tr><td>' + escapeHtml(l.name) + '</td><td>' + escapeHtml(l.phone) + '</td><td>' + escapeHtml(l.location) + '</td>' +
             '<td><span class="pill">' + escapeHtml(l.status) + '</span></td><td>' + escapeHtml(l.assignedUserId ? userName(l.assignedUserId) : '—') + '</td>' +
-            '<td><button class="btn" onclick="openReassignLeadModal(\'' + l.id + '\')">Reassign</button></td></tr>';
+            '<td><button class="btn" onclick="openReassignLeadModal(\'' + l.id + '\')">Reassign</button> ' +
+            '<button class="btn" onclick="openLeadDetailModal(\'' + l.id + '\')">Details</button></td></tr>';
         }).join('') || '<tr><td colspan="6" class="empty">No leads match these filters</td></tr>';
       }).withFailureHandler(function (error) { alert('Could not load leads: ' + (error && error.message)); }).listLeads(filters);
     }
@@ -1827,10 +1860,12 @@
     // ---- My Leads (agent) ----
     function loadMyLeads() {
       scriptRun().withSuccessHandler(function (leads) {
+        cachedMyLeads = leads;
         document.getElementById('myLeadsTable').querySelector('tbody').innerHTML = leads.map(function (l) {
           return '<tr id="myLeadRow-' + l.id + '"><td>' + escapeHtml(l.name) + '</td><td>' + escapeHtml(l.phone) + '</td><td>' + escapeHtml(l.location) + '</td>' +
             '<td><span class="pill">' + escapeHtml(l.status) + '</span></td>' +
-            '<td><button class="btn primary" onclick="submitCallLead(\'' + l.id + '\')">📞 Call</button></td></tr>';
+            '<td><button class="btn primary" onclick="submitCallLead(\'' + l.id + '\')">📞 Call</button> ' +
+            '<button class="btn" onclick="openLeadDetailModal(\'' + l.id + '\')">Details</button></td></tr>';
         }).join('') || '<tr><td colspan="5" class="empty">No leads assigned to you yet</td></tr>';
       }).withFailureHandler(function (error) { alert('Could not load your leads: ' + (error && error.message)); }).listLeads({});
     }
@@ -1846,6 +1881,73 @@
         if (button) { button.disabled = false; button.textContent = '📞 Call'; }
         alert('Could not place the call: ' + (error && error.message));
       }).initiateLeadCall(leadId);
+    }
+
+    // ---- Lead detail modal: stage, comments, call, send WhatsApp — used from both All Leads and My Leads ----
+    function findCachedLead_(leadId) {
+      return cachedLeadsAdmin.find(function (l) { return l.id === leadId; }) || cachedMyLeads.find(function (l) { return l.id === leadId; }) || null;
+    }
+    function openLeadDetailModal(leadId) {
+      var lead = findCachedLead_(leadId);
+      if (!lead) return;
+      window.__leadDetailId = leadId;
+      document.getElementById('leadDetailTitle').textContent = lead.name + ' — ' + lead.phone + ' (' + lead.location + ')';
+      setError('leadDetailError', null);
+      document.getElementById('leadDetailRemarkText').value = '';
+      document.getElementById('leadDetailModalOverlay').classList.add('open');
+      loadLeadDetailStageOptions();
+      loadLeadDetailRemarks(leadId);
+    }
+    function closeLeadDetailModal() {
+      document.getElementById('leadDetailModalOverlay').classList.remove('open');
+      window.__leadDetailId = null;
+    }
+    function loadLeadDetailStageOptions() {
+      var leadId = window.__leadDetailId;
+      function render() {
+        var select = document.getElementById('leadDetailStageSelect');
+        select.innerHTML = '<option value="">Stage…</option>' + cachedLeadStagesOptions.map(function (s) { return '<option value="' + s.id + '">' + escapeHtml(s.name) + '</option>'; }).join('');
+        scriptRun().withSuccessHandler(function (assignment) { select.value = assignment ? assignment.stageId : ''; })
+          .withFailureHandler(function () {}).getLeadStage(leadId);
+      }
+      if (cachedLeadStagesOptions) { render(); return; }
+      scriptRun().withSuccessHandler(function (stages) { cachedLeadStagesOptions = stages; render(); })
+        .withFailureHandler(function (error) { setError('leadDetailError', error); }).listStages();
+    }
+    function submitLeadDetailStage() {
+      var stageId = document.getElementById('leadDetailStageSelect').value;
+      if (!stageId) return;
+      scriptRun().withSuccessHandler(function () { setError('leadDetailError', null); })
+        .withFailureHandler(function (error) { setError('leadDetailError', error); }).setLeadStage(window.__leadDetailId, stageId);
+    }
+    function loadLeadDetailRemarks(leadId) {
+      scriptRun().withSuccessHandler(function (remarks) {
+        document.getElementById('leadDetailRemarksList').innerHTML = remarks.map(function (r) {
+          return '<div class="lead-remark-item">' + escapeHtml(r.text) + '<div class="lead-remark-meta">' + escapeHtml((r.createdAt || '').replace('T', ' ').slice(0, 16)) + '</div></div>';
+        }).join('') || '<div class="empty">No comments yet</div>';
+      }).withFailureHandler(function (error) { setError('leadDetailError', error); }).listLeadRemarks(leadId);
+    }
+    function submitLeadDetailRemark() {
+      var text = document.getElementById('leadDetailRemarkText').value.trim();
+      if (!text) return;
+      scriptRun().withSuccessHandler(function () {
+        document.getElementById('leadDetailRemarkText').value = '';
+        setError('leadDetailError', null);
+        loadLeadDetailRemarks(window.__leadDetailId);
+      }).withFailureHandler(function (error) { setError('leadDetailError', error); }).addLeadRemark(window.__leadDetailId, text);
+    }
+    function submitLeadDetailCall() {
+      scriptRun().withSuccessHandler(function (call) {
+        alert('Call initiated (' + call.status + '). Your phone will ring first, then connect to the lead.');
+      }).withFailureHandler(function (error) { setError('leadDetailError', error); }).initiateLeadCall(window.__leadDetailId);
+    }
+    function submitLeadDetailWhatsApp() {
+      scriptRun().withSuccessHandler(function (result) {
+        closeLeadDetailModal();
+        if (selectedNumberId !== result.numberId) enterWorkspace(result.numberId);
+        showPage('inbox');
+        openConversationFromAnywhere(result.conversationId);
+      }).withFailureHandler(function (error) { setError('leadDetailError', error); }).startWhatsAppFromLead(window.__leadDetailId);
     }
 
     // ============================================================================

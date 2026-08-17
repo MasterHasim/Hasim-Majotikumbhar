@@ -29,7 +29,8 @@ var PASSWORD_AUTH_API_ALLOWLIST_ = [
   // Phase 22: location leads upload, assignment rules, click-to-call.
   'listLeadLocations', 'uploadLeads', 'listLeads', 'reassignLead', 'getLocationAssignmentConfig', 'setLocationAssignmentConfig',
   'listLocationAssignmentParticipants', 'addLocationAssignmentParticipant', 'updateLocationAssignmentParticipant',
-  'initiateLeadCall', 'listLeadCallLog'
+  'initiateLeadCall', 'listLeadCallLog', 'setLeadStage', 'getLeadStage', 'addLeadRemark', 'listLeadRemarks',
+  'startWhatsAppFromLead', 'initiateConversationCall'
 ];
 
 // While mustChangePassword is set, every other allowlisted call is blocked server-

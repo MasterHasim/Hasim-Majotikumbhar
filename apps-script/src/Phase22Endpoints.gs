@@ -11,3 +11,9 @@ function addLocationAssignmentParticipant(location, userId, sequenceOrder) { ret
 function updateLocationAssignmentParticipant(id, patch) { return phase22Api_().updateLocationParticipant(id, patch); }
 function initiateLeadCall(leadId) { return phase22Api_().initiateCall(leadId); }
 function listLeadCallLog(leadId) { return phase22Api_().listCallLog(leadId); }
+function setLeadStage(leadId, stageId) { return phase22Api_().setLeadStage(leadId, stageId); }
+function getLeadStage(leadId) { return phase22Api_().getLeadStage(leadId); }
+function addLeadRemark(leadId, text) { return phase22Api_().addLeadRemark(leadId, text); }
+function listLeadRemarks(leadId) { return phase22Api_().listLeadRemarks(leadId); }
+function startWhatsAppFromLead(leadId) { return phase22Api_().startWhatsAppFromLead(leadId); }
+function initiateConversationCall(conversationId) { return phase22Api_().initiateConversationCall(conversationId); }

@@ -6,10 +6,20 @@ const assert = require('assert');
 
 const properties = {
   SPREADSHEET_ID: 'mock-spreadsheet-id', 'wap.phase1.bootstrapAdminEmail': 'admin@example.com',
-  EXOTEL_VOICE_ACCOUNT_SID: 'sid', EXOTEL_VOICE_API_KEY: 'key', EXOTEL_VOICE_API_TOKEN: 'token', EXOTEL_VOICE_CALLER_ID: '07900000000'
+  EXOTEL_VOICE_ACCOUNT_SID: 'sid', EXOTEL_VOICE_API_KEY: 'key', EXOTEL_VOICE_API_TOKEN: 'token', EXOTEL_VOICE_CALLER_ID: '07900000000',
+  // Conversations/Customers-adjacent Firebase wiring — Conversations moved off Sheets
+  // on 2026-08-11 (see phase7-assignment-verification.js for the same mock shape).
+  FIREBASE_DATABASE_URL: 'https://mock-default-rtdb.firebasedatabase.app',
+  FIREBASE_SERVICE_ACCOUNT_B64: Buffer.from(JSON.stringify({ client_email: 'test@example.iam.gserviceaccount.com', private_key: 'fake-key' })).toString('base64')
 };
 let email = 'admin@example.com';
-global.Utilities = { getUuid: (() => { let n = 0; return () => String(++n); })(), base64Encode: str => Buffer.from(str).toString('base64') };
+global.Utilities = {
+  getUuid: (() => { let n = 0; return () => String(++n); })(), base64Encode: str => Buffer.from(str).toString('base64'),
+  base64EncodeWebSafe: bytes => Buffer.from(bytes).toString('base64').replace(/\+/g, '-').replace(/\//g, '_'),
+  computeRsaSha256Signature: (input, key) => Buffer.from('signed:' + input.length + ':' + key.length),
+  base64Decode: str => Buffer.from(str, 'base64'),
+  newBlob: (data, contentType, name) => { const bytes = Buffer.isBuffer(data) || Array.isArray(data) ? Buffer.from(data) : Buffer.from(String(data), 'utf8'); return { bytes, mimeType: contentType, filename: name, getBytes: () => bytes, getDataAsString: () => bytes.toString('utf8') }; }
+};
 global.PropertiesService = { getScriptProperties: () => ({ getProperty: key => properties[key] || null, setProperty: (key, value) => { properties[key] = value; } }) };
 global.LockService = { getScriptLock: () => ({ waitLock: () => {}, releaseLock: () => {} }) };
 global.Session = { getActiveUser: () => ({ getEmail: () => email }) };
@@ -33,11 +43,24 @@ const mockSpreadsheet = makeSpreadsheet();
 global.SpreadsheetApp = { openById: () => mockSpreadsheet };
 
 let nextCallSid = 0;
+const firebaseMockDb_ = {};
 global.UrlFetchApp = {
-  fetch: (url) => {
+  fetch: (url, options) => {
     if (url.indexOf('api.exotel.com') !== -1) {
       nextCallSid++;
       return { getResponseCode: () => 200, getContentText: () => JSON.stringify({ Call: { Sid: 'call_sid_' + nextCallSid, Status: 'in-progress' } }) };
+    }
+    if (url.indexOf('oauth2.googleapis.com') !== -1) return { getResponseCode: () => 200, getContentText: () => JSON.stringify({ access_token: 'mock-token', expires_in: 3600 }) };
+    const firebaseMatch = url.match(/firebasedatabase\.app\/([^/]+)(?:\/([^/.]+))?\.json/);
+    if (firebaseMatch) {
+      const collection = firebaseMatch[1], id = firebaseMatch[2];
+      firebaseMockDb_[collection] = firebaseMockDb_[collection] || {};
+      if (options.method === 'get') {
+        const value = id ? (firebaseMockDb_[collection][id] || null) : (Object.keys(firebaseMockDb_[collection]).length ? firebaseMockDb_[collection] : null);
+        return { getResponseCode: () => 200, getContentText: () => JSON.stringify(value) };
+      }
+      if (options.method === 'put') { firebaseMockDb_[collection][id] = JSON.parse(options.payload); return { getResponseCode: () => 200, getContentText: () => options.payload }; }
+      if (options.method === 'delete') { delete firebaseMockDb_[collection][id]; return { getResponseCode: () => 200, getContentText: () => 'null' }; }
     }
     return { getResponseCode: () => 400, getContentText: () => 'unhandled request in mock' };
   }
@@ -50,6 +73,7 @@ fs.readdirSync(srcDir).filter(file => file.endsWith('.gs')).sort().forEach(file 
 
 const phase1 = () => new Phase1Api();
 const phase22 = () => new Phase22Api();
+const phase8 = () => new Phase8Api();
 
 phase1().bootstrap({ email, displayName: 'Admin' });
 const roles = phase1().listRoles();
@@ -132,5 +156,65 @@ email = 'rahul@example.com';
 const prayagrajLead = rahulsLeads.find(lead => lead.assignedUserId === rahul.id && lead.location === 'Prayagraj');
 const prayagrajCall = phase22().initiateCall(prayagrajLead.id);
 assert.strictEqual(prayagrajCall.callerId, '07948502806', 'uses the location-specific caller ID, not the account default');
+
+// ---- Lead Stages (reuses Phase 8's Lead_Stages) ----
+email = 'admin@example.com';
+const stages = phase8().seedDefaultLeadStages();
+const contactedStage = stages.find(s => s.key === 'contacted');
+email = 'rahul@example.com';
+const stageResult = phase22().setLeadStage(rahulsOwnLead.id, contactedStage.id);
+assert.strictEqual(stageResult.stageId, contactedStage.id);
+assert.deepStrictEqual(phase22().getLeadStage(rahulsOwnLead.id), stageResult, 'owner can read the stage back');
+email = 'priya@example.com';
+assert.throws(() => phase22().setLeadStage(rahulsOwnLead.id, contactedStage.id), error => error.code === 'FORBIDDEN', 'a non-owner agent cannot set another agent\'s lead stage');
+assert.throws(() => phase22().getLeadStage(rahulsOwnLead.id), error => error.code === 'FORBIDDEN', 'a non-owner agent cannot even read another agent\'s lead stage');
+
+// ---- Comments (Lead_Remarks) ----
+email = 'rahul@example.com';
+const remark = phase22().addLeadRemark(rahulsOwnLead.id, 'Called once, asked to call back tomorrow.');
+assert.strictEqual(remark.text, 'Called once, asked to call back tomorrow.');
+const remarks = phase22().listLeadRemarks(rahulsOwnLead.id);
+assert.strictEqual(remarks.length, 1);
+email = 'priya@example.com';
+assert.throws(() => phase22().addLeadRemark(rahulsOwnLead.id, 'x'), error => error.code === 'FORBIDDEN', 'a non-owner agent cannot comment on another agent\'s lead');
+
+// ---- Send WhatsApp from a lead: resolves the location's WhatsApp number by displayName ----
+email = 'admin@example.com';
+const number = new NumberRepository().create({
+  id: 'number_coimbatore', displayName: 'Entartica - Coimbatore', phoneNumber: '07948502808', provider: 'exotel',
+  providerAccountId: '', wabaId: '', providerNumberId: '', active: true, createdAt: '', updatedAt: ''
+});
+// No numberAccess granted yet — must be rejected, not silently create an inaccessible conversation.
+email = 'rahul@example.com';
+assert.throws(() => phase22().startWhatsAppFromLead(rahulsOwnLead.id), error => error.code === 'FORBIDDEN', 'agent without numberAccess for the resolved number must be rejected');
+email = 'admin@example.com';
+phase1().grantNumberAccess({ userId: rahul.id, numberId: number.id });
+email = 'rahul@example.com';
+const waResult = phase22().startWhatsAppFromLead(rahulsOwnLead.id);
+assert.strictEqual(waResult.numberId, number.id);
+const createdConversation = new ConversationRepository().get(waResult.conversationId);
+assert.strictEqual(createdConversation.numberId, number.id);
+assert.strictEqual(createdConversation.assignedUserId, rahul.id);
+assert.strictEqual(createdConversation.status, 'OPEN');
+const createdCustomer = new CustomerRepository().get(waResult.customerId);
+assert.strictEqual(createdCustomer.phone, rahulsOwnLead.phone);
+// Calling it again for the same lead reuses the same open conversation instead of duplicating it.
+const waResult2 = phase22().startWhatsAppFromLead(rahulsOwnLead.id);
+assert.strictEqual(waResult2.conversationId, waResult.conversationId, 'reuses the existing open conversation');
+
+// A location with no matching WhatsApp number gives a clear configuration error, not a crash.
+email = 'admin@example.com';
+const orphanUpload = phase22().uploadLeads([{ name: 'No Number Yet', phone: '9400000000', location: 'Alibaug' }]);
+const orphanLead = phase22().listLeads({ location: 'Alibaug' })[0];
+phase22().reassignLead(orphanLead.id, rahul.id);
+email = 'rahul@example.com';
+assert.throws(() => phase22().startWhatsAppFromLead(orphanLead.id), error => error.code === 'CONFIGURATION_ERROR', 'no WhatsApp number configured for Alibaug yet');
+
+// ---- Click-to-call from the Inbox/conversation screen: uses that number's own phone as caller ID ----
+const inboxCall = phase22().initiateConversationCall(waResult.conversationId);
+assert.strictEqual(inboxCall.callerId, '07948502808', 'uses the conversation\'s own WhatsApp number as caller ID, not the account/location default');
+assert.strictEqual(inboxCall.leadPhone, rahulsOwnLead.phone);
+email = 'priya@example.com';
+assert.throws(() => phase22().initiateConversationCall(waResult.conversationId), error => error.code === 'FORBIDDEN', 'an agent not assigned to the conversation cannot call it');
 
 console.log('Phase 22 leads verification: PASS');

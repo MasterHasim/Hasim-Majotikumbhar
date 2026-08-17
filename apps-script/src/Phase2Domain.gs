@@ -46,5 +46,11 @@ var Phase2Schemas = {
   Leads: ['name', 'phone', 'location', 'status', 'assignedUserId', 'assignedAt', 'uploadBatchId', 'uploadedBy', 'createdAt', 'updatedAt'],
   Location_Assignment_Config: ['location', 'mode', 'singleUserId', 'lastAssignedUserId', 'active', 'callerId', 'createdAt', 'updatedAt'],
   Location_Assignment_Users: ['location', 'userId', 'sequenceOrder', 'active', 'createdAt', 'updatedAt'],
-  Call_Log: ['leadId', 'agentUserId', 'exotelCallSid', 'agentPhone', 'leadPhone', 'callerId', 'status', 'initiatedAt', 'updatedAt']
+  Call_Log: ['leadId', 'agentUserId', 'exotelCallSid', 'agentPhone', 'leadPhone', 'callerId', 'status', 'initiatedAt', 'updatedAt'],
+  // Phase 22 follow-up: connecting leads to the existing Lead Stages (Phase 8) and a
+  // dedicated comments tab, own tabs rather than new columns on Leads for the same
+  // reason as Customer_Stage above — Leads may already have real rows by the time this
+  // ships (uploaded before this feature existed).
+  Lead_Stage_Assignment: ['leadId', 'stageId', 'setByUserId', 'updatedAt'],
+  Lead_Remarks: ['leadId', 'authorUserId', 'text', 'createdAt']
 };
