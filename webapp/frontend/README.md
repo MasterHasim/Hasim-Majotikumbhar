@@ -20,6 +20,23 @@ npm run typecheck
 
 ## Current state
 
-Sign-in + backend round-trip validated (`App.tsx` calls `/api/whoami`). This
-becomes the real landing screen once Phase 1 (auth/roles) is ported — see
-`PROGRESS.md` at the repo root for the migration plan and status.
+The real Inbox UI is built and wired to the live backend: sign-in → bootstrap
+(first-run only) → number picker → sidebar-nav workspace shell → Inbox page
+(conversation list with search, chat thread + text reply + resolve, and a
+CRM detail panel — reassign, lead stage, remarks, reminders, snooze). Design
+tokens and layout (`src/styles.css`) are ported directly from
+`apps-script/frontend/Index.html`'s mockup-matched CSS, so the two builds
+stay visually consistent.
+
+Live updates are **polling-based for now** (`components/Inbox.tsx`, every 4s)
+rather than a real Firebase Realtime Database subscription — the backend's
+`RealtimeListenApi`/custom-token minting already exists
+(`src/services/realtimeListenApi.ts`), but wiring an actual `onValue`
+listener needs a second Firebase app instance (the primary one already holds
+the Google Auth session) and hasn't been built yet; it's a deliberate
+fast-follow once this page's core flow is confirmed working end-to-end by a
+real user, not an oversight.
+
+Not built yet: templates/quick-replies/media send, dashboard/reports, admin
+panel (users/teams/numbers/settings), and the Phase 22 leads page — see
+`PROGRESS.md` at the repo root for the full migration plan and status.

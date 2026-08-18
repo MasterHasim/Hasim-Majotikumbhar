@@ -145,6 +145,27 @@ are now set on the live backend — click-to-call is wired end-to-end, not just
 returning a configuration error — but the request/response shape itself is
 still unverified against a real Exotel account (see the task list).
 
+**The real frontend Inbox UI is built and live.** Until now every phase above
+was backend-only (API routes + business logic) — there was nothing to click
+on. `webapp/frontend/` now has: sign-in → bootstrap (first run) → number
+picker → sidebar-nav workspace shell → **Inbox page** — conversation list
+(search by name/phone), chat thread with text reply + resolve, and a CRM
+detail panel (reassign, lead stage, remarks, reminders, snooze), all wired
+to the live backend above. Design tokens/layout (`src/styles.css`) are
+ported directly from `apps-script/frontend/Index.html`'s mockup-matched CSS
+so the two builds look the same. Typechecks clean, production build clean,
+verified rendering correctly in a live browser session (no console errors).
+**Live updates are polling-based for now (every 4s)**, not a real Firebase
+listener — the backend's realtime-token minting already exists, wiring an
+actual subscription is a deliberate fast-follow once you've confirmed this
+page works for you, not an oversight. Not yet built: template/media send,
+dashboard/reports, admin panel, and the Phase 22 leads page.
+
+**How to see it**: run `npm run dev` in `webapp/frontend/` (or it may already
+be running — check `http://localhost:5173`) and sign in with your Google
+Workspace account. It already talks to the live backend, no local backend
+server needed.
+
 ### Setup status — everything is now set
 
 1. ✅ Cloudflare account created, `wrangler login` done.
@@ -287,7 +308,8 @@ build:
 5. Fill in `Spreewalk - Raipur` / `ECHT Advisory` provider fields — WhatsApp Numbers page → Edit (optional).
 6. Remove the ngrok callback URL from Exotel (optional).
 7. **Read `docs/ZOHO_PHASE_2.md` and answer its 5 open questions** whenever you're ready to think about Zoho.
-8. **[webapp] Place one real Exotel Voice call to verify Phase 22's click-to-call.** The Exotel Voice secrets are now set on the live backend, but `ExotelVoiceProvider`'s request/response field names are still UNVERIFIED (carried over from the Apps Script build's own unverified version) — a real agent needs a `phone` set (Admin Panel → Users, once that page exists on the new backend, or via the API directly for now) and a lead assigned to them, then click-to-call once so I can confirm/fix the response parsing against what Exotel actually returns.
+8. **[webapp] Click through the new Inbox UI at `http://localhost:5173`** — sign in, pick a number, open a conversation, send a reply, try reassign/stage/remark/reminder/snooze in the detail panel. This is the first time any of the webapp migration work is actually visible/usable — please confirm it works before I build further pages on top of it.
+9. **[webapp] Place one real Exotel Voice call to verify Phase 22's click-to-call.** The Exotel Voice secrets are now set on the live backend, but `ExotelVoiceProvider`'s request/response field names are still UNVERIFIED (carried over from the Apps Script build's own unverified version) — a real agent needs a `phone` set (Admin Panel → Users, once that page exists on the new backend, or via the API directly for now) and a lead assigned to them, then click-to-call once so I can confirm/fix the response parsing against what Exotel actually returns.
 
 ### Done (kept for history)
 

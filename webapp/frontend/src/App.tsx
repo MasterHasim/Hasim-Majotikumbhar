@@ -2,13 +2,11 @@ import { useEffect, useState } from 'react';
 import { getRedirectResult, onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut, type User } from 'firebase/auth';
 import { auth, googleProvider } from './lib/firebase';
 import { apiFetch, ApiClientError } from './lib/api';
-
-interface WhoAmI {
-  id: string;
-  email: string;
-  displayName: string;
-  roleKeys: string[];
-}
+import { backendApi } from './lib/backendApi';
+import type { WhatsAppNumber, WhoAmI } from './types';
+import { NumberPicker } from './components/NumberPicker';
+import { Sidebar } from './components/Sidebar';
+import { Inbox } from './components/Inbox';
 
 async function signIn() {
   try {
@@ -26,18 +24,14 @@ async function signIn() {
   }
 }
 
-/**
- * Pipeline-validation screen for the new stack, mirroring how the Apps Script
- * migration proved the realtime channel worked (a visible round trip, not
- * just "should work in theory"). Once the real Inbox UI is built, this
- * becomes the auth gate in front of it instead of the whole screen.
- */
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [whoAmI, setWhoAmI] = useState<WhoAmI | null>(null);
   const [needsBootstrap, setNeedsBootstrap] = useState(false);
   const [bootstrapping, setBootstrapping] = useState(false);
+  const [numbers, setNumbers] = useState<WhatsAppNumber[] | null>(null);
+  const [activeNumber, setActiveNumber] = useState<WhatsAppNumber | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -66,6 +60,13 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
+  useEffect(() => {
+    if (!whoAmI) { setNumbers(null); return; }
+    backendApi.listMyNumbers()
+      .then(setNumbers)
+      .catch((err) => setError(err instanceof ApiClientError ? `${err.code}: ${err.message}` : String(err)));
+  }, [whoAmI]);
+
   async function completeBootstrap() {
     if (!user?.email) return;
     setBootstrapping(true);
@@ -80,39 +81,61 @@ export default function App() {
     }
   }
 
-  if (authLoading) return <p>Loading…</p>;
+  if (authLoading) return <div className="centered-message">Loading…</div>;
 
   if (!user) {
     return (
-      <div style={{ padding: 24, fontFamily: 'sans-serif' }}>
-        <h1>WhatsApp Panel — New Stack</h1>
-        <button onClick={() => void signIn()}>Sign in with Google</button>
-        {error && <p style={{ color: 'crimson' }}>{error}</p>}
+      <div className="landing-screen">
+        <div className="landing-header">
+          <span className="logo">💬</span>
+          <div>
+            <h1>WhatsApp Panel</h1>
+            <div className="subtitle">Sign in with your Google Workspace account to continue.</div>
+          </div>
+        </div>
+        <button className="btn primary" onClick={() => void signIn()}>Sign in with Google</button>
+        {error && <p className="fatal-error">{error}</p>}
       </div>
     );
   }
 
   if (needsBootstrap) {
     return (
-      <div style={{ padding: 24, fontFamily: 'sans-serif' }}>
-        <h1>WhatsApp Panel — New Stack</h1>
-        <p>Signed in as {user.email}. No admin account exists yet on this new system.</p>
-        <button onClick={() => void completeBootstrap()} disabled={bootstrapping}>
+      <div className="landing-screen">
+        <div className="landing-header">
+          <span className="logo">💬</span>
+          <div>
+            <h1>Welcome</h1>
+            <div className="subtitle">Signed in as {user.email}. No admin account exists yet on this new system.</div>
+          </div>
+        </div>
+        <button className="btn primary" disabled={bootstrapping} onClick={() => void completeBootstrap()}>
           {bootstrapping ? 'Setting up…' : 'Become the first admin'}
         </button>
-        {error && <p style={{ color: 'crimson' }}>{error}</p>}
+        {error && <p className="fatal-error">{error}</p>}
       </div>
     );
   }
 
+  if (!whoAmI || numbers === null) return <div className="centered-message">Loading…</div>;
+
+  if (!activeNumber) {
+    return (
+      <>
+        <NumberPicker numbers={numbers} onPick={setActiveNumber} />
+        {error && <p className="fatal-error">{error}</p>}
+      </>
+    );
+  }
+
   return (
-    <div style={{ padding: 24, fontFamily: 'sans-serif' }}>
-      <h1>WhatsApp Panel — New Stack</h1>
-      <p>Signed in as {user.email}</p>
-      <button onClick={() => signOut(auth)}>Sign out</button>
-      <h2>Backend pipeline check</h2>
-      {error && <p style={{ color: 'crimson' }}>Backend call failed: {error}</p>}
-      {whoAmI && <pre>{JSON.stringify(whoAmI, null, 2)}</pre>}
+    <div id="app">
+      <Sidebar number={activeNumber} whoAmI={whoAmI} onSwitchNumber={() => setActiveNumber(null)} onSignOut={() => void signOut(auth)} />
+      <div id="mainArea">
+        <div id="pageContent">
+          <Inbox number={activeNumber} />
+        </div>
+      </div>
     </div>
   );
 }
