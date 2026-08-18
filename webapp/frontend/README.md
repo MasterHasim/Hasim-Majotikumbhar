@@ -47,6 +47,16 @@ badges for conversations other than the one currently open — same scope
 limitation the Apps Script build's own listener has), plus a 20s safety-net
 refetch of the open workspace in case the `EventSource` silently drops.
 
-Not built yet: templates/quick-replies/media send, dashboard/reports, admin
-panel (users/teams/numbers/settings), and the Phase 22 leads page — see
-`PROGRESS.md` at the repo root for the full migration plan and status.
+**The Leads page (Phase 22 UI) is also built** — a second sidebar nav item
+alongside Inbox. Location/status filters, a lead table, an ADMIN/SITE_MANAGER-
+only bulk upload (paste `Name, Phone, Location` lines), a lead detail modal
+(stage, comments, Call, Send WhatsApp — the last one bridges into the Inbox
+page, switching the active number if the lead's location resolves to a
+different one), and an assignment-rules modal (mode, participants, and a
+quick per-agent phone-number setter, since `initiateCall` needs one and
+there's no Admin Users page yet). All wired to the already-tested
+`Phase22Api` backend.
+
+Not built yet: templates/quick-replies/media send, dashboard/reports, and a
+proper admin panel (users/teams/numbers/settings) — see `PROGRESS.md` at the
+repo root for the full migration plan and status.

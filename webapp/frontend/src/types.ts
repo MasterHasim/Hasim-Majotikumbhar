@@ -117,3 +117,78 @@ export interface WhoAmI {
   displayName: string;
   roleKeys: string[];
 }
+
+// --- Phase 22 (location leads + Exotel click-to-call) ---
+
+export const LEAD_LOCATIONS = ['Raipur', 'Rajsamand', 'Coimbatore', 'Prayagraj', 'Alibaug', 'Saraighat'] as const;
+
+export type LeadStatus = 'NEW' | 'ASSIGNED' | 'UNASSIGNED' | 'CALLED';
+
+export interface Lead {
+  id: string;
+  name: string;
+  phone: string;
+  location: string;
+  status: LeadStatus;
+  assignedUserId: string;
+  assignedAt: string;
+  createdAt: string;
+}
+
+export type LocationAssignmentMode = 'single' | 'round_robin' | 'manual';
+
+export interface LocationAssignmentConfig {
+  id: string;
+  location: string;
+  mode: LocationAssignmentMode;
+  singleUserId: string;
+  active: boolean;
+  callerId: string;
+}
+
+export interface LocationAssignmentUser {
+  id: string;
+  location: string;
+  userId: string;
+  sequenceOrder: number;
+  active: boolean;
+}
+
+export interface LeadStageAssignment {
+  leadId: string;
+  stageId: string;
+  setByUserId: string;
+  updatedAt: string;
+}
+
+export interface LeadRemark {
+  id: string;
+  leadId: string;
+  authorUserId: string;
+  text: string;
+  createdAt: string;
+}
+
+export interface CallLog {
+  id: string;
+  leadId: string;
+  agentUserId: string;
+  exotelCallSid: string;
+  status: string;
+  initiatedAt: string;
+}
+
+export interface UploadLeadsResult {
+  batchId: string;
+  created: number;
+  skipped: number;
+  errors: { index: number; row: unknown; message: string }[];
+}
+
+export interface User {
+  id: string;
+  email: string;
+  displayName: string;
+  status: string;
+  phone: string;
+}

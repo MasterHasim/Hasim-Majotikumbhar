@@ -1,10 +1,14 @@
 import type { WhatsAppNumber, WhoAmI } from '../types';
 
+export type Page = 'inbox' | 'leads';
+
 export function Sidebar({
-  number, whoAmI, onSwitchNumber, onSignOut,
+  number, whoAmI, page, onNavigate, onSwitchNumber, onSignOut,
 }: {
   number: WhatsAppNumber;
   whoAmI: WhoAmI;
+  page: Page;
+  onNavigate: (page: Page) => void;
   onSwitchNumber: () => void;
   onSignOut: () => void;
 }) {
@@ -21,10 +25,14 @@ export function Sidebar({
         <div className="cn-switch">Switch number ▾</div>
       </button>
       <div id="navList">
-        <div className="nav-item active">
+        <button className={`nav-item${page === 'inbox' ? ' active' : ''}`} onClick={() => onNavigate('inbox')}>
           <span className="nav-icon">💬</span>
           <span className="nav-label">Inbox</span>
-        </div>
+        </button>
+        <button className={`nav-item${page === 'leads' ? ' active' : ''}`} onClick={() => onNavigate('leads')}>
+          <span className="nav-icon">📍</span>
+          <span className="nav-label">Leads</span>
+        </button>
       </div>
       <div className="sidebar-footer">
         <div className="avatar-circle">{initial}</div>

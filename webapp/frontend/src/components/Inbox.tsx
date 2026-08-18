@@ -16,7 +16,12 @@ const LIST_POLL_MS = 8000;
  * without firing onerror — cheap insurance, not the primary update path anymore. */
 const WORKSPACE_SAFETY_POLL_MS = 20000;
 
-export function Inbox({ number }: { number: WhatsAppNumber }) {
+export function Inbox({ number, initialConversationId, onInitialConversationConsumed }: {
+  number: WhatsAppNumber;
+  /** Set by App.tsx when Leads.tsx's "Send WhatsApp" bridges here — auto-opens that conversation once. */
+  initialConversationId?: string | null;
+  onInitialConversationConsumed?: () => void;
+}) {
   const [conversations, setConversations] = useState<ConversationListItem[]>([]);
   const [stages, setStages] = useState<Stage[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -70,18 +75,25 @@ export function Inbox({ number }: { number: WhatsAppNumber }) {
   // Stop the realtime connection on unmount (switching conversations is handled in selectConversation itself).
   useEffect(() => () => stopRealtimeRef.current?.(), []);
 
-  async function selectConversation(conversation: ConversationListItem) {
+  const selectConversation = useCallback(async (conversationId: string) => {
     stopRealtimeRef.current?.();
     stopRealtimeRef.current = null;
-    setSelectedId(conversation.id);
-    const ws = await loadWorkspace(conversation.id, true);
-    if (ws?.realtime && selectedIdRef.current === conversation.id) {
-      stopRealtimeRef.current = connectRealtimeMessages(ws.realtime, conversation.id, () => {
-        void loadWorkspace(conversation.id);
+    setSelectedId(conversationId);
+    const ws = await loadWorkspace(conversationId, true);
+    if (ws?.realtime && selectedIdRef.current === conversationId) {
+      stopRealtimeRef.current = connectRealtimeMessages(ws.realtime, conversationId, () => {
+        void loadWorkspace(conversationId);
         void loadConversations();
       });
     }
-  }
+  }, [loadWorkspace, loadConversations]);
+
+  useEffect(() => {
+    if (!initialConversationId) return;
+    void selectConversation(initialConversationId);
+    onInitialConversationConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialConversationId, number.id]);
 
   async function handleResolve() {
     if (!selectedId) return;
@@ -103,7 +115,7 @@ export function Inbox({ number }: { number: WhatsAppNumber }) {
       <h1 className="page-title" style={{ margin: '0 0 12px' }}>Inbox</h1>
       {error && <div className="compose-error" style={{ padding: '0 0 10px' }}>{error}</div>}
       <div className={`split${workspace ? '' : ' no-detail'}`}>
-        <ConversationList conversations={conversations} selectedId={selectedId} search={search} onSearchChange={setSearch} onSelect={(c) => void selectConversation(c)} />
+        <ConversationList conversations={conversations} selectedId={selectedId} search={search} onSearchChange={setSearch} onSelect={(id) => void selectConversation(id)} />
         {workspace ? (
           <>
             <ChatPane workspace={workspace} onAfterSend={handleChanged} onResolve={() => void handleResolve()} />

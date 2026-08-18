@@ -5,8 +5,9 @@ import { apiFetch, ApiClientError } from './lib/api';
 import { backendApi } from './lib/backendApi';
 import type { WhatsAppNumber, WhoAmI } from './types';
 import { NumberPicker } from './components/NumberPicker';
-import { Sidebar } from './components/Sidebar';
+import { Sidebar, type Page } from './components/Sidebar';
 import { Inbox } from './components/Inbox';
+import { Leads } from './components/Leads';
 
 async function signIn() {
   try {
@@ -32,7 +33,17 @@ export default function App() {
   const [bootstrapping, setBootstrapping] = useState(false);
   const [numbers, setNumbers] = useState<WhatsAppNumber[] | null>(null);
   const [activeNumber, setActiveNumber] = useState<WhatsAppNumber | null>(null);
+  const [page, setPage] = useState<Page>('inbox');
+  const [pendingConversationId, setPendingConversationId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  /** Leads.tsx's "Send WhatsApp" bridges into the Inbox on whichever number the lead's location resolves to — which may not be the number currently open. */
+  function openConversationFromLead(conversationId: string, numberId: string) {
+    const target = (numbers ?? []).find((n) => n.id === numberId);
+    if (target && target.id !== activeNumber?.id) setActiveNumber(target);
+    setPendingConversationId(conversationId);
+    setPage('inbox');
+  }
 
   useEffect(() => {
     getRedirectResult(auth).catch((err) => setError(String(err)));
@@ -135,10 +146,14 @@ export default function App() {
 
   return (
     <div id="app">
-      <Sidebar number={activeNumber} whoAmI={whoAmI} onSwitchNumber={() => setActiveNumber(null)} onSignOut={() => void signOut(auth)} />
+      <Sidebar number={activeNumber} whoAmI={whoAmI} page={page} onNavigate={setPage} onSwitchNumber={() => setActiveNumber(null)} onSignOut={() => void signOut(auth)} />
       <div id="mainArea">
         <div id="pageContent">
-          <Inbox number={activeNumber} />
+          {page === 'inbox' ? (
+            <Inbox number={activeNumber} initialConversationId={pendingConversationId} onInitialConversationConsumed={() => setPendingConversationId(null)} />
+          ) : (
+            <Leads whoAmI={whoAmI} onOpenConversation={openConversationFromLead} />
+          )}
         </div>
       </div>
     </div>

@@ -15,7 +15,7 @@ export function ConversationList({
   selectedId: string | null;
   search: string;
   onSearchChange: (value: string) => void;
-  onSelect: (conversation: ConversationListItem) => void;
+  onSelect: (conversationId: string) => void;
 }) {
   const filtered = search.trim()
     ? conversations.filter((c) => c.customerName.toLowerCase().includes(search.toLowerCase()) || c.customerPhone.includes(search))
@@ -31,7 +31,7 @@ export function ConversationList({
         <div className="empty">No conversations yet.</div>
       ) : (
         filtered.map((conversation) => (
-          <button key={conversation.id} className={`conv-item${conversation.id === selectedId ? ' active' : ''}`} onClick={() => onSelect(conversation)}>
+          <button key={conversation.id} className={`conv-item${conversation.id === selectedId ? ' active' : ''}`} onClick={() => onSelect(conversation.id)}>
             <div className="conv-main">
               <div className="conv-title-row">
                 <span className="conv-name">{conversation.customerName || conversation.customerPhone}</span>

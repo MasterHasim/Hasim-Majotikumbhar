@@ -185,11 +185,22 @@ rules already authorize the new backend's tokens too. Replaces the old
 covers the conversation list (other conversations' previews/badges — same
 scope limit the Apps Script listener has), plus a 20s safety-net workspace
 refetch in case the stream silently drops.
-**Live updates are polling-based for now (every 4s)**, not a real Firebase
-listener — the backend's realtime-token minting already exists, wiring an
-actual subscription is a deliberate fast-follow once you've confirmed this
-page works for you, not an oversight. Not yet built: template/media send,
-dashboard/reports, admin panel, and the Phase 22 leads page.
+
+**✅ The Leads page (Phase 22 frontend) is built** — a second sidebar nav
+item alongside Inbox. Location/status filters, a lead table (scoped
+server-side: managers see everything, agents see only their own leads,
+same rule `Phase22Api` already enforces), an ADMIN/SITE_MANAGER-only bulk
+upload (paste `Name, Phone, Location` lines, per-row errors reported
+without aborting the batch — same UX the backend was built for), a lead
+detail modal (stage, comments, Call, Send WhatsApp — which bridges straight
+into the Inbox page, switching the active WhatsApp number automatically if
+the lead's location resolves to a different one), and an assignment-rules
+modal (mode/participants/caller-ID per location, plus a quick per-agent
+phone-number setter since `initiateCall` needs one on file and there's no
+Admin Users page yet to set it otherwise). Typechecks clean, production
+build clean, verified rendering with no console/network errors in a fresh
+browser load. Not yet built: template/media send, dashboard/reports, and a
+proper admin panel (users/teams/numbers/settings).
 
 **How to see it**: run `npm run dev` in `webapp/frontend/` (or it may already
 be running — check `http://localhost:5173`) and sign in with your Google

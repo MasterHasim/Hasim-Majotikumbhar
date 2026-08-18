@@ -147,6 +147,27 @@ h2.section-title { font-size: 14px; margin: 18px 0 8px; }
 .form-row input, .form-row select { padding: 6px 9px; font-size: 13px; border: 1px solid var(--border); border-radius: 6px; }
 .form-error { color: var(--danger); font-size: 12px; margin: 4px 0; }
 
+/* ---- Leads page ---- */
+.leads-toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+.leads-toolbar select { padding: 6px 9px; font-size: 13px; border: 1px solid var(--border); border-radius: 6px; }
+table.data-table { border-collapse: collapse; width: 100%; margin-bottom: 12px; font-size: 13px; background: var(--card-bg); }
+table.data-table th, table.data-table td { border-bottom: 1px solid var(--border); padding: 7px 10px; text-align: left; }
+table.data-table th { color: var(--text-secondary); font-weight: 600; background: var(--bg); }
+table.data-table tr:hover td { background: #fafafa; }
+table.data-table tr.clickable { cursor: pointer; }
+.lead-status-tag { display: inline-block; padding: 1px 8px; border-radius: 9px; font-size: 10px; font-weight: 700; }
+.lead-status-tag.NEW { background: #e8eaed; color: #3c4043; }
+.lead-status-tag.ASSIGNED { background: var(--accent-light); color: var(--accent-dark); }
+.lead-status-tag.UNASSIGNED { background: #fff4e0; color: var(--warning); }
+.lead-status-tag.CALLED { background: #e6f0fe; color: #1a56db; }
+
+/* ---- Generic modal overlay (leads, assignment rules) ---- */
+.modal-overlay { position: fixed; inset: 0; background: rgba(15,42,32,.45); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.modal-card { max-width: 520px; width: 100%; max-height: 85vh; overflow-y: auto; background: var(--card-bg); border-radius: 10px; padding: 20px; }
+.modal-card.wide { max-width: 640px; }
+.lead-remark-item { padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+.lead-remark-meta { color: var(--text-secondary); font-size: 11px; margin-top: 2px; }
+
 /* ---- Full-page loading/error states ---- */
 .centered-message { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-secondary); font-size: 13px; }
 .fatal-error { color: var(--danger); padding: 16px; }
