@@ -1,0 +1,79 @@
+/**
+ * Direct port of apps-script/src/Phase22ExotelVoice.gs — click-to-call for Phase 22
+ * leads. Deliberately separate from exotelProvider.ts (WhatsApp) — Exotel's Voice API
+ * is a different product on a fixed api.exotel.com domain (not the WABA v2 subdomain
+ * exotelProvider.ts uses), so it gets its own credentials rather than assuming the
+ * same account/subdomain covers both.
+ *
+ * UNVERIFIED: modeled on Exotel's public "Connect two numbers" / click-to-call docs
+ * (POST /v1/Accounts/{sid}/Calls/connect.json, From/To/CallerId form params, Basic
+ * Auth with API Key:Token) but not yet exercised against a real account — same
+ * "confirmed vs. assumed" caveat exotelProvider.ts carries for its own unverified
+ * methods. Do not trust the exact field names below until a real call has been placed
+ * and the response shape checked against CallLog rows.
+ */
+import { ApiError } from '../types';
+
+export interface ExotelVoiceConfig {
+  accountSid: string;
+  apiKey: string;
+  apiToken: string;
+  callerId: string;
+}
+
+export function requireExotelVoiceConfig(env: {
+  EXOTEL_VOICE_ACCOUNT_SID?: string;
+  EXOTEL_VOICE_API_KEY?: string;
+  EXOTEL_VOICE_API_TOKEN?: string;
+  EXOTEL_VOICE_CALLER_ID?: string;
+}): ExotelVoiceConfig {
+  const { EXOTEL_VOICE_ACCOUNT_SID, EXOTEL_VOICE_API_KEY, EXOTEL_VOICE_API_TOKEN, EXOTEL_VOICE_CALLER_ID } = env;
+  if (!EXOTEL_VOICE_ACCOUNT_SID || !EXOTEL_VOICE_API_KEY || !EXOTEL_VOICE_API_TOKEN || !EXOTEL_VOICE_CALLER_ID) {
+    throw new ApiError(500, 'CONFIGURATION_ERROR', 'Exotel Voice credentials are not fully configured.');
+  }
+  return { accountSid: EXOTEL_VOICE_ACCOUNT_SID, apiKey: EXOTEL_VOICE_API_KEY, apiToken: EXOTEL_VOICE_API_TOKEN, callerId: EXOTEL_VOICE_CALLER_ID };
+}
+
+export interface ConnectCallResult {
+  callSid: string | null;
+  status: string;
+  callerId: string;
+  raw: unknown;
+}
+
+export class ExotelVoiceProvider {
+  constructor(private config: ExotelVoiceConfig) {}
+
+  /**
+   * Rings agentPhone first; once answered, Exotel connects the call to leadPhone.
+   * `callerId` is optional — pass a location's own ExoPhone to have the lead see that
+   * brand's number instead of the account-wide default; falls back to the configured
+   * default caller ID when omitted.
+   */
+  async connectCall(agentPhone: string, leadPhone: string, callerId?: string): Promise<ConnectCallResult> {
+    const effectiveCallerId = callerId || this.config.callerId;
+    const response = (await this.request('Calls/connect.json', {
+      From: agentPhone,
+      To: leadPhone,
+      CallerId: effectiveCallerId,
+      CallType: 'trans', // UNVERIFIED — assumed value for a real-time (non-recorded-prompt) connect call
+    })) as { Call?: { Sid?: string; CallSid?: string; Status?: string } } | null; // UNVERIFIED envelope shape
+    const call = response?.Call;
+    return { callSid: call?.Sid || call?.CallSid || null, status: call?.Status || 'UNKNOWN', callerId: effectiveCallerId, raw: response };
+  }
+
+  private async request(path: string, formParams: Record<string, string>): Promise<unknown> {
+    const url = `https://api.exotel.com/v1/Accounts/${encodeURIComponent(this.config.accountSid)}/${path}`;
+    const auth = btoa(`${this.config.apiKey}:${this.config.apiToken}`);
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams(formParams).toString(),
+    });
+    const text = await res.text();
+    let parsed: unknown;
+    try { parsed = JSON.parse(text); } catch { parsed = text; }
+    if (!res.ok) throw new ApiError(502, 'PROVIDER_ERROR', `Exotel voice request failed (${res.status}): ${JSON.stringify(parsed)}`);
+    return parsed;
+  }
+}

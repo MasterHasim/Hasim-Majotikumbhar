@@ -5,22 +5,22 @@ no credit card required. Live at `https://whatsapp-panel-backend.hasim-c9e.worke
 
 **Status**: Foundation + Phase 1 (auth/roles/teams/number-access) + messaging
 core (numbers/customers/conversations/messages/webhook/send) + CRM core
-(round-robin assignment, lead stages, remarks, reminders, snooze) ported,
-tested, and deployed live — see PROGRESS.md for the full verification
-history. 59 automated tests cover the actual business logic against a mocked
-Firebase and a mocked Exotel endpoint (real RSA JWT signing/verification
-included, not stubbed out). Run `npm test`. A new feature found in the Apps
-Script build (Phase 22 — location leads + Exotel click-to-call) has been
-added to the migration plan, sequenced right after CRM core, next up.
+(round-robin assignment, lead stages, remarks, reminders, snooze) + Phase 22
+(location leads + Exotel click-to-call) ported, tested, and deployed live —
+see PROGRESS.md for the full verification history. 90 automated tests cover
+the actual business logic against a mocked Firebase and mocked Exotel
+WhatsApp + Voice endpoints (real RSA JWT signing/verification included, not
+stubbed out). Run `npm test`. Next up: templates, quick replies, media.
 
 ## Setup status
 
 All secrets are set — Cloudflare login, `FIREBASE_WEB_API_KEY`,
 `FIREBASE_SERVICE_ACCOUNT_JSON` (a fresh key, independent from the Apps
 Script build's), `BOOTSTRAP_ADMIN_EMAIL`, `WEBHOOK_SECRET_TOKEN` (generated
-automatically, not pointed at Exotel yet on purpose), and the 4 Exotel
-WhatsApp credentials. Exotel Voice credentials (for the upcoming click-to-call
-phase) have also been provided and are ready to set when that phase starts.
+automatically, not pointed at Exotel yet on purpose), the 4 Exotel WhatsApp
+credentials, and the 4 Exotel Voice credentials (`EXOTEL_VOICE_ACCOUNT_SID`/
+`API_KEY`/`API_TOKEN`/`CALLER_ID`). Click-to-call itself is still unverified
+against a real Exotel account — see PROGRESS.md's task list.
 
 **One remaining action**: nobody has completed sign-up yet on this new
 system — open the frontend, sign in with Google, and click "Become the first
@@ -75,9 +75,19 @@ npm run typecheck
   customer stage + remarks, and reminders + snooze. Wired into `phase4Api.ts`
   (auto-assign new conversations) and `phase5Api.ts` (hide snoozed
   conversations from the active inbox); `workspaceApi.ts` aggregates all of it.
-- `src/routes/phase1.ts` / `messaging.ts` / `crm.ts` — HTTP endpoints,
-  one-to-one with `apps-script/src/Phase1Endpoints.gs` / `Phase6Endpoints.gs` /
-  `Phase4Webhook.gs` / the Phase 7-9 endpoint files.
+- `src/domain/phase22.ts` + `src/services/exotelVoiceProvider.ts` +
+  `src/services/phase22Api.ts` — direct ports of
+  `apps-script/src/Phase22{Domain,ExotelVoice,Services}.gs`: the six fixed
+  locations, lead upload/assignment (single/round-robin/manual, same rotation
+  pattern as `phase7Api.ts`'s), lead stage + remarks (reusing `phase8Api.ts`'s
+  ownership rule), click-to-call via a separate Exotel Voice credential set
+  (still UNVERIFIED against a real account, same flag the source carried),
+  and the "start WhatsApp from a lead" bridge into the existing messaging
+  services. Added a `phone` field to `User` (`domain/types.ts`) for this.
+- `src/routes/phase1.ts` / `messaging.ts` / `crm.ts` / `phase22.ts` — HTTP
+  endpoints, one-to-one with `apps-script/src/Phase1Endpoints.gs` /
+  `Phase6Endpoints.gs` / `Phase4Webhook.gs` / the Phase 7-9 endpoint files /
+  `Phase22Endpoints.gs`.
 - `test/helpers/mockFirebase.ts` — mocks Google's OAuth2/JWK endpoints, the
   Firebase REST API, and a fake Exotel endpoint for tests, the same "mock the
   external boundary, run the real code" pattern `apps-script/tests/*.js` used.

@@ -6,6 +6,8 @@ export interface User extends Record_ {
   displayName: string;
   status: 'active' | 'inactive' | 'suspended';
   roleIds: string[];
+  /** Own phone number, for Exotel Voice click-to-call (Phase 22) to ring first — blank until the user/admin sets it. */
+  phone: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -179,5 +181,70 @@ export interface ConversationSnooze extends Record_ {
   conversationId: string;
   snoozedUntil: string;
   snoozedByUserId: string;
+  createdAt: string;
+}
+
+// --- Phase 22 (location leads + Exotel click-to-call, port of Phase22Domain.gs's slice of Phase2Schemas) ---
+
+export type LeadStatus = 'NEW' | 'ASSIGNED' | 'UNASSIGNED' | 'CALLED';
+
+export interface Lead extends Record_ {
+  name: string;
+  phone: string;
+  location: string;
+  status: LeadStatus;
+  assignedUserId: string;
+  assignedAt: string;
+  uploadBatchId: string;
+  uploadedBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type LocationAssignmentMode = 'single' | 'round_robin' | 'manual';
+
+export interface LocationAssignmentConfig extends Record_ {
+  location: string;
+  mode: LocationAssignmentMode;
+  singleUserId: string;
+  lastAssignedUserId: string;
+  active: boolean;
+  callerId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LocationAssignmentUser extends Record_ {
+  location: string;
+  userId: string;
+  sequenceOrder: number;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CallLog extends Record_ {
+  leadId: string;
+  agentUserId: string;
+  exotelCallSid: string;
+  agentPhone: string;
+  leadPhone: string;
+  callerId: string;
+  status: string;
+  initiatedAt: string;
+  updatedAt: string;
+}
+
+export interface LeadStageAssignment extends Record_ {
+  leadId: string;
+  stageId: string;
+  setByUserId: string;
+  updatedAt: string;
+}
+
+export interface LeadRemark extends Record_ {
+  leadId: string;
+  authorUserId: string;
+  text: string;
   createdAt: string;
 }

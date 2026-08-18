@@ -25,6 +25,12 @@ export interface MockFirebaseContext {
   exotelCalls: { method: string; path: string; body: unknown }[];
   /** Override the next Exotel response (status + body) — defaults to a 200 with a fake sid. */
   setNextExotelResponse(status: number, body: unknown): void;
+  /** Mock Exotel Voice account, matching src/services/exotelVoiceProvider.ts's requireExotelVoiceConfig() expects. */
+  exotelVoiceConfig: { EXOTEL_VOICE_ACCOUNT_SID: string; EXOTEL_VOICE_API_KEY: string; EXOTEL_VOICE_API_TOKEN: string; EXOTEL_VOICE_CALLER_ID: string };
+  /** Every call made to the mock Exotel Voice endpoint, for assertions. */
+  exotelVoiceCalls: { path: string; params: Record<string, string> }[];
+  /** Override the next Exotel Voice response (status + body) — defaults to a 200 with a fake call sid. */
+  setNextExotelVoiceResponse(status: number, body: unknown): void;
 }
 
 function base64UrlFromBuffer(bytes: ArrayBuffer): string {
@@ -71,6 +77,11 @@ export async function setupMockFirebase(projectId = 'test-project'): Promise<Moc
   let nextExotelResponse: { status: number; body: unknown } | null = null;
   let exotelSidCounter = 0;
 
+  const exotelVoiceConfig = { EXOTEL_VOICE_ACCOUNT_SID: 'test-voice-sid', EXOTEL_VOICE_API_KEY: 'test-voice-key', EXOTEL_VOICE_API_TOKEN: 'test-voice-token', EXOTEL_VOICE_CALLER_ID: '07900000000' };
+  const exotelVoiceCalls: { path: string; params: Record<string, string> }[] = [];
+  let nextExotelVoiceResponse: { status: number; body: unknown } | null = null;
+  let exotelVoiceCallSidCounter = 0;
+
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
@@ -86,6 +97,19 @@ export async function setupMockFirebase(projectId = 'test-project'): Promise<Moc
       }
       exotelSidCounter += 1;
       return new Response(JSON.stringify({ whatsapp: { messages: [{ sid: `mock-sid-${exotelSidCounter}` }] } }), { status: 200 });
+    }
+
+    if (url.startsWith(`https://api.exotel.com/v1/Accounts/${exotelVoiceConfig.EXOTEL_VOICE_ACCOUNT_SID}/`)) {
+      const path = url.split(`/v1/Accounts/${exotelVoiceConfig.EXOTEL_VOICE_ACCOUNT_SID}/`)[1] ?? '';
+      const params = Object.fromEntries(new URLSearchParams(init?.body as string));
+      exotelVoiceCalls.push({ path, params });
+      if (nextExotelVoiceResponse) {
+        const { status, body: respBody } = nextExotelVoiceResponse;
+        nextExotelVoiceResponse = null;
+        return new Response(JSON.stringify(respBody), { status });
+      }
+      exotelVoiceCallSidCounter += 1;
+      return new Response(JSON.stringify({ Call: { Sid: `mock-call-sid-${exotelVoiceCallSidCounter}`, Status: 'in-progress' } }), { status: 200 });
     }
 
     if (url === 'https://oauth2.googleapis.com/token') {
@@ -130,6 +154,9 @@ export async function setupMockFirebase(projectId = 'test-project'): Promise<Moc
     exotelConfig,
     exotelCalls,
     setNextExotelResponse: (status: number, body: unknown) => { nextExotelResponse = { status, body }; },
+    exotelVoiceConfig,
+    exotelVoiceCalls,
+    setNextExotelVoiceResponse: (status: number, body: unknown) => { nextExotelVoiceResponse = { status, body }; },
     restore: () => {
       globalThis.fetch = originalFetch;
     },

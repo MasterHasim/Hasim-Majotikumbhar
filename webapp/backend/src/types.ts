@@ -11,6 +11,11 @@ export interface Env {
   EXOTEL_API_TOKEN?: string;
   EXOTEL_ACCOUNT_SID?: string;
   EXOTEL_SUBDOMAIN?: string;
+  /** Exotel Voice (click-to-call, Phase 22) — a separate product/credential set from the EXOTEL_* WhatsApp ones above. */
+  EXOTEL_VOICE_ACCOUNT_SID?: string;
+  EXOTEL_VOICE_API_KEY?: string;
+  EXOTEL_VOICE_API_TOKEN?: string;
+  EXOTEL_VOICE_CALLER_ID?: string;
   WEBHOOK_SECRET_TOKEN?: string;
   /** Comma-separated list of allowed frontend origins for CORS (e.g. "http://localhost:5173,https://panel.pages.dev"). */
   ALLOWED_ORIGINS?: string;

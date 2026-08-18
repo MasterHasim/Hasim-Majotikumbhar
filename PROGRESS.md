@@ -115,6 +115,36 @@ Deferred to later phases on purpose (matches the task breakdown):
 sendTemplateReply/sendMediaReply/file upload (templates & media — needs a
 Drive-equivalent host, likely Cloudflare R2, not set up yet).
 
+**Phase 22 (location leads + Exotel click-to-call) ported, tested, and live.**
+Direct port of `apps-script/src/Phase22{Domain,Services,ExotelVoice,Endpoints}.gs`
+— a second, independent assignment workflow alongside the CRM core's per-number
+round robin: `Phase22Api` covers lead upload (per-row validation, duplicate
+skipping, individual-row error reporting so one bad row doesn't abort a whole
+paste), per-location assignment config (single fixed agent / round-robin /
+manual, same rotation-with-self-healing-pointer logic as the CRM core's round
+robin, just keyed by location), lead reassignment, lead stage + remarks
+(reusing Phase8Api's exact ownership rule — a manager can touch any lead, an
+agent only their own), click-to-call (`ExotelVoiceProvider`, a new port of
+`Phase22ExotelVoice.gs` — separate credentials/domain from the WhatsApp
+Exotel integration, still UNVERIFIED against a real account, same flag the
+source carried), and the "start WhatsApp from a lead" bridge that finds/creates
+a Customer+Conversation on the WhatsApp number matching the lead's location
+(matched by a location-name substring in the number's display name) and hands
+the frontend straight into the existing inbox UI. Added a `phone` field to
+`User` (missing until now — needed so click-to-call knows which number to ring
+first) and its own `src/domain/phase22.ts` for the six fixed locations and
+validation rules. 31 new automated tests (90 total) covering round-robin/
+single/manual assignment modes, lead visibility scoping, config/participant
+CRUD, call placement (including the location-caller-ID override and the
+missing-agent-phone/missing-Voice-credentials error paths, via a new mocked
+Exotel Voice endpoint in the test harness), stage/remark ownership gating, and
+the WhatsApp-bridge's idempotency + numberAccess gating. Exposed via 16 new
+routes in a new `src/routes/phase22.ts`, deployed live and smoke-tested (every
+route correctly requires auth). The Exotel Voice secrets you provided earlier
+are now set on the live backend — click-to-call is wired end-to-end, not just
+returning a configuration error — but the request/response shape itself is
+still unverified against a real Exotel account (see the task list).
+
 ### Setup status — everything is now set
 
 1. ✅ Cloudflare account created, `wrangler login` done.
@@ -123,7 +153,7 @@ Drive-equivalent host, likely Cloudflare R2, not set up yet).
 4. ✅ `BOOTSTRAP_ADMIN_EMAIL` secret set.
 5. ✅ `WEBHOOK_SECRET_TOKEN` set (generated automatically, not reused from the Apps Script build). **Not pointed at Exotel yet on purpose** — that's a deliberate later cutover step, not something to do now.
 6. ✅ Exotel WhatsApp credentials set (`EXOTEL_API_KEY`/`API_TOKEN`/`ACCOUNT_SID`/`SUBDOMAIN`) — `sendReply` and the webhook can now actually reach WhatsApp.
-7. **Exotel Voice credentials received, not yet used** — you also provided `EXOTEL_VOICE_ACCOUNT_SID`/`API_KEY`/`API_TOKEN`/`CALLER_ID` for the click-to-call feature (Phase 22, see below). Kept for when that phase is built — not set as secrets yet since the code that would use them doesn't exist on this backend yet.
+7. ✅ Exotel Voice credentials set (`EXOTEL_VOICE_ACCOUNT_SID`/`API_KEY`/`API_TOKEN`/`CALLER_ID`) — click-to-call (Phase 22) can now actually reach Exotel's Voice API. **Unverified**: no real call has been placed yet, so the exact request/response field names (carried over from the Apps Script build's own unverified version) aren't confirmed — see the task list for a one-time real-call test.
 
 ### ✅ First admin account created — full pipeline confirmed live
 
@@ -157,8 +187,8 @@ build:
 2. ~~Phase 1 — auth, roles, teams, number access~~ ✅ done, tested
 3. ~~Messaging core — numbers, customers, conversations, messages, webhook, send~~ ✅ done, tested, live
 4. ~~CRM core — assignment, remarks, reminders, stages~~ ✅ done, tested, live
-5. Location leads + click-to-call (Phase 22) — **next**
-6. Templates, quick replies, media
+5. ~~Location leads + click-to-call (Phase 22)~~ ✅ done, tested, live (Voice call itself still needs a one-time real-call verification — see task list)
+6. Templates, quick replies, media — **next**
 7. Admin panel, notifications, dashboard, audit/backup
 8. Parallel-run validation, then cutover (Apps Script stays live and untouched the entire time)
 
@@ -257,6 +287,7 @@ build:
 5. Fill in `Spreewalk - Raipur` / `ECHT Advisory` provider fields — WhatsApp Numbers page → Edit (optional).
 6. Remove the ngrok callback URL from Exotel (optional).
 7. **Read `docs/ZOHO_PHASE_2.md` and answer its 5 open questions** whenever you're ready to think about Zoho.
+8. **[webapp] Place one real Exotel Voice call to verify Phase 22's click-to-call.** The Exotel Voice secrets are now set on the live backend, but `ExotelVoiceProvider`'s request/response field names are still UNVERIFIED (carried over from the Apps Script build's own unverified version) — a real agent needs a `phone` set (Admin Panel → Users, once that page exists on the new backend, or via the API directly for now) and a lead assigned to them, then click-to-call once so I can confirm/fix the response parsing against what Exotel actually returns.
 
 ### Done (kept for history)
 

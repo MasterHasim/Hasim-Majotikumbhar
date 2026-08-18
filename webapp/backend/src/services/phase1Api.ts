@@ -94,14 +94,14 @@ export class Phase1Api {
     }
     const admin: User = {
       id: Ids.create('user'), email, displayName: Validation.requiredString(profile.displayName, 'displayName'),
-      status: Status.ACTIVE, roleIds: [roleIds.ADMIN!], createdAt: now, updatedAt: now,
+      status: Status.ACTIVE, roleIds: [roleIds.ADMIN!], phone: '', createdAt: now, updatedAt: now,
     };
     await this.repos.users.create(admin);
     await this.audit.write(admin.id, 'phase1.bootstrapped', 'user', admin.id, {});
     return admin;
   }
 
-  async createUser(input: { email: string; displayName: string; roleIds?: string[]; status?: string }): Promise<User> {
+  async createUser(input: { email: string; displayName: string; roleIds?: string[]; status?: string; phone?: string }): Promise<User> {
     const actor = await this.access.require(Permissions.USERS_MANAGE);
     const now = Ids.now();
     const email = Validation.email(input.email);
@@ -109,7 +109,7 @@ export class Phase1Api {
     const roleIds = Validation.stringArray(input.roleIds ?? [], 'roleIds');
     await this.assertRoleIds(roleIds);
     const status = Validation.enumValue(input.status ?? Status.ACTIVE, [Status.ACTIVE, Status.INACTIVE, Status.SUSPENDED], 'status');
-    const record: User = { id: Ids.create('user'), email, displayName: Validation.requiredString(input.displayName, 'displayName'), status, roleIds, createdAt: now, updatedAt: now };
+    const record: User = { id: Ids.create('user'), email, displayName: Validation.requiredString(input.displayName, 'displayName'), status, roleIds, phone: (input.phone || '').toString().trim(), createdAt: now, updatedAt: now };
     await this.repos.users.create(record);
     await this.audit.write(actor.id, 'user.created', 'user', record.id, { email: record.email });
     return record;
@@ -293,7 +293,7 @@ export class Phase1Api {
 
   private validatePatch(collection: string, patch: Record<string, unknown>): Record<string, unknown> {
     const allowedFields: Record<string, string[]> = {
-      users: ['email', 'displayName', 'status', 'roleIds'], roles: ['key', 'name', 'permissions', 'status'], teams: ['name', 'status'],
+      users: ['email', 'displayName', 'status', 'roleIds', 'phone'], roles: ['key', 'name', 'permissions', 'status'], teams: ['name', 'status'],
       teamMembers: ['status', 'numberIds'], numberAccess: ['status', 'granted'],
     };
     const allowed = allowedFields[collection];
