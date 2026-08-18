@@ -90,6 +90,13 @@ export interface AssignableUser {
   email: string;
 }
 
+/** Scoped realtime credentials minted by the backend (RealtimeListenApi) — a Firebase custom token, never admin access, good only for the numbers the signed-in user can already see. */
+export interface RealtimeListenToken {
+  token: string;
+  databaseUrl: string;
+  webApiKey: string;
+}
+
 export interface Workspace {
   conversation: Conversation;
   customer: Customer | null;
@@ -101,6 +108,7 @@ export interface Workspace {
   reminders: Reminder[] | null;
   snoozeStatus: SnoozeStatus | null;
   assignableUsers: AssignableUser[];
+  realtime?: RealtimeListenToken | null;
 }
 
 export interface WhoAmI {

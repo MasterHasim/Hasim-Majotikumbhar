@@ -171,6 +171,20 @@ trailing newline, corrupting the secret. This broke `WEBHOOK_SECRET_TOKEN`
 re-set correctly via a newline-safe method (`printf '%s' ... | wrangler
 secret put`) — click-to-call should now actually reach Exotel instead of
 silently failing auth.
+
+**✅ Real-time updates are now live.** The Inbox's open conversation updates
+the instant a new message lands — a direct port of the Apps Script build's
+already-proven `RealtimeListener` (`webapp/frontend/src/lib/realtime.ts`):
+exchange the backend-minted custom token for a real Firebase ID token via
+Identity Toolkit, then stream `messages.json` filtered by `conversationId`
+as Server-Sent Events. No Firebase console changes needed — same project,
+same collection paths (`conversations`/`messages`), same `numberIds` custom
+claim shape as the Apps Script build's token, so its existing security
+rules already authorize the new backend's tokens too. Replaces the old
+4-second blind poll for the open conversation; a relaxed 8s poll still
+covers the conversation list (other conversations' previews/badges — same
+scope limit the Apps Script listener has), plus a 20s safety-net workspace
+refetch in case the stream silently drops.
 **Live updates are polling-based for now (every 4s)**, not a real Firebase
 listener — the backend's realtime-token minting already exists, wiring an
 actual subscription is a deliberate fast-follow once you've confirmed this

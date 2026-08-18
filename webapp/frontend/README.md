@@ -20,22 +20,32 @@ npm run typecheck
 
 ## Current state
 
-The real Inbox UI is built and wired to the live backend: sign-in → bootstrap
-(first-run only) → number picker → sidebar-nav workspace shell → Inbox page
-(conversation list with search, chat thread + text reply + resolve, and a
-CRM detail panel — reassign, lead stage, remarks, reminders, snooze). Design
-tokens and layout (`src/styles.css`) are ported directly from
+The real Inbox UI is built, wired to the live backend, and **live-verified
+end-to-end by a real user**: sign-in → bootstrap (first-run only) → number
+picker (with an ADMIN-only "add a number" form, since the new backend starts
+with zero numbers registered — a separate Firebase data model from the Apps
+Script build's Sheets-based numbers) → sidebar-nav workspace shell → Inbox
+page (conversation list with search, chat thread + text reply + resolve, and
+a CRM detail panel — reassign, lead stage, remarks, reminders, snooze).
+Design tokens and layout (`src/styles.css`) are ported directly from
 `apps-script/frontend/Index.html`'s mockup-matched CSS, so the two builds
 stay visually consistent.
 
-Live updates are **polling-based for now** (`components/Inbox.tsx`, every 4s)
-rather than a real Firebase Realtime Database subscription — the backend's
-`RealtimeListenApi`/custom-token minting already exists
-(`src/services/realtimeListenApi.ts`), but wiring an actual `onValue`
-listener needs a second Firebase app instance (the primary one already holds
-the Google Auth session) and hasn't been built yet; it's a deliberate
-fast-follow once this page's core flow is confirmed working end-to-end by a
-real user, not an oversight.
+**Live updates are real Firebase Realtime Database updates** (`lib/realtime.ts`),
+not polling — a direct port of the Apps Script build's already-proven
+`RealtimeListener` (same REST + `EventSource` approach: exchange the
+backend-minted custom token for a real ID token via Identity Toolkit, then
+stream `messages.json` filtered by `conversationId` as Server-Sent Events).
+Deliberately REST rather than the Firebase JS SDK's `onValue` — the primary
+Firebase app instance already holds the Google Auth session used for the
+backend's Bearer token, and REST sidesteps needing a second app instance
+entirely. On any push event the workspace is refetched (not merged from the
+raw event) so sender-name enrichment and status stay consistent, exactly the
+same "hide, don't error" correctness bar `WorkspaceApi` already holds
+elsewhere. A relaxed 8s poll still covers the conversation *list* (previews/
+badges for conversations other than the one currently open — same scope
+limitation the Apps Script build's own listener has), plus a 20s safety-net
+refetch of the open workspace in case the `EventSource` silently drops.
 
 Not built yet: templates/quick-replies/media send, dashboard/reports, admin
 panel (users/teams/numbers/settings), and the Phase 22 leads page — see

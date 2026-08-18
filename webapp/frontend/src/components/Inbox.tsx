@@ -2,15 +2,19 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ConversationListItem, Stage, WhatsAppNumber, Workspace } from '../types';
 import { backendApi } from '../lib/backendApi';
 import { ApiClientError } from '../lib/api';
+import { connectRealtimeMessages } from '../lib/realtime';
 import { ConversationList } from './ConversationList';
 import { ChatPane } from './ChatPane';
 import { DetailPanel } from './DetailPanel';
 
-/** Polling interval for the conversation list and open workspace — a pragmatic stand-in
- * for the real Firebase realtime listener (RealtimeListenApi already exists on the
- * backend); wiring an actual live subscription is a deliberate fast-follow once this
- * page's core flow is confirmed working, not skipped by accident. */
-const POLL_MS = 4000;
+/** Conversation-list refresh — realtime (lib/realtime.ts) only covers the currently
+ * open conversation's own messages, same scope the Apps Script build's listener has;
+ * other conversations' previews/badges still need a periodic refresh. Relaxed from
+ * the old 4s blind-poll interval now that the open chat itself updates instantly. */
+const LIST_POLL_MS = 8000;
+/** Safety-net refetch of the open workspace, in case the EventSource silently drops
+ * without firing onerror — cheap insurance, not the primary update path anymore. */
+const WORKSPACE_SAFETY_POLL_MS = 20000;
 
 export function Inbox({ number }: { number: WhatsAppNumber }) {
   const [conversations, setConversations] = useState<ConversationListItem[]>([]);
@@ -21,6 +25,7 @@ export function Inbox({ number }: { number: WhatsAppNumber }) {
   const [error, setError] = useState<string | null>(null);
   const selectedIdRef = useRef<string | null>(null);
   selectedIdRef.current = selectedId;
+  const stopRealtimeRef = useRef<(() => void) | null>(null);
 
   const loadConversations = useCallback(async () => {
     try {
@@ -30,32 +35,52 @@ export function Inbox({ number }: { number: WhatsAppNumber }) {
     }
   }, [number.id]);
 
-  const loadWorkspace = useCallback(async (conversationId: string) => {
+  const loadWorkspace = useCallback(async (conversationId: string, includeRealtime = false) => {
     try {
-      setWorkspace(await backendApi.getWorkspace(conversationId));
+      const ws = await backendApi.getWorkspace(conversationId, includeRealtime);
+      setWorkspace(ws);
+      return ws;
     } catch (err) {
       setError(err instanceof ApiClientError ? `${err.code}: ${err.message}` : String(err));
+      return null;
     }
   }, []);
 
   useEffect(() => {
     setSelectedId(null);
     setWorkspace(null);
+    stopRealtimeRef.current?.();
+    stopRealtimeRef.current = null;
     void loadConversations();
     backendApi.listStages().then(setStages).catch(() => setStages([]));
   }, [number.id, loadConversations]);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      void loadConversations();
-      if (selectedIdRef.current) void loadWorkspace(selectedIdRef.current);
-    }, POLL_MS);
+    const interval = setInterval(() => void loadConversations(), LIST_POLL_MS);
     return () => clearInterval(interval);
-  }, [loadConversations, loadWorkspace]);
+  }, [loadConversations]);
 
-  function selectConversation(conversation: ConversationListItem) {
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (selectedIdRef.current) void loadWorkspace(selectedIdRef.current);
+    }, WORKSPACE_SAFETY_POLL_MS);
+    return () => clearInterval(interval);
+  }, [loadWorkspace]);
+
+  // Stop the realtime connection on unmount (switching conversations is handled in selectConversation itself).
+  useEffect(() => () => stopRealtimeRef.current?.(), []);
+
+  async function selectConversation(conversation: ConversationListItem) {
+    stopRealtimeRef.current?.();
+    stopRealtimeRef.current = null;
     setSelectedId(conversation.id);
-    void loadWorkspace(conversation.id);
+    const ws = await loadWorkspace(conversation.id, true);
+    if (ws?.realtime && selectedIdRef.current === conversation.id) {
+      stopRealtimeRef.current = connectRealtimeMessages(ws.realtime, conversation.id, () => {
+        void loadWorkspace(conversation.id);
+        void loadConversations();
+      });
+    }
   }
 
   async function handleResolve() {
@@ -78,7 +103,7 @@ export function Inbox({ number }: { number: WhatsAppNumber }) {
       <h1 className="page-title" style={{ margin: '0 0 12px' }}>Inbox</h1>
       {error && <div className="compose-error" style={{ padding: '0 0 10px' }}>{error}</div>}
       <div className={`split${workspace ? '' : ' no-detail'}`}>
-        <ConversationList conversations={conversations} selectedId={selectedId} search={search} onSearchChange={setSearch} onSelect={selectConversation} />
+        <ConversationList conversations={conversations} selectedId={selectedId} search={search} onSearchChange={setSearch} onSelect={(c) => void selectConversation(c)} />
         {workspace ? (
           <>
             <ChatPane workspace={workspace} onAfterSend={handleChanged} onResolve={() => void handleResolve()} />
