@@ -18,6 +18,12 @@ export const Permissions = {
   TEAMS_MANAGE_ALL: 'teams.manage.all', TEAMS_OPERATE_ASSIGNED: 'teams.operate.assigned', TEAMS_CONTROL_OWN: 'teams.control.own',
   AVAILABILITY_MANAGE_SELF: 'availability.manageSelf', AVAILABILITY_MANAGE_ALL: 'availability.manageAll',
   ELIGIBILITY_MANAGE_ALL: 'eligibility.manageAll', ELIGIBILITY_MANAGE_TEAM: 'eligibility.manageTeam', AUDIT_READ: 'audit.read',
+  // Phase 22 (location leads + Exotel click-to-call) — added to RoleDefinitions
+  // directly here rather than via the Apps Script build's one-time fixup script
+  // (Phase22RolePermissionsFixupTemp.gs), since this backend hasn't been
+  // bootstrapped yet — a fresh bootstrap picks these up automatically, no
+  // migration of already-persisted Role records ever needed.
+  LEADS_MANAGE: 'leads.manage', LEADS_VIEW_ASSIGNED: 'leads.view.assigned', LEADS_CALL: 'leads.call',
 } as const;
 export type Permission = (typeof Permissions)[keyof typeof Permissions];
 
@@ -33,8 +39,8 @@ export const ALL_PERMISSIONS = Object.values(Permissions);
 export const RoleDefinitions: Record<RoleKey, { name: string; permissions: Permission[] }> = {
   ADMIN: { name: 'Administrator', permissions: [...ALL_PERMISSIONS] },
   SUPERVISOR: { name: 'Supervisor', permissions: [Permissions.TEAMS_OPERATE_ASSIGNED, Permissions.REPORTS_VIEW, Permissions.REMINDERS_MANAGE, Permissions.REMARKS_VIEW, Permissions.CONVERSATIONS_VIEW_TEAM, Permissions.CONVERSATIONS_REASSIGN_TEAM] },
-  SITE_MANAGER: { name: 'Site manager', permissions: [Permissions.TEAMS_CONTROL_OWN, Permissions.REPORTS_VIEW, Permissions.REMINDERS_MANAGE, Permissions.REMARKS_MANAGE, Permissions.CONVERSATIONS_VIEW_TEAM, Permissions.CONVERSATIONS_REASSIGN_TEAM, Permissions.ELIGIBILITY_MANAGE_TEAM] },
-  AGENT: { name: 'Agent', permissions: [Permissions.AVAILABILITY_MANAGE_SELF, Permissions.TEMPLATES_USE, Permissions.REMARKS_MANAGE, Permissions.REMINDERS_MANAGE, Permissions.LEAD_STAGES_MANAGE, Permissions.CONVERSATIONS_VIEW_ASSIGNED, Permissions.CONVERSATIONS_REPLY_ASSIGNED] },
+  SITE_MANAGER: { name: 'Site manager', permissions: [Permissions.TEAMS_CONTROL_OWN, Permissions.REPORTS_VIEW, Permissions.REMINDERS_MANAGE, Permissions.REMARKS_MANAGE, Permissions.CONVERSATIONS_VIEW_TEAM, Permissions.CONVERSATIONS_REASSIGN_TEAM, Permissions.ELIGIBILITY_MANAGE_TEAM, Permissions.LEADS_MANAGE] },
+  AGENT: { name: 'Agent', permissions: [Permissions.AVAILABILITY_MANAGE_SELF, Permissions.TEMPLATES_USE, Permissions.REMARKS_MANAGE, Permissions.REMINDERS_MANAGE, Permissions.LEAD_STAGES_MANAGE, Permissions.CONVERSATIONS_VIEW_ASSIGNED, Permissions.CONVERSATIONS_REPLY_ASSIGNED, Permissions.LEADS_VIEW_ASSIGNED, Permissions.LEADS_CALL] },
   VIEWER: { name: 'Viewer', permissions: [Permissions.CUSTOMERS_VIEW, Permissions.REPORTS_VIEW, Permissions.CONVERSATIONS_VIEW_AUTHORIZED] },
 };
 

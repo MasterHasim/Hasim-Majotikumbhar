@@ -92,42 +92,53 @@ auto-assignment on new conversations (CRM core), snooze filtering (CRM core),
 sendTemplateReply/sendMediaReply/file upload (templates & media — needs a
 Drive-equivalent host, likely Cloudflare R2, not set up yet).
 
-### ✅ Action needed from you — new stack setup
+### Setup status — everything is now set
 
 1. ✅ Cloudflare account created, `wrangler login` done.
 2. ✅ `FIREBASE_WEB_API_KEY` secret set.
 3. ✅ `FIREBASE_SERVICE_ACCOUNT_JSON` secret set (fresh key, independent from the Apps Script build's).
 4. ✅ `BOOTSTRAP_ADMIN_EMAIL` secret set.
-5. **Set Exotel credentials** (needed before `sendReply` or the webhook can actually reach WhatsApp — same account as the Apps Script build):
-   ```
-   npx wrangler secret put EXOTEL_API_KEY
-   npx wrangler secret put EXOTEL_API_TOKEN
-   npx wrangler secret put EXOTEL_ACCOUNT_SID
-   npx wrangler secret put EXOTEL_SUBDOMAIN
-   ```
-6. **Set a webhook secret token** (generate a new random value — don't reuse the Apps Script one, keep the two systems independent):
-   ```
-   npx wrangler secret put WEBHOOK_SECRET_TOKEN
-   ```
-   Once set, the new webhook URL is `https://whatsapp-panel-backend.hasim-c9e.workers.dev/webhook/exotel?token=<that value>` — **don't point Exotel at this yet**; that's a live cutover step for later, not now (see the phase list below).
-7. For local development instead of live secrets: copy
-   `webapp/backend/.dev.vars.example` → `.dev.vars` and
-   `webapp/frontend/.env.example` → `.env.local`, fill in the same values.
-   Both files are gitignored.
+5. ✅ `WEBHOOK_SECRET_TOKEN` set (generated automatically, not reused from the Apps Script build). **Not pointed at Exotel yet on purpose** — that's a deliberate later cutover step, not something to do now.
+6. ✅ Exotel WhatsApp credentials set (`EXOTEL_API_KEY`/`API_TOKEN`/`ACCOUNT_SID`/`SUBDOMAIN`) — `sendReply` and the webhook can now actually reach WhatsApp.
+7. **Exotel Voice credentials received, not yet used** — you also provided `EXOTEL_VOICE_ACCOUNT_SID`/`API_KEY`/`API_TOKEN`/`CALLER_ID` for the click-to-call feature (Phase 22, see below). Kept for when that phase is built — not set as secrets yet since the code that would use them doesn't exist on this backend yet.
 
-Full details are in `webapp/backend/README.md` and `webapp/frontend/README.md`.
-I can't do these specific steps myself — they need credential values only you
-have access to. Everything else (all the actual code) I'm building without
-needing anything further from you, phase by phase, same order as the original
+### ⚠️ One thing you need to do right now: complete setup as the first admin
+
+Nobody has actually finished sign-up on the new system yet — I checked the
+live database directly and it's empty. This is a one-click fix: open
+`http://localhost:5173` (or your own `npm run dev`), sign in with Google, and
+you'll see a **"Become the first admin"** button — click it once. After that,
+everything else works normally.
+
+### 🆕 New feature found: location leads + click-to-call (Phase 22)
+
+While looking into the Exotel Voice credentials, I found `apps-script/src/
+Phase22*.gs` — a real, separate feature added to the Apps Script build:
+uploading call leads per site location, auto-assigning them (single agent /
+round-robin / manual per location), click-to-call through Exotel's Voice API,
+and a bridge that lets an agent jump from a lead straight into a WhatsApp
+conversation with that same person. Added it to the migration plan as its own
+phase, sequenced right after CRM core (it reuses that phase's round-robin and
+stage/remarks patterns directly, so porting it right after keeps the code
+consistent rather than duplicating the pattern early). Also added its 3 new
+permissions (`leads.manage`/`leads.view.assigned`/`leads.call`) to the new
+backend's role definitions now, while the system is still unbootstrapped —
+means a fresh bootstrap picks them up automatically, no separate fixup script
+ever needed (the Apps Script build needed one, since its roles were already
+persisted before the feature existed).
+
+Full setup details are in `webapp/backend/README.md` and
+`webapp/frontend/README.md`. Phase-by-phase plan, same order as the original
 build:
 
 1. ~~Foundation (backend + frontend scaffolding, auth pipeline proven)~~ ✅ done
 2. ~~Phase 1 — auth, roles, teams, number access~~ ✅ done, tested
 3. ~~Messaging core — numbers, customers, conversations, messages, webhook, send~~ ✅ done, tested, live
 4. CRM core — assignment, remarks, reminders, stages — **next**
-5. Templates, quick replies, media
-6. Admin panel, notifications, dashboard, audit/backup
-7. Parallel-run validation, then cutover (Apps Script stays live and untouched the entire time)
+5. Location leads + click-to-call (Phase 22) — new, added to the plan
+6. Templates, quick replies, media
+7. Admin panel, notifications, dashboard, audit/backup
+8. Parallel-run validation, then cutover (Apps Script stays live and untouched the entire time)
 
 ---
 

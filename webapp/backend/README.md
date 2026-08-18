@@ -8,32 +8,22 @@ core (numbers/customers/conversations/messages/webhook/send) ported, tested,
 and deployed live — see PROGRESS.md for the full verification history. 35
 automated tests cover the actual business logic against a mocked Firebase and
 a mocked Exotel endpoint (real RSA JWT signing/verification included, not
-stubbed out). Run `npm test`.
+stubbed out). Run `npm test`. A new feature found in the Apps Script build
+(Phase 22 — location leads + Exotel click-to-call) has been added to the
+migration plan, sequenced after CRM core.
 
-## One-time setup (things only you can do)
+## Setup status
 
-1. ✅ Cloudflare account created, logged in via `wrangler login`.
-2. ✅ `FIREBASE_WEB_API_KEY` secret set (public/safe value, same as the Apps Script build's).
-3. ✅ `FIREBASE_SERVICE_ACCOUNT_JSON` secret set — a fresh key generated for
-   this backend (Firebase Console → ⚙️ Project Settings → **Service accounts**
-   → **Generate new private key**), independent from the Apps Script build's.
-4. ✅ `BOOTSTRAP_ADMIN_EMAIL` secret set — the one identity allowed to call
-   `POST /api/bootstrap` and become the first ADMIN user.
-5. **Set Exotel credentials** (needed before `sendReply` or the webhook can
-   actually reach WhatsApp — same Exotel account as the Apps Script build):
-   ```bash
-   npx wrangler secret put EXOTEL_API_KEY
-   npx wrangler secret put EXOTEL_API_TOKEN
-   npx wrangler secret put EXOTEL_ACCOUNT_SID
-   npx wrangler secret put EXOTEL_SUBDOMAIN
-   ```
-6. **Set a webhook secret token** (generate a **new** random value — don't
-   reuse the Apps Script one, keep the two systems independent until cutover):
-   ```bash
-   npx wrangler secret put WEBHOOK_SECRET_TOKEN
-   ```
-   Don't point Exotel at the new webhook URL yet — that's a deliberate later
-   cutover step (see PROGRESS.md), not something to do as part of setup.
+All secrets are set — Cloudflare login, `FIREBASE_WEB_API_KEY`,
+`FIREBASE_SERVICE_ACCOUNT_JSON` (a fresh key, independent from the Apps
+Script build's), `BOOTSTRAP_ADMIN_EMAIL`, `WEBHOOK_SECRET_TOKEN` (generated
+automatically, not pointed at Exotel yet on purpose), and the 4 Exotel
+WhatsApp credentials. Exotel Voice credentials (for the upcoming click-to-call
+phase) have also been provided and are ready to set when that phase starts.
+
+**One remaining action**: nobody has completed sign-up yet on this new
+system — open the frontend, sign in with Google, and click "Become the first
+admin" when prompted (see PROGRESS.md).
 
 For local development, copy `.dev.vars.example` to `.dev.vars` and fill in the
 same values instead — `.dev.vars` is gitignored and only used by `wrangler dev`.
