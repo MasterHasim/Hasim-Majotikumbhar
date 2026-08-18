@@ -1,0 +1,13 @@
+name = "whatsapp-panel-backend"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Free tier (Workers Free plan): 100,000 requests/day, no credit card required.
+# Secrets (Firebase service account, Exotel credentials, webhook token) are set
+# via `wrangler secret put <NAME>` — never committed here. See .dev.vars.example
+# for the full list needed and README.md for the one-time setup steps.
+
+[vars]
+FIREBASE_DATABASE_URL = "https://whatsapp-panel-db-default-rtdb.asia-southeast1.firebasedatabase.app"
+ENVIRONMENT = "development"

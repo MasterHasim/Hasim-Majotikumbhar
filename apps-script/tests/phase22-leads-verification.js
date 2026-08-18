@@ -1,0 +1,224 @@
+/* Run with: node tests/phase22-leads-verification.js */
+const fs = require('fs');
+const path = require('path');
+const vm = require('vm');
+const assert = require('assert');
+
+const properties = {
+  SPREADSHEET_ID: 'mock-spreadsheet-id', 'wap.phase1.bootstrapAdminEmail': 'admin@example.com',
+  EXOTEL_VOICE_ACCOUNT_SID: 'sid', EXOTEL_VOICE_API_KEY: 'key', EXOTEL_VOICE_API_TOKEN: 'token', EXOTEL_VOICE_CALLER_ID: '07900000000',
+  // Conversations/Customers-adjacent Firebase wiring — Conversations moved off Sheets
+  // on 2026-08-11 (see phase7-assignment-verification.js for the same mock shape).
+  FIREBASE_DATABASE_URL: 'https://mock-default-rtdb.firebasedatabase.app',
+  FIREBASE_SERVICE_ACCOUNT_B64: Buffer.from(JSON.stringify({ client_email: 'test@example.iam.gserviceaccount.com', private_key: 'fake-key' })).toString('base64')
+};
+let email = 'admin@example.com';
+global.Utilities = {
+  getUuid: (() => { let n = 0; return () => String(++n); })(), base64Encode: str => Buffer.from(str).toString('base64'),
+  base64EncodeWebSafe: bytes => Buffer.from(bytes).toString('base64').replace(/\+/g, '-').replace(/\//g, '_'),
+  computeRsaSha256Signature: (input, key) => Buffer.from('signed:' + input.length + ':' + key.length),
+  base64Decode: str => Buffer.from(str, 'base64'),
+  newBlob: (data, contentType, name) => { const bytes = Buffer.isBuffer(data) || Array.isArray(data) ? Buffer.from(data) : Buffer.from(String(data), 'utf8'); return { bytes, mimeType: contentType, filename: name, getBytes: () => bytes, getDataAsString: () => bytes.toString('utf8') }; }
+};
+global.PropertiesService = { getScriptProperties: () => ({ getProperty: key => properties[key] || null, setProperty: (key, value) => { properties[key] = value; } }) };
+global.LockService = { getScriptLock: () => ({ waitLock: () => {}, releaseLock: () => {} }) };
+global.Session = { getActiveUser: () => ({ getEmail: () => email }) };
+
+function makeSheet() {
+  let rows = [];
+  return {
+    appendRow: values => { rows.push(values.slice()); },
+    getDataRange: () => ({ getValues: () => rows.map(row => row.slice()) }),
+    getRange: (rowIndex) => ({ setValues: values => { rows[rowIndex - 1] = values[0].slice(); }, setNumberFormat: () => {} }),
+    getMaxRows: () => 1000,
+    getLastRow: () => rows.length,
+    deleteRow: rowIndex => { rows.splice(rowIndex - 1, 1); }
+  };
+}
+function makeSpreadsheet() {
+  const sheetsByName = {};
+  return { getSheetByName: name => sheetsByName[name] || null, insertSheet: name => { const sheet = makeSheet(); sheetsByName[name] = sheet; return sheet; } };
+}
+const mockSpreadsheet = makeSpreadsheet();
+global.SpreadsheetApp = { openById: () => mockSpreadsheet };
+
+let nextCallSid = 0;
+const firebaseMockDb_ = {};
+global.UrlFetchApp = {
+  fetch: (url, options) => {
+    if (url.indexOf('api.exotel.com') !== -1) {
+      nextCallSid++;
+      return { getResponseCode: () => 200, getContentText: () => JSON.stringify({ Call: { Sid: 'call_sid_' + nextCallSid, Status: 'in-progress' } }) };
+    }
+    if (url.indexOf('oauth2.googleapis.com') !== -1) return { getResponseCode: () => 200, getContentText: () => JSON.stringify({ access_token: 'mock-token', expires_in: 3600 }) };
+    const firebaseMatch = url.match(/firebasedatabase\.app\/([^/]+)(?:\/([^/.]+))?\.json/);
+    if (firebaseMatch) {
+      const collection = firebaseMatch[1], id = firebaseMatch[2];
+      firebaseMockDb_[collection] = firebaseMockDb_[collection] || {};
+      if (options.method === 'get') {
+        const value = id ? (firebaseMockDb_[collection][id] || null) : (Object.keys(firebaseMockDb_[collection]).length ? firebaseMockDb_[collection] : null);
+        return { getResponseCode: () => 200, getContentText: () => JSON.stringify(value) };
+      }
+      if (options.method === 'put') { firebaseMockDb_[collection][id] = JSON.parse(options.payload); return { getResponseCode: () => 200, getContentText: () => options.payload }; }
+      if (options.method === 'delete') { delete firebaseMockDb_[collection][id]; return { getResponseCode: () => 200, getContentText: () => 'null' }; }
+    }
+    return { getResponseCode: () => 400, getContentText: () => 'unhandled request in mock' };
+  }
+};
+
+const srcDir = path.join(__dirname, '..', 'src');
+fs.readdirSync(srcDir).filter(file => file.endsWith('.gs')).sort().forEach(file => {
+  vm.runInThisContext(fs.readFileSync(path.join(srcDir, file), 'utf8'), { filename: file });
+});
+
+const phase1 = () => new Phase1Api();
+const phase22 = () => new Phase22Api();
+const phase8 = () => new Phase8Api();
+
+phase1().bootstrap({ email, displayName: 'Admin' });
+const roles = phase1().listRoles();
+const roleId = key => roles.find(role => role.key === key).id;
+
+const rahul = phase1().createUser({ email: 'rahul@example.com', displayName: 'Rahul', roleIds: [roleId('AGENT')] });
+const priya = phase1().createUser({ email: 'priya@example.com', displayName: 'Priya', roleIds: [roleId('AGENT')] });
+phase1().updateUser(rahul.id, { phone: '9111111111' });
+
+// Manual mode (no config yet) — lead lands UNASSIGNED.
+const upload1 = phase22().uploadLeads([{ name: 'Lead One', phone: '9876543210', location: 'Raipur' }]);
+assert.strictEqual(upload1.created, 1);
+assert.strictEqual(upload1.skipped, 0);
+const leadsAfterUpload1 = phase22().listLeads({});
+assert.strictEqual(leadsAfterUpload1.length, 1);
+assert.strictEqual(leadsAfterUpload1[0].status, 'UNASSIGNED');
+
+// Duplicate phone+location in the same batch is skipped, not double-created.
+const uploadDup = phase22().uploadLeads([{ name: 'Lead One Again', phone: '9876543210', location: 'Raipur' }]);
+assert.strictEqual(uploadDup.created, 0);
+assert.strictEqual(uploadDup.skipped, 1);
+
+// Invalid row (bad phone) is reported, not thrown, and doesn't block the rest of the batch.
+const uploadMixed = phase22().uploadLeads([{ name: 'Bad Phone', phone: 'abc', location: 'Raipur' }, { name: 'Good Row', phone: '9111111112', location: 'Rajsamand' }]);
+assert.strictEqual(uploadMixed.created, 1);
+assert.strictEqual(uploadMixed.errors.length, 1);
+
+// Single mode always assigns the configured agent.
+phase22().setLocationConfig('Coimbatore', { mode: 'single', singleUserId: rahul.id, active: true });
+const uploadSingle = phase22().uploadLeads([{ name: 'Single Lead', phone: '9222222222', location: 'Coimbatore' }]);
+assert.strictEqual(uploadSingle.created, 1);
+const singleLead = phase22().listLeads({ location: 'Coimbatore' })[0];
+assert.strictEqual(singleLead.assignedUserId, rahul.id);
+assert.strictEqual(singleLead.status, 'ASSIGNED');
+
+// Round robin rotates across the pool, wrapping around, mirroring Phase 7's selectNextAgent_.
+phase22().setLocationConfig('Prayagraj', { mode: 'round_robin', active: true });
+phase22().addLocationParticipant('Prayagraj', rahul.id, 1);
+phase22().addLocationParticipant('Prayagraj', priya.id, 2);
+const rrLead1 = phase22().uploadLeads([{ name: 'RR One', phone: '9300000001', location: 'Prayagraj' }]);
+const rrLead2 = phase22().uploadLeads([{ name: 'RR Two', phone: '9300000002', location: 'Prayagraj' }]);
+const rrLead3 = phase22().uploadLeads([{ name: 'RR Three', phone: '9300000003', location: 'Prayagraj' }]);
+const rrLeads = phase22().listLeads({ location: 'Prayagraj' }).sort((a, b) => a.phone.localeCompare(b.phone));
+assert.strictEqual(rrLeads[0].assignedUserId, rahul.id);
+assert.strictEqual(rrLeads[1].assignedUserId, priya.id);
+assert.strictEqual(rrLeads[2].assignedUserId, rahul.id, 'wraps back to Rahul');
+
+// Manual reassignment overrides whatever the rule assigned.
+const reassigned = phase22().reassignLead(rrLeads[0].id, priya.id);
+assert.strictEqual(reassigned.assignedUserId, priya.id);
+assert.strictEqual(reassigned.status, 'ASSIGNED');
+
+// Role scoping: AGENT sees only their own leads via LEADS_VIEW_ASSIGNED, not everyone's.
+email = 'rahul@example.com';
+const rahulsLeads = phase22().listLeads({});
+assert.ok(rahulsLeads.every(lead => lead.assignedUserId === rahul.id));
+assert.ok(rahulsLeads.length > 0);
+
+// Permission denial: AGENT cannot upload leads (LEADS_MANAGE is ADMIN/SITE_MANAGER only).
+assert.throws(() => phase22().uploadLeads([{ name: 'X', phone: '9000000000', location: 'Alibaug' }]), error => error.code === 'FORBIDDEN');
+
+// Click-to-call: only for a lead assigned to the calling agent, and uses the account-
+// wide default caller ID when the location has none configured (Coimbatore).
+const rahulsOwnLead = rahulsLeads.find(lead => lead.assignedUserId === rahul.id && lead.location === 'Coimbatore');
+const call = phase22().initiateCall(rahulsOwnLead.id);
+assert.strictEqual(call.agentPhone, '9111111111');
+assert.ok(call.exotelCallSid.indexOf('call_sid_') === 0);
+assert.strictEqual(call.callerId, '07900000000', 'falls back to the account-wide EXOTEL_VOICE_CALLER_ID');
+assert.strictEqual(phase22().listLeads({}).find(l => l.id === rahulsOwnLead.id).status, 'CALLED');
+
+email = 'priya@example.com';
+assert.throws(() => phase22().initiateCall(rahulsOwnLead.id), error => error.code === 'FORBIDDEN', 'a lead not assigned to the caller must be rejected');
+
+// A location with its own caller ID (a separate ExoPhone per brand) overrides the
+// default, and dashes pasted straight from a display table are stripped on save.
+email = 'admin@example.com';
+const savedConfig = phase22().setLocationConfig('Prayagraj', { callerId: '079-485-02806' });
+assert.strictEqual(savedConfig.callerId, '07948502806', 'dashes stripped on save');
+email = 'rahul@example.com';
+const prayagrajLead = rahulsLeads.find(lead => lead.assignedUserId === rahul.id && lead.location === 'Prayagraj');
+const prayagrajCall = phase22().initiateCall(prayagrajLead.id);
+assert.strictEqual(prayagrajCall.callerId, '07948502806', 'uses the location-specific caller ID, not the account default');
+
+// ---- Lead Stages (reuses Phase 8's Lead_Stages) ----
+email = 'admin@example.com';
+const stages = phase8().seedDefaultLeadStages();
+const contactedStage = stages.find(s => s.key === 'contacted');
+email = 'rahul@example.com';
+const stageResult = phase22().setLeadStage(rahulsOwnLead.id, contactedStage.id);
+assert.strictEqual(stageResult.stageId, contactedStage.id);
+assert.deepStrictEqual(phase22().getLeadStage(rahulsOwnLead.id), stageResult, 'owner can read the stage back');
+email = 'priya@example.com';
+assert.throws(() => phase22().setLeadStage(rahulsOwnLead.id, contactedStage.id), error => error.code === 'FORBIDDEN', 'a non-owner agent cannot set another agent\'s lead stage');
+assert.throws(() => phase22().getLeadStage(rahulsOwnLead.id), error => error.code === 'FORBIDDEN', 'a non-owner agent cannot even read another agent\'s lead stage');
+
+// ---- Comments (Lead_Remarks) ----
+email = 'rahul@example.com';
+const remark = phase22().addLeadRemark(rahulsOwnLead.id, 'Called once, asked to call back tomorrow.');
+assert.strictEqual(remark.text, 'Called once, asked to call back tomorrow.');
+const remarks = phase22().listLeadRemarks(rahulsOwnLead.id);
+assert.strictEqual(remarks.length, 1);
+email = 'priya@example.com';
+assert.throws(() => phase22().addLeadRemark(rahulsOwnLead.id, 'x'), error => error.code === 'FORBIDDEN', 'a non-owner agent cannot comment on another agent\'s lead');
+
+// ---- Send WhatsApp from a lead: resolves the location's WhatsApp number by displayName ----
+email = 'admin@example.com';
+// active is the string 'TRUE', not the boolean true — regression test for a real bug
+// found live 2026-08-17: WhatsApp_Numbers rows hand-edited in the sheet round-trip a
+// typed "TRUE" as a string through the plain-text-formatted column, and findNumberForLocation_
+// originally used a strict `=== true` check that silently excluded every such row.
+const number = new NumberRepository().create({
+  id: 'number_coimbatore', displayName: 'Entartica - Coimbatore', phoneNumber: '07948502808', provider: 'exotel',
+  providerAccountId: '', wabaId: '', providerNumberId: '', active: 'TRUE', createdAt: '', updatedAt: ''
+});
+// No numberAccess granted yet — must be rejected, not silently create an inaccessible conversation.
+email = 'rahul@example.com';
+assert.throws(() => phase22().startWhatsAppFromLead(rahulsOwnLead.id), error => error.code === 'FORBIDDEN', 'agent without numberAccess for the resolved number must be rejected');
+email = 'admin@example.com';
+phase1().grantNumberAccess({ userId: rahul.id, numberId: number.id });
+email = 'rahul@example.com';
+const waResult = phase22().startWhatsAppFromLead(rahulsOwnLead.id);
+assert.strictEqual(waResult.numberId, number.id);
+const createdConversation = new ConversationRepository().get(waResult.conversationId);
+assert.strictEqual(createdConversation.numberId, number.id);
+assert.strictEqual(createdConversation.assignedUserId, rahul.id);
+assert.strictEqual(createdConversation.status, 'OPEN');
+const createdCustomer = new CustomerRepository().get(waResult.customerId);
+assert.strictEqual(createdCustomer.phone, rahulsOwnLead.phone);
+// Calling it again for the same lead reuses the same open conversation instead of duplicating it.
+const waResult2 = phase22().startWhatsAppFromLead(rahulsOwnLead.id);
+assert.strictEqual(waResult2.conversationId, waResult.conversationId, 'reuses the existing open conversation');
+
+// A location with no matching WhatsApp number gives a clear configuration error, not a crash.
+email = 'admin@example.com';
+const orphanUpload = phase22().uploadLeads([{ name: 'No Number Yet', phone: '9400000000', location: 'Alibaug' }]);
+const orphanLead = phase22().listLeads({ location: 'Alibaug' })[0];
+phase22().reassignLead(orphanLead.id, rahul.id);
+email = 'rahul@example.com';
+assert.throws(() => phase22().startWhatsAppFromLead(orphanLead.id), error => error.code === 'CONFIGURATION_ERROR', 'no WhatsApp number configured for Alibaug yet');
+
+// ---- Click-to-call from the Inbox/conversation screen: uses that number's own phone as caller ID ----
+const inboxCall = phase22().initiateConversationCall(waResult.conversationId);
+assert.strictEqual(inboxCall.callerId, '07948502808', 'uses the conversation\'s own WhatsApp number as caller ID, not the account/location default');
+assert.strictEqual(inboxCall.leadPhone, rahulsOwnLead.phone);
+email = 'priya@example.com';
+assert.throws(() => phase22().initiateConversationCall(waResult.conversationId), error => error.code === 'FORBIDDEN', 'an agent not assigned to the conversation cannot call it');
+
+console.log('Phase 22 leads verification: PASS');

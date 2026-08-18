@@ -1,13 +1,187 @@
 # WhatsApp Multi-Number CRM — Progress Report
 
-**Last updated:** 2026-08-10 (overnight autonomous run through Phase 18, then a same-day live session with you actively testing and giving direct feedback — see `memory/DECISIONS.md`)
+**Last updated:** 2026-08-17 (Phase 22 added to the live `apps-script/` build — see below; webapp migration status below that is unchanged since 2026-08-10)
 **Purpose:** single source of truth for "what's done, what's left, and what needs you personally." Updated after every phase/transition. See `docs/ROADMAP.md` for full phase scope, `memory/CHANGELOG.md` for full per-phase detail (this file stays intentionally brief per phase), and `memory/DECISIONS.md` for architectural reasoning.
 
-## Action needed from you right now
+## ✅ New: Phase 22 — Location Leads Upload, Assignment Rules & Exotel Click-to-Call (2026-08-17)
 
-- **The panel has been fully rebuilt** to match the reference CRM mockup you shared, **with your number-picker screen back as the first step** (I'd dropped it in the same pass — you caught that and asked for it back, done). Flow now: pick a number on the landing screen → dark-green sidebar workspace (Dashboard/Inbox/All Conversations/Unassigned/Reminders/Customers/Reports + admin sections) scoped entirely to that one number, no cross-number mixing anywhere. A "current number" pill at the top of the sidebar takes you back to switch numbers. The separate Admin Panel page is still gone — everything else is one app now. **Please click through this thoroughly** — it's the biggest UI change yet, and while I reviewed the code carefully (and caught/fixed one real bug — see `memory/DECISIONS.md` — before shipping), I have no way to actually click through Apps Script's rendered output myself.
-- **Media sending is still broken** — still waiting on diagnostics from you. Check Apps Script → Executions for the `sendMediaReply` call and tell me whether it errors, hangs, or sends-but-never-arrives (or share the raw request/response).
-- See the **full wake-up task list** at the bottom of this file for everything else queued up.
+Built into the live `apps-script/` build (not the webapp — see migration section below).
+Admins can now upload a spreadsheet of call leads (name/phone/location) for Raipur,
+Rajsamand, Coimbatore, Prayagraj, Alibaug, and Saraighat; each lead auto-assigns to a
+site agent by a per-location rule (single agent / round robin / manual, configurable
+under the new **Location Leads → Assignment Rules** admin tab). Agents see their own
+leads under a new **My Leads** page with a one-click **Call** button.
+
+**Action needed from you before click-to-call works:**
+1. Set four Script Properties in the Apps Script editor (Project Settings → Script
+   Properties): `EXOTEL_VOICE_ACCOUNT_SID`, `EXOTEL_VOICE_API_KEY`,
+   `EXOTEL_VOICE_API_TOKEN`, `EXOTEL_VOICE_CALLER_ID` (the ExoPhone the calls should
+   come from). If your Exotel Voice API uses the same account as your existing WhatsApp
+   integration, these can be the same Account SID/Key/Token you already set for
+   `EXOTEL_*` — just the CallerId is new.
+2. For each agent, open **Users → Edit** and fill in their **Phone** field — this is the
+   number Exotel rings first before connecting the call to the lead.
+3. Place one real test call once the above are set — the exact Exotel Voice API
+   request/response shape is flagged UNVERIFIED in `src/Phase22ExotelVoice.gs` (modeled
+   on public docs, not yet exercised against a real account), same as how the WhatsApp
+   provider's less-common methods started out.
+4. Upload a test batch of leads and set an assignment rule per location before agents
+   go looking for their leads — a location with no rule configured leaves leads
+   `UNASSIGNED` in the admin table until manually assigned.
+
+All 24 backend test suites pass (`cd apps-script && node tests/<name>.js` for any one,
+or see `memory/CHANGELOG.md` for the full list), including the pre-existing suites —
+nothing else in the app regressed.
+
+## 🚧 Migration in progress: moving off Apps Script to a free, faster stack
+
+Per your decision, the app is being rebuilt on Cloudflare Workers (backend) +
+Firebase Realtime Database (already in use) + React (frontend) — all free
+tier, no credit card required anywhere. The two builds are kept **completely
+separate** on disk: `apps-script/` (current, live, what your team uses today
+— untouched and still being bug-fixed in parallel) and `webapp/` (the new
+build, `webapp/backend/` + `webapp/frontend/`). Nothing moves over to the new
+one until it's fully validated — see the phase list further down.
+
+**Status: foundation built and verified working.**
+- `webapp/backend/` — Cloudflare Workers project. Verified locally: boots
+  cleanly, routing/error-handling/CORS all work, and the auth-checking
+  pipeline correctly rejects unauthenticated requests. Firebase Admin access
+  (reading/writing the database, minting realtime tokens) is built using the
+  same JWT-signing approach the Apps Script build used, adapted to Workers'
+  native Web Crypto API instead of Apps Script's `Utilities` — no Firebase
+  Admin SDK needed (it isn't Workers-compatible).
+- `webapp/frontend/` — React app (Vite). Verified: typechecks clean, builds
+  clean, dev server boots. Has a working Google-sign-in screen that calls the
+  new backend and shows the response — proves the whole chain (browser →
+  Firebase Auth → ID token → Workers → verified → response) works end to end,
+  the same kind of real round-trip check that caught the Apps Script realtime
+  bugs earlier, done now before any real feature logic is built on top.
+
+**Phase 1 (auth/roles/teams/number-access) ported and tested.** Direct port of
+`apps-script/src/Phase1{Domain,AccessControl,Services,Endpoints}.gs` — same
+five roles, same permission rules, same validation, only the storage layer
+(Realtime Database instead of Script Properties) and identity source
+(verified Firebase ID token instead of `Session.getActiveUser()`) changed.
+Verified two ways: live against a running `wrangler dev` server (every one of
+the 24 endpoints correctly routes and enforces auth), and with 18 automated
+tests against a mocked Firebase — real RSA JWT signing/verification included,
+not stubbed out — covering bootstrap edge cases, permission enforcement, and
+the core `requireConversationOperation` authorization gate across roles. One
+real bug was caught and fixed by these tests (a test-isolation issue in the
+Google-public-key cache, not a production bug). Run `npm test` in
+`webapp/backend/`.
+
+**Messaging core (numbers/customers/conversations/messages/webhook/send)
+ported, tested, and live.** Direct port of `apps-script/src/Phase{3,4,5,6}
+Services.gs` + `WorkspaceServices.gs` — numbers CRUD, the Exotel webhook
+ingestion pipeline (confirmed-live payload parsing carried over as-is),
+authorized conversation listing/detail, sendReply with the bookkeeping-
+isolation fix from the Apps Script build carried over, and the workspace
+aggregator (now gating the realtime token behind `includeRealtime` from the
+start, instead of learning that lesson the hard way again). 35 automated
+tests total (17 new), including a mocked Exotel endpoint proving both the
+success path (SENT, needsResponse cleared) and the failure path (FAILED
+status saved, no throw, needsResponse untouched). Deployed live and smoke-
+tested — every route, the webhook's shared-secret auth, and the "always
+200, real status in the body" behavior all confirmed working on the actual
+deployed URL, not just locally.
+
+**CRM core (assignment, remarks, reminders, stages) ported, tested, and live.**
+Direct port of `apps-script/src/Phase{7,8,9}{Domain,Services}.gs` — the
+round-robin engine (`Phase7Api`/`NumberAssignmentConfigApi`: eligibility +
+availability + numberAccess gating, self-healing rotation pointer,
+returning-customer inheritance to their prior owner, fallback/unassigned
+queue, working-hours restriction, full assignment history), lead stages +
+per-customer stage + internal remarks (`Phase8Api`), and reminders + snooze
+(`Phase9Api` — snoozed conversations now correctly disappear from Phase 5's
+active inbox list). Wired into the two places the Apps Script build wired
+them: Phase4Api's webhook ingestion now auto-assigns every brand-new
+conversation, and Phase5Api's active-conversation list now filters out
+anything currently snoozed. `WorkspaceApi` restored to its full field set
+(stage/remarks/reminders/snoozeStatus/assignableUsers), matching the
+original aggregator exactly. 24 new automated tests (59 total) covering
+round-robin rotation across multiple eligible agents, the
+eligible-but-unavailable-is-skipped case, returning-customer routing once
+their prior conversation is closed, config/participant CRUD and its
+authorization gates, stage/remark/customer visibility scoping, and
+reminder/snooze lifecycle including the "hidden from active inbox, visible
+in all-statuses view" behavior. Exposed via 25 new routes in a new
+`src/routes/crm.ts`, deployed live, and smoke-tested (every new route
+correctly requires auth — 401 without a token, not 404 — confirming the
+whole set is live and wired).
+
+Deferred to later phases on purpose (matches the task breakdown):
+sendTemplateReply/sendMediaReply/file upload (templates & media — needs a
+Drive-equivalent host, likely Cloudflare R2, not set up yet).
+
+### Setup status — everything is now set
+
+1. ✅ Cloudflare account created, `wrangler login` done.
+2. ✅ `FIREBASE_WEB_API_KEY` secret set.
+3. ✅ `FIREBASE_SERVICE_ACCOUNT_JSON` secret set (fresh key, independent from the Apps Script build's).
+4. ✅ `BOOTSTRAP_ADMIN_EMAIL` secret set.
+5. ✅ `WEBHOOK_SECRET_TOKEN` set (generated automatically, not reused from the Apps Script build). **Not pointed at Exotel yet on purpose** — that's a deliberate later cutover step, not something to do now.
+6. ✅ Exotel WhatsApp credentials set (`EXOTEL_API_KEY`/`API_TOKEN`/`ACCOUNT_SID`/`SUBDOMAIN`) — `sendReply` and the webhook can now actually reach WhatsApp.
+7. **Exotel Voice credentials received, not yet used** — you also provided `EXOTEL_VOICE_ACCOUNT_SID`/`API_KEY`/`API_TOKEN`/`CALLER_ID` for the click-to-call feature (Phase 22, see below). Kept for when that phase is built — not set as secrets yet since the code that would use them doesn't exist on this backend yet.
+
+### ✅ First admin account created — full pipeline confirmed live
+
+You've completed bootstrap and confirmed `/api/whoami` returns real data
+(`ADMIN`, your actual name/email). This is the first genuine end-to-end proof
+on real infrastructure: Google sign-in → Firebase ID token → Workers backend
+→ Realtime Database → back to the browser, no mocks anywhere in that chain.
+
+### 🆕 New feature found: location leads + click-to-call (Phase 22)
+
+While looking into the Exotel Voice credentials, I found `apps-script/src/
+Phase22*.gs` — a real, separate feature added to the Apps Script build:
+uploading call leads per site location, auto-assigning them (single agent /
+round-robin / manual per location), click-to-call through Exotel's Voice API,
+and a bridge that lets an agent jump from a lead straight into a WhatsApp
+conversation with that same person. Added it to the migration plan as its own
+phase, sequenced right after CRM core (it reuses that phase's round-robin and
+stage/remarks patterns directly, so porting it right after keeps the code
+consistent rather than duplicating the pattern early). Also added its 3 new
+permissions (`leads.manage`/`leads.view.assigned`/`leads.call`) to the new
+backend's role definitions now, while the system is still unbootstrapped —
+means a fresh bootstrap picks them up automatically, no separate fixup script
+ever needed (the Apps Script build needed one, since its roles were already
+persisted before the feature existed).
+
+Full setup details are in `webapp/backend/README.md` and
+`webapp/frontend/README.md`. Phase-by-phase plan, same order as the original
+build:
+
+1. ~~Foundation (backend + frontend scaffolding, auth pipeline proven)~~ ✅ done
+2. ~~Phase 1 — auth, roles, teams, number access~~ ✅ done, tested
+3. ~~Messaging core — numbers, customers, conversations, messages, webhook, send~~ ✅ done, tested, live
+4. ~~CRM core — assignment, remarks, reminders, stages~~ ✅ done, tested, live
+5. Location leads + click-to-call (Phase 22) — **next**
+6. Templates, quick replies, media
+7. Admin panel, notifications, dashboard, audit/backup
+8. Parallel-run validation, then cutover (Apps Script stays live and untouched the entire time)
+
+---
+
+## Action needed from you right now (Apps Script build — daily use)
+
+- **Real-time message delivery is live and confirmed working end-to-end (@55).** New messages now appear the instant they arrive, via the browser talking to Firebase directly instead of through Apps Script. Getting here needed three separate fixes beyond the original build (@50):
+  1. **Concurrency pileup (@51)** — opening a conversation was firing 5+ parallel Apps Script executions at once (workspace data, the listen token, templates, quick replies, stages); the Executions panel showed even unrelated Sheets-only calls stuck "Running" for 6-7s as a result. The listen token now rides inside the existing `getConversationWorkspace` call instead of its own round trip.
+  2. **Firebase Authentication was never enabled for the project** — `signInWithCustomToken` can't work at all until the Authentication product itself is initialized in the Firebase console, separately from Realtime Database and the registered web app. Enabled directly (Email/Password + Google providers, per your request).
+  3. **Security rules broke the live query** — `.read` was defined per-message (`$messageId`), but Firebase rejects an entire `orderBy`/`equalTo` query if the read rule depends on data below the queried location. Fixed using Firebase's query-based rules pattern (checks `query.orderByChild`/`query.equalTo` against a lookup on `/conversations/{id}/numberId`, evaluable without touching individual message records) — still scoped to exactly the numbers an agent has been granted, same as everywhere else in the app. Live-verified via a visible debug banner injected into the running app: confirmed `signIn OK` and `ES OPEN` (EventSource connected) before removing the debug scaffolding.
+
+  Please do a final real-world check: open a conversation and have someone message it from WhatsApp without touching the panel — it should now appear without any refresh.
+- ~~"Sent reply not showing in the thread"~~ — confirmed working by you. Resolved.
+- ~~Authorize the Drive scope~~ — done, confirmed by you.
+- ~~Domain-restricted deployment~~ — checked, it's already "Anyone," not the cause of anything. Ruled out.
+- **Media delivered as generic binary ("Bin format"), not viewable — fixed, needs retest (@42).** Root cause: Drive's `export=download` link ignores the file's real type and serves everything as `application/octet-stream`, so WhatsApp couldn't tell it was an image. Switched to `export=view`, which serves the real Content-Type. Confirmed-by-reasoning for images; video/audio/document delivery through this same URL format is still unverified — flag it again if a non-image attachment still comes through wrong.
+- **Test "Add user" end-to-end (deployed @41).** Creating a user now automatically emails them a welcome message with a temporary password included directly (not a link) — no separate "send setup link" step needed. If the email doesn't arrive, the temp password still shows in an alert to you as a fallback, and the per-row "Send setup link"/"Generate temp password" buttons remain as manual alternatives.
+- **Change-password screen UI fixed + password show/hide added (@43).** The full-width bug was a real CSS gap. Test the "Current password is incorrect" flow again with the eye toggle to check exactly what you're typing.
+- **All "Edit" buttons across the admin pages now use a proper card/dropdown modal instead of sequential prompt() popups (@44, and a real bug in it fixed at @45 — the modal wasn't appearing at all due to a CSS conflict).** Users, Customer details, Quick Replies, Team Members, WhatsApp Numbers, Lead Stages. Please click through each once to confirm they save correctly. Three lower-priority prompt()s remain (snooze duration, template variables, submit-for-review wabaId) — not "edit a record" flows, left for now unless you want those converted too.
+- **"User number assignment" — Edit User now manages WhatsApp number access directly (@46).** This was a real gap: number access lived only on a separate Settings page. Edit User now shows a checklist of every number with current access pre-checked. Please test toggling a number on/off for a user.
+- **Firebase Realtime Database migration is LIVE (@47), and a real perf regression in it was found and fixed (@49).** Messages/Conversations moved to Firebase (@47), but you reported it still felt slow right after — turned out `FirebaseRealtimeDbRepository` was missing the same per-request read cache `SheetRepository` already had, so one dashboard/workspace load was doing 4+ separate live network calls to Firebase for data that hadn't changed between them. Fixed and deployed (@49), with direct test coverage proving 3 repository instances now produce exactly 1 network read. **Also fixed the "page refreshing" complaint (@48)**: every action was flashing the chat pane and conversation list to a blank "Loading…" before repopulating — not an actual page reload, but felt like one. Old content now stays on screen through the round trip. **Please retest now**: click through reply/note/assign/resolve and confirm it feels instant, not flashing or slow. Everything else (Numbers, Customers, Templates, Users, etc.) is still on Sheets by design — see the exchange in chat for why moving the rest isn't recommended right now.
+- See the **full wake-up task list** at the bottom of this file for everything else queued up (template live-send verification, seeding lead stages, etc.)
 
 ## Phase status
 
@@ -19,7 +193,7 @@
 | 3 | WhatsApp Numbers & Exotel Integration | ✅ Done, live-verified | 10 numbers registered (8 fully, 2 partially) |
 | 4 | Webhook & Message Ingestion | ✅ Done, live-verified | |
 | 5 | Conversations & Inbox | ✅ Done, live-verified | |
-| 6 | Agent Reply / Outbound Messaging | 🟡 Code done, Node-tested — live send pending you | `sendText` request shape unverified until a real send happens |
+| 6 | Agent Reply / Outbound Messaging | ✅ **Live-confirmed 2026-08-10** — a real reply sent from the portal reached the customer on WhatsApp | Template/media sends within this phase's family are still unverified (see Phase 10/11) |
 | 7 | Assignment & Round-Robin Engine | ✅ Code done, Node-tested | Auto-assigns new leads on ingestion; no live send involved, so no user-dependent verification needed here |
 | 8 | CRM-lite: Customers, Stages, Remarks | ✅ Code done, Node-tested | Stage seed needs a one-time live run (see task list) |
 | 9 | Reminders, Snooze & Follow-up | ✅ Code done, Node-tested | |
@@ -38,6 +212,8 @@
 
 ## Recently shipped (brief — see `memory/CHANGELOG.md` for full detail)
 
+- **Live-testing round 2 (@33-@35)**: confirmed the audit log migration ran clean (1625 entries moved). Added `CacheService` cross-request caching for speed, then **reverted it same-session** after you reported a sent reply not appearing in the thread — too risky for message data, not worth it. Replaced the old 3-prompt() media-URL flow with a real local-file picker (uploads to a dedicated Drive folder, sets link-sharing so Exotel can fetch it — delivery itself still unverified). Added a visible scrollbar + smooth scroll to the message pane. **Real send confirmed working**: a reply sent from the portal reached the customer on WhatsApp for the first time.
+- **Four real bugs found from your live testing, all fixed and deployed (@29-@32)**: (1) landing screen stuck on "Loading…" forever — a failure-handler helper (`renderError`) was referenced but never defined, so the call threw before the request to the server was even sent; (2) every repository read did a full Sheets table scan, and the aggregated workspace endpoint re-read the same tables 3-4x over — added a short-TTL, write-invalidated read cache shared across repository instances; (3) the audit log's single Property-blob storage hit Apps Script's quota after a month of real use, breaking "Add Note" and silently breaking other audit-logged actions — moved to a proper Sheets tab (**needs your one-time migration run, see above**); (4) the conversation panel's message pane used a hardcoded height that didn't account for whatever sat above it (e.g. Dashboard's KPI row), pushing the compose box below the fold and forcing double-scrolling — now sizes itself to whatever room is actually left, plus added message avatars and Enter-to-send on both Reply and Note.
 - **Number-picker restored + everything properly scoped**: you asked for the original "select a number first" screen back (I'd dropped it earlier the same session) and for nothing to mix across numbers once you're inside one. Done — Dashboard, Inbox, All Conversations, Unassigned, Customers, Reminders, Reports, and the notification bell are all now scoped to whichever number you picked on the landing screen. Admin pages (Users, Teams, WhatsApp Numbers, Templates, Quick Replies, Settings, Audit Log) are still org-wide, since those aren't conversation data.
 - **Unified sidebar-nav redesign**: the whole panel now matches the reference CRM mockup you shared — one app, dark-green sidebar navigation (Dashboard, Inbox, All Conversations, Unassigned, Reminders, Customers, Reports, plus the former Admin Panel sections), a real KPI dashboard, a redesigned chat panel (inline Assign dropdown, Reply/Note tabs, sender names, inline media), and a Customer Details side panel (edit contact info, Previous Conversations, Notes, Reminders). No more separate `?page=admin` — that page is retired. New: an Availability dropdown in the top bar (this already existed on the backend since Phase 1 but was never wired to any UI until now) and a notification bell. KPI cards show real counts only, not fake "vs yesterday" trends, per your own call. This was almost entirely a frontend rewrite — all 20 backend tests still pass.
 - **Inbox polish**: fixed four real gaps from your workspace screenshot — conversation list shows customer names now (was showing "OPEN"), replies show who sent them ("Rahul replied," per the original spec, previously invisible), media messages show an actual image/link instead of placeholder text, and Remarks/Reminders are now collapsible sections below the compose box instead of always-expanded panels pushing the chat thread out of view.
