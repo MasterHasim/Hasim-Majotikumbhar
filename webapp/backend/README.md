@@ -6,11 +6,15 @@ no credit card required. Live at `https://whatsapp-panel-backend.hasim-c9e.worke
 **Status**: Foundation + Phase 1 (auth/roles/teams/number-access) + messaging
 core (numbers/customers/conversations/messages/webhook/send) + CRM core
 (round-robin assignment, lead stages, remarks, reminders, snooze) + Phase 22
-(location leads + Exotel click-to-call) ported, tested, and deployed live —
-see PROGRESS.md for the full verification history. 90 automated tests cover
+(location leads + Exotel click-to-call) + Phase 10/11 (templates, quick
+replies, media send/receive) ported, tested, and deployed live — see
+PROGRESS.md for the full verification history. 102 automated tests cover
 the actual business logic against a mocked Firebase and mocked Exotel
 WhatsApp + Voice endpoints (real RSA JWT signing/verification included, not
-stubbed out). Run `npm test`. Next up: templates, quick replies, media.
+stubbed out). Run `npm test`. Next up: admin panel, notifications, dashboard,
+audit/backup. Local-file media upload is blocked on you enabling R2 in the
+Cloudflare dashboard (`sendMediaReply` itself works today with any
+already-hosted URL) — see PROGRESS.md's task list.
 
 ## Setup status
 
@@ -65,8 +69,19 @@ npm run typecheck
 - `src/services/phase3Api.ts` / `phase4Api.ts` / `phase5Api.ts` / `phase6Api.ts`
   / `workspaceApi.ts` / `realtimeListenApi.ts` — direct ports of
   `apps-script/src/Phase{3,4,5,6}Services.gs`, `WorkspaceServices.gs`, and
-  `RealtimeListenServices.gs`. Template/media sends are deferred to a later
-  phase on purpose (see PROGRESS.md) — they don't exist on this backend yet.
+  `RealtimeListenServices.gs`. `phase6Api.ts` now also has `sendTemplateReply`/
+  `sendMediaReply`; `phase4Api.ts` persists inbound `mediaUrl` from the
+  webhook into `messageMedia`.
+- `src/services/phase10Api.ts` / `phase11Api.ts` — direct ports of
+  `apps-script/src/Phase{10,11}Services.gs`: template draft → submit → sync
+  workflow (real `ExotelProvider.createTemplate`/`getTemplates` calls,
+  ADMIN-only) and quick-reply CRUD.
+- `src/lib/firebaseAdmin.ts`'s `FirebaseDb` has a request-scoped `list()`
+  cache (writes invalidate their collection) — added after live logs
+  (`wrangler tail`) showed `WorkspaceApi`'s aggregation hitting Cloudflare's
+  Free-tier 50-subrequest-per-invocation cap, since every `PhaseNApi` builds
+  its own `AccessControl` from a fresh repository bundle. Same class of fix
+  the Apps Script build already made for `SheetRepository`.
 - `src/services/phase7Api.ts` (`Phase7Api` + `NumberAssignmentConfigApi`) /
   `phase8Api.ts` / `phase9Api.ts` — direct ports of
   `apps-script/src/Phase{7,8,9}{Domain,Services}.gs`: round-robin assignment
@@ -84,10 +99,11 @@ npm run typecheck
   (still UNVERIFIED against a real account, same flag the source carried),
   and the "start WhatsApp from a lead" bridge into the existing messaging
   services. Added a `phone` field to `User` (`domain/types.ts`) for this.
-- `src/routes/phase1.ts` / `messaging.ts` / `crm.ts` / `phase22.ts` — HTTP
-  endpoints, one-to-one with `apps-script/src/Phase1Endpoints.gs` /
-  `Phase6Endpoints.gs` / `Phase4Webhook.gs` / the Phase 7-9 endpoint files /
-  `Phase22Endpoints.gs`.
+- `src/routes/phase1.ts` / `messaging.ts` / `crm.ts` / `phase22.ts` /
+  `templates.ts` — HTTP endpoints, one-to-one with
+  `apps-script/src/Phase1Endpoints.gs` / `Phase6Endpoints.gs` /
+  `Phase4Webhook.gs` / the Phase 7-9 endpoint files / `Phase22Endpoints.gs` /
+  the Phase 10-11 endpoint files.
 - `test/helpers/mockFirebase.ts` — mocks Google's OAuth2/JWK endpoints, the
   Firebase REST API, and a fake Exotel endpoint for tests, the same "mock the
   external boundary, run the real code" pattern `apps-script/tests/*.js` used.

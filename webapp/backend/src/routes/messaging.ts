@@ -68,6 +68,16 @@ export function registerMessagingRoutes(router: RouterType) {
     const ctx = await buildContext(request, env);
     return Response.json(await new Phase6Api(ctx.db, ctx.identityEmail, env).resolveConversation(param(request, 'id')));
   });
+  router.post('/api/conversations/:id/send-template', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    const body = (await json(request)) as { templateId: string; variables?: Record<string, unknown> };
+    return Response.json(await new Phase6Api(ctx.db, ctx.identityEmail, env).sendTemplateReply(param(request, 'id'), body.templateId, body.variables ?? {}));
+  });
+  router.post('/api/conversations/:id/send-media', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    const body = (await json(request)) as { mediaType: string; mediaUrl: string; caption?: string };
+    return Response.json(await new Phase6Api(ctx.db, ctx.identityEmail, env).sendMediaReply(param(request, 'id'), body.mediaType, body.mediaUrl, body.caption ?? ''));
+  });
 
   // --- Exotel webhook (no Firebase auth — shared secret token instead, same as apps-script/src/Phase4Webhook.gs) ---
   router.post('/webhook/exotel', async (request: IRequest, env: Env) => {

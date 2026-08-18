@@ -2,7 +2,7 @@
 import { apiFetch } from './api';
 import type {
   AssignableUser, CallLog, Conversation, ConversationListItem, Customer, CustomerStage, Lead, LeadRemark, LeadStageAssignment,
-  LocationAssignmentConfig, LocationAssignmentUser, Remark, Reminder, SnoozeStatus, Stage, UploadLeadsResult, User, WhatsAppNumber, WhoAmI, Workspace,
+  LocationAssignmentConfig, LocationAssignmentUser, QuickReply, Remark, Reminder, SnoozeStatus, Stage, Template, UploadLeadsResult, User, WhatsAppNumber, WhoAmI, Workspace,
 } from '../types';
 
 export const backendApi = {
@@ -23,6 +23,12 @@ export const backendApi = {
 
   resolveConversation: (conversationId: string) =>
     apiFetch<Conversation>(`/api/conversations/${encodeURIComponent(conversationId)}/resolve`, { method: 'POST' }),
+
+  sendTemplateReply: (conversationId: string, templateId: string, variables: Record<string, unknown>) =>
+    apiFetch<unknown>(`/api/conversations/${encodeURIComponent(conversationId)}/send-template`, { method: 'POST', body: JSON.stringify({ templateId, variables }) }),
+
+  sendMediaReply: (conversationId: string, mediaType: string, mediaUrl: string, caption: string) =>
+    apiFetch<unknown>(`/api/conversations/${encodeURIComponent(conversationId)}/send-media`, { method: 'POST', body: JSON.stringify({ mediaType, mediaUrl, caption }) }),
 
   reassignConversation: (conversationId: string, newUserId: string) =>
     apiFetch<Conversation>(`/api/conversations/${encodeURIComponent(conversationId)}/reassign`, { method: 'POST', body: JSON.stringify({ newUserId }) }),
@@ -99,6 +105,28 @@ export const backendApi = {
 
   startWhatsAppFromLead: (leadId: string) =>
     apiFetch<{ customerId: string; conversationId: string; numberId: string }>(`/api/leads/${encodeURIComponent(leadId)}/start-whatsapp`, { method: 'POST' }),
+
+  // --- Phase 10/11: templates, quick replies ---
+
+  listTemplates: () => apiFetch<Template[]>('/api/templates'),
+
+  createDraftTemplate: (input: { name: string; language: string; category: string; wabaId?: string; components?: unknown[] }) =>
+    apiFetch<Template>('/api/templates', { method: 'POST', body: JSON.stringify(input) }),
+
+  updateDraftTemplate: (id: string, patch: Record<string, unknown>) =>
+    apiFetch<Template>(`/api/templates/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+
+  submitTemplateForReview: (id: string) => apiFetch<Template>(`/api/templates/${encodeURIComponent(id)}/submit`, { method: 'POST' }),
+
+  syncTemplatesFromProvider: (wabaId: string) => apiFetch<Template[]>('/api/templates/sync', { method: 'POST', body: JSON.stringify({ wabaId }) }),
+
+  listQuickReplies: () => apiFetch<QuickReply[]>('/api/quick-replies'),
+
+  createQuickReply: (input: { shortcut: string; text: string }) =>
+    apiFetch<QuickReply>('/api/quick-replies', { method: 'POST', body: JSON.stringify(input) }),
+
+  updateQuickReply: (id: string, patch: Record<string, unknown>) =>
+    apiFetch<QuickReply>(`/api/quick-replies/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) }),
 };
 
 export type { AssignableUser, Customer };

@@ -184,6 +184,39 @@ export interface ConversationSnooze extends Record_ {
   createdAt: string;
 }
 
+// --- Phase 10/11 (templates, quick replies, media) ---
+
+export type TemplateStatus = 'LOCAL_DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED';
+
+export interface Template extends Record_ {
+  wabaId: string;
+  providerTemplateId: string;
+  name: string;
+  language: string;
+  category: string;
+  status: TemplateStatus;
+  components: unknown[];
+  variables: string[];
+  createdAt: string;
+  updatedAt: string;
+  lastSyncedAt: string;
+}
+
+export interface QuickReply extends Record_ {
+  shortcut: string;
+  text: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MessageMedia extends Record_ {
+  messageId: string;
+  mediaType: string;
+  mediaUrl: string;
+  caption: string;
+}
+
 // --- Phase 22 (location leads + Exotel click-to-call, port of Phase22Domain.gs's slice of Phase2Schemas) ---
 
 export type LeadStatus = 'NEW' | 'ASSIGNED' | 'UNASSIGNED' | 'CALLED';

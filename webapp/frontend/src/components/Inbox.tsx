@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { ConversationListItem, Stage, WhatsAppNumber, Workspace } from '../types';
+import type { ConversationListItem, QuickReply, Stage, Template, WhatsAppNumber, Workspace } from '../types';
 import { backendApi } from '../lib/backendApi';
 import { ApiClientError } from '../lib/api';
 import { connectRealtimeMessages } from '../lib/realtime';
@@ -24,6 +24,8 @@ export function Inbox({ number, initialConversationId, onInitialConversationCons
 }) {
   const [conversations, setConversations] = useState<ConversationListItem[]>([]);
   const [stages, setStages] = useState<Stage[]>([]);
+  const [quickReplies, setQuickReplies] = useState<QuickReply[]>([]);
+  const [templates, setTemplates] = useState<Template[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [search, setSearch] = useState('');
@@ -59,6 +61,12 @@ export function Inbox({ number, initialConversationId, onInitialConversationCons
     void loadConversations();
     backendApi.listStages().then(setStages).catch(() => setStages([]));
   }, [number.id, loadConversations]);
+
+  // Quick replies and templates aren't number-scoped — fetch once, not on every number switch.
+  useEffect(() => {
+    backendApi.listQuickReplies().then(setQuickReplies).catch(() => setQuickReplies([]));
+    backendApi.listTemplates().then(setTemplates).catch(() => setTemplates([]));
+  }, []);
 
   useEffect(() => {
     const interval = setInterval(() => void loadConversations(), LIST_POLL_MS);
@@ -118,7 +126,7 @@ export function Inbox({ number, initialConversationId, onInitialConversationCons
         <ConversationList conversations={conversations} selectedId={selectedId} search={search} onSearchChange={setSearch} onSelect={(id) => void selectConversation(id)} />
         {workspace ? (
           <>
-            <ChatPane workspace={workspace} onAfterSend={handleChanged} onResolve={() => void handleResolve()} />
+            <ChatPane workspace={workspace} quickReplies={quickReplies} templates={templates} onAfterSend={handleChanged} onResolve={() => void handleResolve()} />
             <DetailPanel workspace={workspace} stages={stages} onChanged={handleChanged} />
           </>
         ) : (

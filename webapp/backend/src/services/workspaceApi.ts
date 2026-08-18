@@ -10,7 +10,7 @@
  * shipped this unconditionally at first, found the extra per-call cost live, and
  * fixed it; this port starts from that fix instead of re-learning it.
  */
-import type { CustomerStage, Message, Reminder, Stage, User } from '../domain/types';
+import type { CustomerStage, Message, MessageMedia, Reminder, Stage, User } from '../domain/types';
 import { Repository } from '../lib/repository';
 import { FirebaseDb } from '../lib/firebaseAdmin';
 import { Phase5Api, type ConversationDetail } from './phase5Api';
@@ -23,7 +23,7 @@ export interface Workspace {
   conversation: ConversationDetail['conversation'];
   customer: ConversationDetail['customer'];
   number: ConversationDetail['number'];
-  messages: (Message & { senderName: string | null })[];
+  messages: (Message & { senderName: string | null; media: MessageMedia | null })[];
   assignedUserName: string | null;
   stage: CustomerStage | null;
   remarks: Awaited<ReturnType<Phase8Api['listRemarks']>> | null;
@@ -40,6 +40,7 @@ export class WorkspaceApi {
   private phase9: Phase9Api;
   private realtime: RealtimeListenApi;
   private users: Repository<User>;
+  private messageMedia: Repository<MessageMedia>;
 
   constructor(db: FirebaseDb, identityEmail: string, env: { FIREBASE_WEB_API_KEY: string }) {
     this.phase5 = new Phase5Api(db, identityEmail);
@@ -48,6 +49,7 @@ export class WorkspaceApi {
     this.phase9 = new Phase9Api(db, identityEmail);
     this.realtime = new RealtimeListenApi(db, identityEmail, env);
     this.users = new Repository<User>(db, 'users');
+    this.messageMedia = new Repository<MessageMedia>(db, 'messageMedia');
   }
 
   async getConversationWorkspace(conversationId: string, includeRealtime: boolean): Promise<Workspace> {
@@ -73,9 +75,10 @@ export class WorkspaceApi {
     return workspace;
   }
 
-  private async enrichMessages(messages: Message[]): Promise<(Message & { senderName: string | null })[]> {
+  private async enrichMessages(messages: Message[]): Promise<(Message & { senderName: string | null; media: MessageMedia | null })[]> {
     const userCache = new Map<string, string | null>();
-    const result: (Message & { senderName: string | null })[] = [];
+    const allMedia = await this.messageMedia.list();
+    const result: (Message & { senderName: string | null; media: MessageMedia | null })[] = [];
     for (const message of messages) {
       let senderName: string | null = null;
       if (message.senderUserId) {
@@ -85,7 +88,8 @@ export class WorkspaceApi {
         }
         senderName = userCache.get(message.senderUserId) ?? null;
       }
-      result.push({ ...message, senderName });
+      const media = allMedia.find((m) => m.messageId === message.id) ?? null;
+      result.push({ ...message, senderName, media });
     }
     return result;
   }

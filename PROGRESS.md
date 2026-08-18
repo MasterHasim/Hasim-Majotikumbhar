@@ -199,8 +199,34 @@ modal (mode/participants/caller-ID per location, plus a quick per-agent
 phone-number setter since `initiateCall` needs one on file and there's no
 Admin Users page yet to set it otherwise). Typechecks clean, production
 build clean, verified rendering with no console/network errors in a fresh
-browser load. Not yet built: template/media send, dashboard/reports, and a
-proper admin panel (users/teams/numbers/settings).
+browser load.
+
+**✅ Templates, quick replies, and media (Phase 10/11) are ported — backend
+and frontend both.** Direct port of `apps-script/src/Phase{10,11}Services.gs`
+plus the media half of `Phase6Services.gs`: `Phase10Api` (draft → submit →
+sync template workflow, ADMIN-only, real `ExotelProvider.createTemplate`/
+`getTemplates` calls, same "built and tested, not invoked live unattended"
+boundary as `sendReply`), `Phase11Api` (quick-reply CRUD, admin-managed,
+anyone can list), and `Phase6Api.sendTemplateReply`/`sendMediaReply`
+(variable substitution into `{{n}}` placeholders, media send by URL).
+Inbound media (`mediaUrl` from Exotel's webhook) is now persisted into a
+`messageMedia` collection and shown inline in the chat thread. The Inbox
+compose box got a quick-reply picker, a template picker (with inline
+variable inputs), and a "send media by URL" form; a new ADMIN-only
+**Settings** page manages quick replies and templates (draft/submit/sync).
+12 new backend tests (102 total), deployed and smoke-tested live; frontend
+typechecks/builds clean, verified rendering with no console errors.
+
+**Deliberately not built yet: file upload for media** (Apps Script's
+`uploadConversationMedia` used Drive; the free-tier equivalent here is
+Cloudflare R2, and **R2 needs to be enabled once in the Cloudflare
+dashboard before I can create a bucket** — `wrangler r2 bucket create`
+failed with `Please enable R2 through the Cloudflare Dashboard [code:
+10042]`. `sendMediaReply` itself works today with any already-hosted URL;
+only "pick a local file and have the panel host it for you" is blocked on
+this one manual step — see the task list. Also not yet built: dashboard/
+reports and a proper admin panel (users/teams/numbers/settings beyond the
+new Settings page's quick-replies/templates scope).
 
 **How to see it**: run `npm run dev` in `webapp/frontend/` (or it may already
 be running — check `http://localhost:5173`) and sign in with your Google
@@ -250,8 +276,8 @@ build:
 3. ~~Messaging core — numbers, customers, conversations, messages, webhook, send~~ ✅ done, tested, live
 4. ~~CRM core — assignment, remarks, reminders, stages~~ ✅ done, tested, live
 5. ~~Location leads + click-to-call (Phase 22)~~ ✅ done, tested, live (Voice call itself still needs a one-time real-call verification — see task list)
-6. Templates, quick replies, media — **next**
-7. Admin panel, notifications, dashboard, audit/backup
+6. ~~Templates, quick replies, media~~ ✅ done, tested, live (media *file upload* specifically waits on you enabling R2 — see task list)
+7. Admin panel, notifications, dashboard, audit/backup — **next**
 8. Parallel-run validation, then cutover (Apps Script stays live and untouched the entire time)
 
 ---
@@ -351,6 +377,7 @@ build:
 7. **Read `docs/ZOHO_PHASE_2.md` and answer its 5 open questions** whenever you're ready to think about Zoho.
 8. ~~[webapp] Click through the new Inbox UI~~ — ✅ done by you 2026-08-18. Registered all 10 numbers, confirmed the Inbox shell, a real inbound test message via the actual webhook pipeline, and a real reply sent successfully through Exotel.
 9. **[webapp] Place one real Exotel Voice call to verify Phase 22's click-to-call.** The Exotel Voice secrets are now set on the live backend, but `ExotelVoiceProvider`'s request/response field names are still UNVERIFIED (carried over from the Apps Script build's own unverified version) — a real agent needs a `phone` set (Admin Panel → Users, once that page exists on the new backend, or via the API directly for now) and a lead assigned to them, then click-to-call once so I can confirm/fix the response parsing against what Exotel actually returns.
+10. **[webapp] Enable R2 in the Cloudflare dashboard** (Cloudflare's own account-level gate — `wrangler r2 bucket create` fails with `Please enable R2 through the Cloudflare Dashboard [code: 10042]` until this is done once). Cloudflare's R2 free tier itself needs no credit card, but the dashboard flow to switch it on has to be done by you, the account owner — I can't do this via the API. Once enabled, tell me and I'll create the bucket, bind it, and wire up the local-file media upload that's currently the one missing piece of Phase 10/11.
 
 ### Done (kept for history)
 

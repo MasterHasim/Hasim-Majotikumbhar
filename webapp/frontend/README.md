@@ -57,6 +57,17 @@ quick per-agent phone-number setter, since `initiateCall` needs one and
 there's no Admin Users page yet). All wired to the already-tested
 `Phase22Api` backend.
 
-Not built yet: templates/quick-replies/media send, dashboard/reports, and a
-proper admin panel (users/teams/numbers/settings) — see `PROGRESS.md` at the
-repo root for the full migration plan and status.
+**Templates, quick replies, and media are also wired up.** The Inbox compose
+box (`components/ChatPane.tsx`) now has a quick-reply picker, a template
+picker (inline `{{n}}` variable inputs, only APPROVED templates offered),
+and a "send media by URL" form; inbound/outbound media renders inline in the
+thread (image preview or a link, depending on type). A new ADMIN-only
+**Settings** page (`components/Settings.tsx`) manages quick replies and the
+template draft → submit → sync workflow. Picking a local file to upload
+isn't built yet — it's blocked on you enabling Cloudflare R2 (see
+`webapp/backend/README.md`); sending media you already have a URL for works
+today.
+
+Not built yet: dashboard/reports and a proper admin panel (users/teams/
+numbers/broader settings) — see `PROGRESS.md` at the repo root for the full
+migration plan and status.

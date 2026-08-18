@@ -12,7 +12,7 @@
  */
 import { ApiError } from '../types';
 import { Ids } from '../domain/phase1';
-import type { Conversation, Customer, Message, WhatsAppNumber } from '../domain/types';
+import type { Conversation, Customer, Message, MessageMedia, WhatsAppNumber } from '../domain/types';
 import { Repository } from '../lib/repository';
 import { AuditLogService } from '../lib/auditLog';
 import { FirebaseDb } from '../lib/firebaseAdmin';
@@ -36,6 +36,7 @@ export class Phase4Api {
   private customers: Repository<Customer>;
   private conversations: Repository<Conversation>;
   private messages: Repository<Message>;
+  private messageMedia: Repository<MessageMedia>;
 
   constructor(private db: FirebaseDb) {
     this.audit = new AuditLogService(db);
@@ -43,6 +44,7 @@ export class Phase4Api {
     this.customers = new Repository<Customer>(db, 'customers');
     this.conversations = new Repository<Conversation>(db, 'conversations');
     this.messages = new Repository<Message>(db, 'messages');
+    this.messageMedia = new Repository<MessageMedia>(db, 'messageMedia');
   }
 
   async ingestInboundMessage(normalized: NormalizedWebhookMessage): Promise<IngestResult> {
@@ -80,6 +82,9 @@ export class Phase4Api {
       providerMessageId: normalized.providerMessageId, status: (normalized.status as Message['status']) || 'RECEIVED', timestamp: normalized.timestamp || now,
     };
     await this.messages.create(message);
+    if (normalized.mediaUrl) {
+      await this.messageMedia.create({ id: Ids.create('media'), messageId: message.id, mediaType: normalized.messageType || 'image', mediaUrl: normalized.mediaUrl, caption: normalized.text || '' });
+    }
     await this.conversations.update(conversation.id, { needsResponse: true, lastMessageAt: message.timestamp });
     await this.audit.write(null, 'message.ingested', 'message', message.id, { conversationId: conversation.id, customerId: customer.id, numberId: number.id });
 

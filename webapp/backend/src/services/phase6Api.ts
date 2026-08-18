@@ -1,9 +1,9 @@
 /**
  * Direct port of apps-script/src/Phase6Services.gs's Phase6Api — agent/admin replies
- * and conversation resolution. sendTemplateReply/sendMediaReply/uploadConversationMedia
- * are deferred to the templates/media migration phase (see PROGRESS.md) since they
- * depend on Templates existing and on a Drive-equivalent file host (Cloudflare R2) not
- * set up yet — plain text sendReply and resolveConversation don't need either.
+ * and conversation resolution, now including sendTemplateReply (Phase 10) and
+ * sendMediaReply (Phase 11, URL-based — uploadConversationMedia's R2-backed file
+ * upload lives in routes/media.ts, blocked on the user enabling R2 in the Cloudflare
+ * dashboard; sendMediaReply itself just needs an already-hosted URL and doesn't).
  *
  * The bookkeeping-isolation fix from the Apps Script build (2026-08-13 — a secondary
  * conversation-metadata/audit-log failure must not turn an already-successful send
@@ -13,13 +13,26 @@
  */
 import { ApiError } from '../types';
 import { Ids, Validation } from '../domain/phase1';
-import type { Conversation, Customer, Message, WhatsAppNumber } from '../domain/types';
+import type { Conversation, Customer, Message, MessageMedia, Template, WhatsAppNumber } from '../domain/types';
 import { Repository } from '../lib/repository';
 import { AccessControl } from '../lib/accessControl';
 import { AuditLogService } from '../lib/auditLog';
 import { FirebaseDb } from '../lib/firebaseAdmin';
 import { buildPhase1Repositories } from '../lib/phase1Repositories';
 import { ExotelProvider, requireExotelConfig, type ExotelConfig } from './exotelProvider';
+
+/** UNVERIFIED — best-effort placeholder substitution ({{1}}, {{2}}, ...) matching Meta/WhatsApp template component conventions, same flag apps-script/src/Phase6Services.gs's substituteTemplateVariables_ carries. */
+function substituteTemplateVariables(components: unknown[], variables: Record<string, unknown>): unknown[] {
+  return (components || []).map((component) => {
+    const c = component as { type?: string; text?: string } | null;
+    if (!c || c.type !== 'BODY' || typeof c.text !== 'string') return component;
+    const text = c.text.replace(/\{\{(\d+)\}\}/g, (match, index) => {
+      const value = variables[index];
+      return value !== undefined ? String(value) : match;
+    });
+    return { ...c, text };
+  });
+}
 
 /** Same E.164 normalization as apps-script/src/Phase6Services.gs's toE164_. */
 export function toE164(phoneNumber: string): string {
@@ -50,6 +63,8 @@ export class Phase6Api {
   private customers: Repository<Customer>;
   private conversations: Repository<Conversation>;
   private messages: Repository<Message>;
+  private templates: Repository<Template>;
+  private messageMedia: Repository<MessageMedia>;
   private exotelConfig: ExotelConfig;
 
   constructor(db: FirebaseDb, identityEmail: string, env: { EXOTEL_API_KEY?: string; EXOTEL_API_TOKEN?: string; EXOTEL_ACCOUNT_SID?: string; EXOTEL_SUBDOMAIN?: string }) {
@@ -60,12 +75,34 @@ export class Phase6Api {
     this.customers = new Repository<Customer>(db, 'customers');
     this.conversations = new Repository<Conversation>(db, 'conversations');
     this.messages = new Repository<Message>(db, 'messages');
+    this.templates = new Repository<Template>(db, 'templates');
+    this.messageMedia = new Repository<MessageMedia>(db, 'messageMedia');
     this.exotelConfig = requireExotelConfig(env);
   }
 
   async sendReply(conversationId: string, text: string): Promise<Message> {
     const validText = Validation.requiredString(text, 'text');
     return this.sendOutbound(conversationId, 'text', validText, (provider, number, customer) => provider.sendText(toE164(number.phoneNumber), toE164(customer.phone), validText));
+  }
+
+  /** Send an approved template with variables substituted into its components. UNVERIFIED — sendTemplate has never been called live, same as sendText. */
+  async sendTemplateReply(conversationId: string, templateId: string, variables: Record<string, unknown>): Promise<Message> {
+    const template = await this.templates.get(templateId);
+    if (!template) throw new ApiError(404, 'NOT_FOUND', 'Template was not found.');
+    if (template.status !== 'APPROVED') throw new ApiError(400, 'VALIDATION_ERROR', 'Only an APPROVED template can be sent.');
+    const components = substituteTemplateVariables(template.components, variables || {});
+    const displayText = `[Template: ${template.name}]`;
+    return this.sendOutbound(conversationId, 'template', displayText, (provider, number, customer) => provider.sendTemplate(toE164(number.phoneNumber), toE164(customer.phone), template.name, template.language, components));
+  }
+
+  /** Send a media message (image/document/etc). UNVERIFIED — sendMedia has never been called live, same as sendText/sendTemplate. Expects an already-hosted mediaUrl (see routes/media.ts for the R2-backed upload that produces one). */
+  async sendMediaReply(conversationId: string, mediaType: string, mediaUrl: string, caption: string): Promise<Message> {
+    const validMediaType = Validation.requiredString(mediaType, 'mediaType');
+    const validMediaUrl = Validation.requiredString(mediaUrl, 'mediaUrl');
+    const displayText = caption || `[Media: ${validMediaType}]`;
+    const message = await this.sendOutbound(conversationId, 'media', displayText, (provider, number, customer) => provider.sendMedia(toE164(number.phoneNumber), toE164(customer.phone), validMediaType, validMediaUrl, caption || ''));
+    await this.messageMedia.create({ id: Ids.create('media'), messageId: message.id, mediaType: validMediaType, mediaUrl: validMediaUrl, caption: caption || '' });
+    return message;
   }
 
   async resolveConversation(conversationId: string): Promise<Conversation> {

@@ -33,6 +33,12 @@ export interface ConversationListItem extends Conversation {
 
 export type MessageStatus = 'RECEIVED' | 'SENT' | 'DELIVERED' | 'READ' | 'FAILED' | 'UNKNOWN';
 
+export interface MessageMedia {
+  mediaType: string;
+  mediaUrl: string;
+  caption: string;
+}
+
 export interface Message {
   id: string;
   conversationId: string;
@@ -43,6 +49,28 @@ export interface Message {
   status: MessageStatus;
   timestamp: string;
   senderName?: string | null;
+  media?: MessageMedia | null;
+}
+
+export type TemplateStatus = 'LOCAL_DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED';
+
+export interface Template {
+  id: string;
+  wabaId: string;
+  providerTemplateId: string;
+  name: string;
+  language: string;
+  category: string;
+  status: TemplateStatus;
+  components: { type?: string; text?: string }[];
+  variables: string[];
+}
+
+export interface QuickReply {
+  id: string;
+  shortcut: string;
+  text: string;
+  active: boolean;
 }
 
 export interface Stage {

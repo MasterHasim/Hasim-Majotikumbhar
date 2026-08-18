@@ -8,6 +8,7 @@ import { NumberPicker } from './components/NumberPicker';
 import { Sidebar, type Page } from './components/Sidebar';
 import { Inbox } from './components/Inbox';
 import { Leads } from './components/Leads';
+import { Settings } from './components/Settings';
 
 async function signIn() {
   try {
@@ -149,11 +150,11 @@ export default function App() {
       <Sidebar number={activeNumber} whoAmI={whoAmI} page={page} onNavigate={setPage} onSwitchNumber={() => setActiveNumber(null)} onSignOut={() => void signOut(auth)} />
       <div id="mainArea">
         <div id="pageContent">
-          {page === 'inbox' ? (
+          {page === 'inbox' && (
             <Inbox number={activeNumber} initialConversationId={pendingConversationId} onInitialConversationConsumed={() => setPendingConversationId(null)} />
-          ) : (
-            <Leads whoAmI={whoAmI} onOpenConversation={openConversationFromLead} />
           )}
+          {page === 'leads' && <Leads whoAmI={whoAmI} onOpenConversation={openConversationFromLead} />}
+          {page === 'settings' && whoAmI.roleKeys.includes('ADMIN') && <Settings />}
         </div>
       </div>
     </div>
