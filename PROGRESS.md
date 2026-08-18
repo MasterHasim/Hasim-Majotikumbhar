@@ -102,13 +102,12 @@ Drive-equivalent host, likely Cloudflare R2, not set up yet).
 6. ✅ Exotel WhatsApp credentials set (`EXOTEL_API_KEY`/`API_TOKEN`/`ACCOUNT_SID`/`SUBDOMAIN`) — `sendReply` and the webhook can now actually reach WhatsApp.
 7. **Exotel Voice credentials received, not yet used** — you also provided `EXOTEL_VOICE_ACCOUNT_SID`/`API_KEY`/`API_TOKEN`/`CALLER_ID` for the click-to-call feature (Phase 22, see below). Kept for when that phase is built — not set as secrets yet since the code that would use them doesn't exist on this backend yet.
 
-### ⚠️ One thing you need to do right now: complete setup as the first admin
+### ✅ First admin account created — full pipeline confirmed live
 
-Nobody has actually finished sign-up on the new system yet — I checked the
-live database directly and it's empty. This is a one-click fix: open
-`http://localhost:5173` (or your own `npm run dev`), sign in with Google, and
-you'll see a **"Become the first admin"** button — click it once. After that,
-everything else works normally.
+You've completed bootstrap and confirmed `/api/whoami` returns real data
+(`ADMIN`, your actual name/email). This is the first genuine end-to-end proof
+on real infrastructure: Google sign-in → Firebase ID token → Workers backend
+→ Realtime Database → back to the browser, no mocks anywhere in that chain.
 
 ### 🆕 New feature found: location leads + click-to-call (Phase 22)
 
