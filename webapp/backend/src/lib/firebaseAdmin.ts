@@ -108,6 +108,21 @@ export async function mintCustomToken(serviceAccount: FirebaseServiceAccount, ui
 }
 
 export class FirebaseDb {
+  /**
+   * Request-scoped cache for list() — a FirebaseDb instance is created fresh per
+   * incoming request (see lib/requestContext.ts), so this cache naturally lives and
+   * dies with one request, never leaking across requests. Added after discovering
+   * (live, via wrangler tail, not guessed) that WorkspaceApi's aggregation was
+   * hitting Cloudflare's Free-tier 50-subrequest-per-invocation cap: every PhaseNApi
+   * builds its own AccessControl from a fresh buildPhase1Repositories() bundle, so
+   * one workspace fetch was re-reading users/roles/teams/teamMembers/numberAccess
+   * from scratch several times over, each re-read its own real HTTP subrequest to
+   * Firebase's REST API. Same fix the Apps Script build already made for
+   * SheetRepository (see PROGRESS.md) — a repeated list() on the same collection
+   * within one request should be one network read, not N.
+   */
+  private listCache = new Map<string, Promise<unknown[]>>();
+
   constructor(public readonly serviceAccount: FirebaseServiceAccount, public readonly databaseUrl: string) {}
 
   private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -122,14 +137,23 @@ export class FirebaseDb {
     return text ? (JSON.parse(text) as T) : (null as T);
   }
 
-  get<T>(path: string) { return this.request<T | null>('GET', path); }
-  put<T>(path: string, data: T) { return this.request<T>('PUT', path, data); }
-  patch<T>(path: string, data: Partial<T>) { return this.request<T>('PATCH', path, data); }
-  delete(path: string) { return this.request<null>('DELETE', path); }
+  /** Writes invalidate that collection's cached list() — a create/update/delete within a request must be visible to any list() called afterward in the same request. */
+  private invalidate(path: string): void {
+    this.listCache.delete(path.split('/')[0]!);
+  }
 
-  /** All records at a collection path, as an array (Realtime Database stores them as an object keyed by id). */
-  async list<T>(collection: string): Promise<T[]> {
-    const data = await this.get<Record<string, T>>(collection);
-    return data ? Object.values(data) : [];
+  get<T>(path: string) { return this.request<T | null>('GET', path); }
+  put<T>(path: string, data: T) { this.invalidate(path); return this.request<T>('PUT', path, data); }
+  patch<T>(path: string, data: Partial<T>) { this.invalidate(path); return this.request<T>('PATCH', path, data); }
+  delete(path: string) { this.invalidate(path); return this.request<null>('DELETE', path); }
+
+  /** All records at a collection path, as an array (Realtime Database stores them as an object keyed by id) — cached for the lifetime of this request. */
+  list<T>(collection: string): Promise<T[]> {
+    let cached = this.listCache.get(collection);
+    if (!cached) {
+      cached = this.get<Record<string, T>>(collection).then((data) => (data ? Object.values(data) : []));
+      this.listCache.set(collection, cached);
+    }
+    return cached as Promise<T[]>;
   }
 }
