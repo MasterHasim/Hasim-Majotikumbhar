@@ -141,6 +141,11 @@ select.btn { -webkit-appearance: none; appearance: none; }
 .mini-add button { padding: 0 10px; border: none; border-radius: 6px; background: var(--accent); color: #fff; cursor: pointer; font-size: 12px; }
 
 h1.page-title { font-size: 18px; margin: 0 0 16px; }
+h2.section-title { font-size: 14px; margin: 18px 0 8px; }
+.card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-bottom: 16px; max-width: 760px; }
+.form-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; align-items: center; }
+.form-row input, .form-row select { padding: 6px 9px; font-size: 13px; border: 1px solid var(--border); border-radius: 6px; }
+.form-error { color: var(--danger); font-size: 12px; margin: 4px 0; }
 
 /* ---- Full-page loading/error states ---- */
 .centered-message { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-secondary); font-size: 13px; }

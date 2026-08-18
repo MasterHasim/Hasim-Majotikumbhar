@@ -10,6 +10,9 @@ export const backendApi = {
 
   listMyNumbers: () => apiFetch<WhatsAppNumber[]>('/api/my-numbers'),
 
+  createNumber: (input: { displayName: string; phoneNumber: string; provider: string }) =>
+    apiFetch<WhatsAppNumber>('/api/numbers', { method: 'POST', body: JSON.stringify(input) }),
+
   listConversations: (numberId: string) => apiFetch<ConversationListItem[]>(`/api/conversations?numberId=${encodeURIComponent(numberId)}`),
 
   getWorkspace: (conversationId: string) => apiFetch<Workspace>(`/api/workspace/${encodeURIComponent(conversationId)}`),

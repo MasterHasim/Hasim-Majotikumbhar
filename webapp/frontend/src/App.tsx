@@ -122,7 +122,12 @@ export default function App() {
   if (!activeNumber) {
     return (
       <>
-        <NumberPicker numbers={numbers} onPick={setActiveNumber} />
+        <NumberPicker
+          numbers={numbers}
+          isAdmin={whoAmI.roleKeys.includes('ADMIN')}
+          onPick={setActiveNumber}
+          onNumberCreated={(created) => setNumbers((prev) => [...(prev ?? []), created])}
+        />
         {error && <p className="fatal-error">{error}</p>}
       </>
     );
