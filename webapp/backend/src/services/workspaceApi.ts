@@ -61,14 +61,14 @@ export class WorkspaceApi {
       stage: null, remarks: null, reminders: null, snoozeStatus: null, assignableUsers: [],
     };
 
-    try { workspace.stage = detail.customer ? await this.phase8.getCustomerStage(detail.customer.id) : null; } catch { workspace.stage = null; }
-    try { workspace.remarks = await this.phase8.listRemarks(conversationId); } catch { workspace.remarks = null; }
-    try { workspace.reminders = await this.phase9.listReminders(conversationId); } catch { workspace.reminders = null; }
-    try { workspace.snoozeStatus = await this.phase9.getSnoozeStatus(conversationId); } catch { workspace.snoozeStatus = null; }
-    try { workspace.assignableUsers = await this.phase7.listAssignableUsers(detail.conversation.numberId); } catch { workspace.assignableUsers = []; }
+    try { workspace.stage = detail.customer ? await this.phase8.getCustomerStage(detail.customer.id) : null; } catch (e) { console.error('workspace.stage failed', e); workspace.stage = null; }
+    try { workspace.remarks = await this.phase8.listRemarks(conversationId); } catch (e) { console.error('workspace.remarks failed', e); workspace.remarks = null; }
+    try { workspace.reminders = await this.phase9.listReminders(conversationId); } catch (e) { console.error('workspace.reminders failed', e); workspace.reminders = null; }
+    try { workspace.snoozeStatus = await this.phase9.getSnoozeStatus(conversationId); } catch (e) { console.error('workspace.snoozeStatus failed', e); workspace.snoozeStatus = null; }
+    try { workspace.assignableUsers = await this.phase7.listAssignableUsers(detail.conversation.numberId); } catch (e) { console.error('workspace.assignableUsers failed', e); workspace.assignableUsers = []; }
 
     if (includeRealtime) {
-      try { workspace.realtime = await this.realtime.getRealtimeListenToken(); } catch { workspace.realtime = null; }
+      try { workspace.realtime = await this.realtime.getRealtimeListenToken(); } catch (e) { console.error('workspace.realtime failed', e); workspace.realtime = null; }
     }
     return workspace;
   }
