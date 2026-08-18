@@ -145,16 +145,32 @@ are now set on the live backend — click-to-call is wired end-to-end, not just
 returning a configuration error — but the request/response shape itself is
 still unverified against a real Exotel account (see the task list).
 
-**The real frontend Inbox UI is built and live.** Until now every phase above
-was backend-only (API routes + business logic) — there was nothing to click
-on. `webapp/frontend/` now has: sign-in → bootstrap (first run) → number
-picker → sidebar-nav workspace shell → **Inbox page** — conversation list
-(search by name/phone), chat thread with text reply + resolve, and a CRM
-detail panel (reassign, lead stage, remarks, reminders, snooze), all wired
-to the live backend above. Design tokens/layout (`src/styles.css`) are
-ported directly from `apps-script/frontend/Index.html`'s mockup-matched CSS
-so the two builds look the same. Typechecks clean, production build clean,
-verified rendering correctly in a live browser session (no console errors).
+**✅ The real frontend Inbox UI is built, live, and confirmed working by you
+end-to-end.** Until now every phase above was backend-only (API routes +
+business logic) — there was nothing to click on. `webapp/frontend/` now has:
+sign-in → bootstrap (first run) → number picker → sidebar-nav workspace
+shell → **Inbox page** — conversation list (search by name/phone), chat
+thread with text reply + resolve, and a CRM detail panel (reassign, lead
+stage, remarks, reminders, snooze), all wired to the live backend above.
+Design tokens/layout (`src/styles.css`) are ported directly from
+`apps-script/frontend/Index.html`'s mockup-matched CSS so the two builds
+look the same. You registered all 10 real WhatsApp numbers via the new
+"Add a WhatsApp number" form (ADMIN-only), and confirmed live: the number
+picker, the Inbox shell, a real inbound test message (sent through the
+actual webhook ingestion pipeline, not faked), and — the big one — **a real
+reply sent successfully through Exotel** (green "SENT" bubble, no failure).
+One transient "conversation list briefly empty" glitch self-corrected within
+seconds (Cloudflare edge-propagation lag right after a secret rotation, same
+kind of transient seen elsewhere this session) — not a real bug.
+
+**Real bug found and fixed during this verification**: setting secrets via
+PowerShell's `"value" | wrangler secret put` pipeline silently appends a
+trailing newline, corrupting the secret. This broke `WEBHOOK_SECRET_TOKEN`
+(caught immediately — 401s until fixed) and had also corrupted all four
+`EXOTEL_VOICE_*` secrets set earlier the same way. All five have been
+re-set correctly via a newline-safe method (`printf '%s' ... | wrangler
+secret put`) — click-to-call should now actually reach Exotel instead of
+silently failing auth.
 **Live updates are polling-based for now (every 4s)**, not a real Firebase
 listener — the backend's realtime-token minting already exists, wiring an
 actual subscription is a deliberate fast-follow once you've confirmed this
@@ -308,7 +324,7 @@ build:
 5. Fill in `Spreewalk - Raipur` / `ECHT Advisory` provider fields — WhatsApp Numbers page → Edit (optional).
 6. Remove the ngrok callback URL from Exotel (optional).
 7. **Read `docs/ZOHO_PHASE_2.md` and answer its 5 open questions** whenever you're ready to think about Zoho.
-8. **[webapp] Click through the new Inbox UI at `http://localhost:5173`** — sign in, pick a number, open a conversation, send a reply, try reassign/stage/remark/reminder/snooze in the detail panel. This is the first time any of the webapp migration work is actually visible/usable — please confirm it works before I build further pages on top of it.
+8. ~~[webapp] Click through the new Inbox UI~~ — ✅ done by you 2026-08-18. Registered all 10 numbers, confirmed the Inbox shell, a real inbound test message via the actual webhook pipeline, and a real reply sent successfully through Exotel.
 9. **[webapp] Place one real Exotel Voice call to verify Phase 22's click-to-call.** The Exotel Voice secrets are now set on the live backend, but `ExotelVoiceProvider`'s request/response field names are still UNVERIFIED (carried over from the Apps Script build's own unverified version) — a real agent needs a `phone` set (Admin Panel → Users, once that page exists on the new backend, or via the API directly for now) and a lead assigned to them, then click-to-call once so I can confirm/fix the response parsing against what Exotel actually returns.
 
 ### Done (kept for history)
