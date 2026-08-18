@@ -2,12 +2,9 @@
  * Direct port of apps-script/src/Phase5Services.gs's Phase5Api — view-only inbox
  * reads. Every non-admin role needs an explicit numberAccess grant before anything
  * else is checked (AccessControl.hasGrantedNumber); team membership's numberIds is a
- * separate, additional scope used only for the team-view path.
- *
- * Snooze filtering (Phase9's isConversationSnoozed_ in the source) is not wired in
- * yet — that lands with CRM core (see PROGRESS.md); listConversations() currently
- * treats nothing as snoozed, same as the Apps Script build's own state before its
- * Phase 9 existed.
+ * separate, additional scope used only for the team-view path. Snooze filtering
+ * (isConversationSnoozed, src/services/phase9Api.ts) matches Phase9Domain.gs's
+ * isConversationSnoozed_.
  */
 import { ApiError } from '../types';
 import { Roles, Status, Validation } from '../domain/phase1';
@@ -18,6 +15,7 @@ import { AuditLogService } from '../lib/auditLog';
 import { FirebaseDb } from '../lib/firebaseAdmin';
 import { buildPhase1Repositories } from '../lib/phase1Repositories';
 import type { NumberAccess } from '../domain/types';
+import { isConversationSnoozed } from './phase9Api';
 
 export interface ConversationListItem extends Conversation {
   customerName: string;
@@ -39,7 +37,7 @@ export class Phase5Api {
   conversations: Repository<Conversation>;
   messages: Repository<Message>;
 
-  constructor(db: FirebaseDb, identityEmail: string) {
+  constructor(private db: FirebaseDb, identityEmail: string) {
     const repos = buildPhase1Repositories(db);
     const audit = new AuditLogService(db);
     this.access = new AccessControl(repos, audit, identityEmail);
@@ -75,6 +73,11 @@ export class Phase5Api {
     let results = (await this.conversations.list()).filter((c) => c.numberId === numberId);
     if (activeOnly) {
       results = results.filter((c) => c.status === 'OPEN');
+      const notSnoozed: Conversation[] = [];
+      for (const conversation of results) {
+        if (!(await isConversationSnoozed(this.db, conversation.id))) notSnoozed.push(conversation);
+      }
+      results = notSnoozed;
     }
     const visible: Conversation[] = [];
     for (const conversation of results) {

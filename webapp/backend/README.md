@@ -4,13 +4,14 @@ Replaces the Apps Script `.gs` business logic. Free tier: 100,000 requests/day,
 no credit card required. Live at `https://whatsapp-panel-backend.hasim-c9e.workers.dev`.
 
 **Status**: Foundation + Phase 1 (auth/roles/teams/number-access) + messaging
-core (numbers/customers/conversations/messages/webhook/send) ported, tested,
-and deployed live — see PROGRESS.md for the full verification history. 35
-automated tests cover the actual business logic against a mocked Firebase and
-a mocked Exotel endpoint (real RSA JWT signing/verification included, not
-stubbed out). Run `npm test`. A new feature found in the Apps Script build
-(Phase 22 — location leads + Exotel click-to-call) has been added to the
-migration plan, sequenced after CRM core.
+core (numbers/customers/conversations/messages/webhook/send) + CRM core
+(round-robin assignment, lead stages, remarks, reminders, snooze) ported,
+tested, and deployed live — see PROGRESS.md for the full verification
+history. 59 automated tests cover the actual business logic against a mocked
+Firebase and a mocked Exotel endpoint (real RSA JWT signing/verification
+included, not stubbed out). Run `npm test`. A new feature found in the Apps
+Script build (Phase 22 — location leads + Exotel click-to-call) has been
+added to the migration plan, sequenced right after CRM core, next up.
 
 ## Setup status
 
@@ -64,12 +65,19 @@ npm run typecheck
 - `src/services/phase3Api.ts` / `phase4Api.ts` / `phase5Api.ts` / `phase6Api.ts`
   / `workspaceApi.ts` / `realtimeListenApi.ts` — direct ports of
   `apps-script/src/Phase{3,4,5,6}Services.gs`, `WorkspaceServices.gs`, and
-  `RealtimeListenServices.gs`. Round-robin auto-assignment, snooze filtering,
-  and template/media sends are deferred to later phases on purpose (see
-  PROGRESS.md) — they don't exist on this backend yet.
-- `src/routes/phase1.ts` / `messaging.ts` — HTTP endpoints, one-to-one with
-  `apps-script/src/Phase1Endpoints.gs` / `Phase6Endpoints.gs` /
-  `Phase4Webhook.gs`.
+  `RealtimeListenServices.gs`. Template/media sends are deferred to a later
+  phase on purpose (see PROGRESS.md) — they don't exist on this backend yet.
+- `src/services/phase7Api.ts` (`Phase7Api` + `NumberAssignmentConfigApi`) /
+  `phase8Api.ts` / `phase9Api.ts` — direct ports of
+  `apps-script/src/Phase{7,8,9}{Domain,Services}.gs`: round-robin assignment
+  (eligibility + availability + numberAccess gating, rotation, returning-
+  customer inheritance, fallback, working hours, history), lead stages +
+  customer stage + remarks, and reminders + snooze. Wired into `phase4Api.ts`
+  (auto-assign new conversations) and `phase5Api.ts` (hide snoozed
+  conversations from the active inbox); `workspaceApi.ts` aggregates all of it.
+- `src/routes/phase1.ts` / `messaging.ts` / `crm.ts` — HTTP endpoints,
+  one-to-one with `apps-script/src/Phase1Endpoints.gs` / `Phase6Endpoints.gs` /
+  `Phase4Webhook.gs` / the Phase 7-9 endpoint files.
 - `test/helpers/mockFirebase.ts` — mocks Google's OAuth2/JWK endpoints, the
   Firebase REST API, and a fake Exotel endpoint for tests, the same "mock the
   external boundary, run the real code" pattern `apps-script/tests/*.js` used.

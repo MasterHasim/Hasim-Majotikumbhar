@@ -4,10 +4,11 @@
  * — a webhook has no signed-in identity; it's a system-level operation, audited with
  * actorUserId: null, same as the source.
  *
- * Round-robin auto-assignment (Phase7Api.assignConversation in the source) is not
- * wired in yet — that's CRM core (a separate migration phase, see PROGRESS.md), so a
- * brand-new conversation is left unassigned here for now, same as the Apps Script
- * build's own state before its Phase 7 existed.
+ * Round-robin auto-assignment (Phase7Api.assignConversation) runs for a brand-new
+ * conversation after the write completes, same ordering the source used relative to
+ * its own LockService lock (this backend has no equivalent lock to wait for release
+ * of — see src/lib/repository.ts's note on that trade-off — the ordering is kept
+ * anyway since it's the same logical sequence: message recorded first, then assigned).
  */
 import { ApiError } from '../types';
 import { Ids } from '../domain/phase1';
@@ -16,6 +17,7 @@ import { Repository } from '../lib/repository';
 import { AuditLogService } from '../lib/auditLog';
 import { FirebaseDb } from '../lib/firebaseAdmin';
 import { normalizePhoneTail, type NormalizedWebhookMessage } from './exotelProvider';
+import { Phase7Api } from './phase7Api';
 
 export interface IngestResult {
   duplicate?: boolean;
@@ -57,15 +59,19 @@ export class Phase4Api {
     const now = Ids.now();
     const incomingCustomerTail = normalizePhoneTail(normalized.fromPhone);
     let customer = await this.customers.findOne((c) => normalizePhoneTail(c.phone) === incomingCustomerTail);
+    let isNewCustomer = false;
     if (!customer) {
       customer = { id: Ids.create('customer'), phone: normalized.fromPhone ?? '', name: normalized.profileName || '', email: '', company: '', source: 'whatsapp', createdAt: now, updatedAt: now };
       await this.customers.create(customer);
+      isNewCustomer = true;
     }
 
     let conversation = await this.conversations.findOne((c) => c.customerId === customer!.id && c.numberId === number.id && c.status === 'OPEN');
+    let isNewConversation = false;
     if (!conversation) {
       conversation = { id: Ids.create('conversation'), customerId: customer.id, numberId: number.id, assignedUserId: '', status: 'OPEN', needsResponse: true, lastMessageAt: normalized.timestamp || now, createdAt: now, updatedAt: now };
       await this.conversations.create(conversation);
+      isNewConversation = true;
     }
 
     const message: Message = {
@@ -76,6 +82,13 @@ export class Phase4Api {
     await this.messages.create(message);
     await this.conversations.update(conversation.id, { needsResponse: true, lastMessageAt: message.timestamp });
     await this.audit.write(null, 'message.ingested', 'message', message.id, { conversationId: conversation.id, customerId: customer.id, numberId: number.id });
+
+    if (isNewConversation) {
+      // System-level operation, same as the rest of this method — the placeholder
+      // identity is never actually checked (assignConversation makes no
+      // AccessControl calls, same as apps-script/src/Phase7Services.gs's version).
+      await new Phase7Api(this.db, 'system@internal').assignConversation(conversation, isNewCustomer);
+    }
 
     return { duplicate: false, messageId: message.id, conversationId: conversation.id, customerId: customer.id };
   }

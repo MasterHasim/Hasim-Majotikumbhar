@@ -87,8 +87,31 @@ tested — every route, the webhook's shared-secret auth, and the "always
 200, real status in the body" behavior all confirmed working on the actual
 deployed URL, not just locally.
 
-Deferred to later phases on purpose (matches the task breakdown): round-robin
-auto-assignment on new conversations (CRM core), snooze filtering (CRM core),
+**CRM core (assignment, remarks, reminders, stages) ported, tested, and live.**
+Direct port of `apps-script/src/Phase{7,8,9}{Domain,Services}.gs` — the
+round-robin engine (`Phase7Api`/`NumberAssignmentConfigApi`: eligibility +
+availability + numberAccess gating, self-healing rotation pointer,
+returning-customer inheritance to their prior owner, fallback/unassigned
+queue, working-hours restriction, full assignment history), lead stages +
+per-customer stage + internal remarks (`Phase8Api`), and reminders + snooze
+(`Phase9Api` — snoozed conversations now correctly disappear from Phase 5's
+active inbox list). Wired into the two places the Apps Script build wired
+them: Phase4Api's webhook ingestion now auto-assigns every brand-new
+conversation, and Phase5Api's active-conversation list now filters out
+anything currently snoozed. `WorkspaceApi` restored to its full field set
+(stage/remarks/reminders/snoozeStatus/assignableUsers), matching the
+original aggregator exactly. 24 new automated tests (59 total) covering
+round-robin rotation across multiple eligible agents, the
+eligible-but-unavailable-is-skipped case, returning-customer routing once
+their prior conversation is closed, config/participant CRUD and its
+authorization gates, stage/remark/customer visibility scoping, and
+reminder/snooze lifecycle including the "hidden from active inbox, visible
+in all-statuses view" behavior. Exposed via 25 new routes in a new
+`src/routes/crm.ts`, deployed live, and smoke-tested (every new route
+correctly requires auth — 401 without a token, not 404 — confirming the
+whole set is live and wired).
+
+Deferred to later phases on purpose (matches the task breakdown):
 sendTemplateReply/sendMediaReply/file upload (templates & media — needs a
 Drive-equivalent host, likely Cloudflare R2, not set up yet).
 
@@ -133,8 +156,8 @@ build:
 1. ~~Foundation (backend + frontend scaffolding, auth pipeline proven)~~ ✅ done
 2. ~~Phase 1 — auth, roles, teams, number access~~ ✅ done, tested
 3. ~~Messaging core — numbers, customers, conversations, messages, webhook, send~~ ✅ done, tested, live
-4. CRM core — assignment, remarks, reminders, stages — **next**
-5. Location leads + click-to-call (Phase 22) — new, added to the plan
+4. ~~CRM core — assignment, remarks, reminders, stages~~ ✅ done, tested, live
+5. Location leads + click-to-call (Phase 22) — **next**
 6. Templates, quick replies, media
 7. Admin panel, notifications, dashboard, audit/backup
 8. Parallel-run validation, then cutover (Apps Script stays live and untouched the entire time)

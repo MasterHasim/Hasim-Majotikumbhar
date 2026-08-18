@@ -109,3 +109,75 @@ export interface Message extends Record_ {
   status: MessageStatus;
   timestamp: string;
 }
+
+// --- CRM core (port of Phase7/8/9/12's slice of Phase2Domain.gs's Phase2Schemas) ---
+
+export interface AssignmentRecord extends Record_ {
+  conversationId: string;
+  userId: string;
+  assignedBy: string;
+  assignedAt: string;
+  reason: string;
+}
+
+export interface NumberAssignmentConfig extends Record_ {
+  numberId: string;
+  roundRobinEnabled: boolean;
+  fallbackUserId: string;
+  workingHoursStart: string;
+  workingHoursEnd: string;
+  lastAssignedUserId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface NumberAssignmentUser extends Record_ {
+  numberId: string;
+  userId: string;
+  sequenceOrder: number;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Stage extends Record_ {
+  key: string;
+  name: string;
+  sequenceOrder: number;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CustomerStage extends Record_ {
+  customerId: string;
+  stageId: string;
+  setByUserId: string;
+  updatedAt: string;
+}
+
+export interface Remark extends Record_ {
+  conversationId: string;
+  authorUserId: string;
+  text: string;
+  createdAt: string;
+}
+
+export type ReminderStatus = 'PENDING' | 'COMPLETED' | 'CANCELLED';
+
+export interface Reminder extends Record_ {
+  conversationId: string;
+  ownerUserId: string;
+  text: string;
+  dueAt: string;
+  status: ReminderStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ConversationSnooze extends Record_ {
+  conversationId: string;
+  snoozedUntil: string;
+  snoozedByUserId: string;
+  createdAt: string;
+}

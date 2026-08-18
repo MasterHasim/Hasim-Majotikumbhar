@@ -4,6 +4,7 @@ import { ApiError } from './types';
 import { withCors } from './lib/cors';
 import { registerPhase1Routes } from './routes/phase1';
 import { registerMessagingRoutes } from './routes/messaging';
+import { registerCrmRoutes } from './routes/crm';
 
 const router = Router();
 
@@ -11,6 +12,7 @@ router.get('/health', () => Response.json({ status: 'ok', service: 'whatsapp-pan
 
 registerPhase1Routes(router);
 registerMessagingRoutes(router);
+registerCrmRoutes(router);
 
 router.all('*', () => new Response('Not found', { status: 404 }));
 
