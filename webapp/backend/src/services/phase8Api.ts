@@ -35,7 +35,7 @@ export class Phase8Api {
     this.stages = new Repository<Stage>(db, 'stages');
     this.customerStages = new Repository<CustomerStage>(db, 'customerStages');
     this.customers = new Repository<Customer>(db, 'customers');
-    this.conversations = new Repository<Conversation>(db, 'conversations');
+    this.conversations = new Repository<Conversation>(db, 'webapp_conversations');
     this.remarks = new Repository<Remark>(db, 'remarks');
   }
 

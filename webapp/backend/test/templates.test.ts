@@ -110,7 +110,7 @@ describe('Phase10Api / Phase11Api / Phase6Api template+media additions', () => {
     beforeEach(async () => {
       const result = await new Phase4Api(db).ingestInboundMessage({ providerMessageId: 'msg-1', fromPhone: '+919876543210', providerNumberId: '+917948502801', direction: 'INBOUND', messageType: 'text', text: 'Hi', timestamp: new Date().toISOString(), status: null });
       conversationId = result.conversationId!;
-      await db.put(`conversations/${conversationId}`, { ...(await db.get(`conversations/${conversationId}`) as object), assignedUserId: agentId });
+      await db.put(`webapp_conversations/${conversationId}`, { ...(await db.get(`webapp_conversations/${conversationId}`) as object), assignedUserId: agentId });
     });
 
     it('rejects sending a template that is not APPROVED', async () => {

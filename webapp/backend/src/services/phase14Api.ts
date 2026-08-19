@@ -52,8 +52,8 @@ export class Phase14Api {
     this.access = new AccessControl(repos, audit, identityEmail);
     this.users = repos.users;
     this.phase5 = new Phase5Api(db, identityEmail);
-    this.conversations = new Repository<Conversation>(db, 'conversations');
-    this.messages = new Repository<Message>(db, 'messages');
+    this.conversations = new Repository<Conversation>(db, 'webapp_conversations');
+    this.messages = new Repository<Message>(db, 'webapp_messages');
     this.customerStages = new Repository<CustomerStage>(db, 'customerStages');
     this.stages = new Repository<Stage>(db, 'stages');
   }

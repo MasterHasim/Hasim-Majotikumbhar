@@ -122,7 +122,7 @@ describe('Messaging core (ported from Phase 3-6 + WorkspaceServices.gs)', () => 
       const result = await new Phase4Api(db).ingestInboundMessage({ providerMessageId: 'msg-1', fromPhone: '+919876543210', providerNumberId: '+917948502801', direction: 'INBOUND', messageType: 'text', text: 'Hi', timestamp: new Date().toISOString(), status: null });
       conversationId = result.conversationId!;
       // Assign to the agent so 'reply' authorization passes (no round-robin ported yet — assign directly for this test).
-      await db.put(`conversations/${conversationId}`, { ...(await db.get(`conversations/${conversationId}`) as object), assignedUserId: agentId });
+      await db.put(`webapp_conversations/${conversationId}`, { ...(await db.get(`webapp_conversations/${conversationId}`) as object), assignedUserId: agentId });
     });
 
     it('sends a reply, records it as SENT, and clears needsResponse', async () => {

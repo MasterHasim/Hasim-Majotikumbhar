@@ -112,7 +112,7 @@ export class Phase7Api {
     this.phase1Repos = buildPhase1Repositories(db);
     this.audit = new AuditLogService(db);
     this.access = new AccessControl(this.phase1Repos, this.audit, identityEmail);
-    this.conversations = new Repository<Conversation>(db, 'conversations');
+    this.conversations = new Repository<Conversation>(db, 'webapp_conversations');
     this.assignments = new Repository<AssignmentRecord>(db, 'assignments');
     this.assignConfig = new Repository<NumberAssignmentConfig>(db, 'numberAssignmentConfig');
     this.assignUsers = new Repository<NumberAssignmentUser>(db, 'numberAssignmentUsers');

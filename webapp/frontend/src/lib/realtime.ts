@@ -13,9 +13,12 @@
  * backend's Bearer token, and a second sign-in on the same instance would replace
  * it. REST sidesteps that entirely — exchange the custom token for an ID token via
  * Identity Toolkit, then stream the Realtime Database's REST endpoint as
- * Server-Sent Events. The exact same approach already confirmed live in the Apps
- * Script build (PROGRESS.md, "Real-time message delivery is live and confirmed
- * working end-to-end").
+ * Server-Sent Events. The same approach already confirmed live in the Apps Script
+ * build (PROGRESS.md, "Real-time message delivery is live and confirmed working
+ * end-to-end") — but as of the webapp_conversations/webapp_messages rename (see
+ * PROGRESS.md, "data isolation from the live Apps Script build"), this path needs
+ * its own security rule in the Firebase console; it's a separate path from the one
+ * Apps Script's rule covers, even though both live in the same Firebase project.
  */
 import type { RealtimeListenToken } from '../types';
 
@@ -33,7 +36,7 @@ export function connectRealtimeMessages(tokenResult: RealtimeListenToken, conver
     .then((auth: { idToken?: string }) => {
       if (stopped) return;
       if (!auth.idToken) { console.error('RealtimeListener: signInWithCustomToken failed', auth); return; }
-      const url = `${tokenResult.databaseUrl}/messages.json?auth=${encodeURIComponent(auth.idToken)}` +
+      const url = `${tokenResult.databaseUrl}/webapp_messages.json?auth=${encodeURIComponent(auth.idToken)}` +
         `&orderBy=${encodeURIComponent('"conversationId"')}&equalTo=${encodeURIComponent(`"${conversationId}"`)}`;
       es = new EventSource(url);
       es.addEventListener('put', onEvent);

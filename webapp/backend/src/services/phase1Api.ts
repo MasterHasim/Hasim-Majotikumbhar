@@ -4,7 +4,7 @@
  * for the original synchronous version this is ported from.
  */
 import { ApiError } from '../types';
-import { Ids, Permissions, RoleDefinitions, ROLE_KEYS, Roles, Status, Validation, type RoleKey } from '../domain/phase1';
+import { ALL_PERMISSIONS, Ids, Permissions, RoleDefinitions, ROLE_KEYS, Roles, Status, Validation, type Permission, type RoleKey } from '../domain/phase1';
 import type { AssignmentEligibility, Availability, NumberAccess, Role, Team, TeamMember, User } from '../domain/types';
 import { Repository } from '../lib/repository';
 import { AccessControl, type Phase1Repositories } from '../lib/accessControl';
@@ -143,7 +143,7 @@ export class Phase1Api {
 
   async updateTeam(id: string, patch: Record<string, unknown>): Promise<Team> {
     const actor = await this.access.requireTeamOperation(Permissions.TEAMS_CONTROL_OWN, id);
-    const safePatch = this.validatePatch('teams', patch);
+    const safePatch = await this.validatePatch('teams', patch);
     const record = await this.repos.teams.update(id, safePatch);
     await this.audit.write(actor.id, 'team.updated', 'teams', id, {});
     return record;
@@ -180,7 +180,7 @@ export class Phase1Api {
     const member = await this.repos.teamMembers.get(id);
     if (!member) throw new ApiError(404, 'NOT_FOUND', 'Team member was not found.');
     const actor = await this.access.requireTeamOperation(Permissions.TEAMS_CONTROL_OWN, member.teamId);
-    const safePatch = this.validatePatch('teamMembers', patch);
+    const safePatch = await this.validatePatch('teamMembers', patch);
     const record = await this.repos.teamMembers.update(id, safePatch);
     await this.audit.write(actor.id, 'teamMember.updated', 'teamMember', id, {});
     return record;
@@ -273,7 +273,7 @@ export class Phase1Api {
     const actor = await this.access.require(permission);
     const prior = await repo.get(id);
     if (!prior) throw new ApiError(404, 'NOT_FOUND', `${collection} record was not found.`);
-    const safePatch = this.validatePatch(collection, patch);
+    const safePatch = await this.validatePatch(collection, patch);
     if (collection === 'users' && safePatch.email && safePatch.email !== (prior as unknown as User).email) {
       if (await this.repos.users.findOne((u) => u.email === safePatch.email)) throw new ApiError(409, 'CONFLICT', 'A user with this email exists.');
     }
@@ -291,7 +291,7 @@ export class Phase1Api {
     }
   }
 
-  private validatePatch(collection: string, patch: Record<string, unknown>): Record<string, unknown> {
+  private async validatePatch(collection: string, patch: Record<string, unknown>): Promise<Record<string, unknown>> {
     const allowedFields: Record<string, string[]> = {
       users: ['email', 'displayName', 'status', 'roleIds', 'phone'], roles: ['key', 'name', 'permissions', 'status'], teams: ['name', 'status'],
       teamMembers: ['status', 'numberIds'], numberAccess: ['status', 'granted'],
@@ -313,6 +313,14 @@ export class Phase1Api {
       Validation.enumValue(result.status, permitted, 'status');
     }
     if (result.granted !== undefined && typeof result.granted !== 'boolean') throw new ApiError(400, 'VALIDATION_ERROR', 'granted must be boolean.');
+    if (result.roleIds !== undefined) { result.roleIds = Validation.stringArray(result.roleIds, 'roleIds'); await this.assertRoleIds(result.roleIds as string[]); }
+    if (result.numberIds !== undefined) result.numberIds = Validation.stringArray(result.numberIds, 'numberIds');
+    if (result.permissions !== undefined) {
+      result.permissions = Validation.stringArray(result.permissions, 'permissions');
+      for (const permission of result.permissions as string[]) {
+        if (!ALL_PERMISSIONS.includes(permission as Permission)) throw new ApiError(400, 'VALIDATION_ERROR', `Unknown permission: ${permission}`);
+      }
+    }
     return result;
   }
 }

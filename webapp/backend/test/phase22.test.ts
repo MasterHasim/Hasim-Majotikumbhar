@@ -297,7 +297,7 @@ describe('Phase22Api (ported from Phase22Domain.gs + Phase22Services.gs)', () =>
     it('initiateConversationCall uses the conversation number as caller ID', async () => {
       await new Phase1Api(db, ADMIN_EMAIL).grantNumberAccess({ userId: agentId, numberId });
       const { conversationId } = await new Phase22Api(db, AGENT_EMAIL).startWhatsAppFromLead(leadId);
-      await db.put(`conversations/${conversationId}`, { ...(await db.get(`conversations/${conversationId}`) as object), assignedUserId: agentId });
+      await db.put(`webapp_conversations/${conversationId}`, { ...(await db.get(`webapp_conversations/${conversationId}`) as object), assignedUserId: agentId });
       const call = await new Phase22Api(db, AGENT_EMAIL, mock.exotelVoiceConfig as never).initiateConversationCall(conversationId);
       expect(call.callerId).toBe('079-485-02801');
       expect(mock.exotelVoiceCalls.at(-1)!.params.CallerId).toBe('079-485-02801');

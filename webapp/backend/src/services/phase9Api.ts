@@ -27,7 +27,7 @@ export class Phase9Api {
     this.access = new AccessControl(this.phase1Repos, this.audit, identityEmail);
     this.reminders = new Repository<Reminder>(db, 'reminders');
     this.snoozes = new Repository<ConversationSnooze>(db, 'conversationSnoozes');
-    this.conversations = new Repository<Conversation>(db, 'conversations');
+    this.conversations = new Repository<Conversation>(db, 'webapp_conversations');
   }
 
   async createReminder(conversationId: string, text: string, dueAt: string): Promise<Reminder> {

@@ -62,7 +62,7 @@ export class Phase22Api {
     this.leadStages = new Repository<LeadStageAssignment>(db, 'leadStageAssignments');
     this.leadRemarks = new Repository<LeadRemark>(db, 'leadRemarks');
     this.customers = new Repository<Customer>(db, 'customers');
-    this.conversations = new Repository<Conversation>(db, 'conversations');
+    this.conversations = new Repository<Conversation>(db, 'webapp_conversations');
     this.numbers = new Repository<WhatsAppNumber>(db, 'numbers');
     if (env) this.exotelVoiceConfig = requireExotelVoiceConfig(env);
   }

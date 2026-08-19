@@ -44,7 +44,7 @@ export class Phase13Api {
   constructor(db: FirebaseDb, identityEmail: string) {
     this.phase5 = new Phase5Api(db, identityEmail);
     this.customers = new Repository<Customer>(db, 'customers');
-    this.messages = new Repository<Message>(db, 'messages');
+    this.messages = new Repository<Message>(db, 'webapp_messages');
     this.numbers = new Repository<WhatsAppNumber>(db, 'numbers');
     this.customerStages = new Repository<CustomerStage>(db, 'customerStages');
   }

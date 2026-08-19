@@ -121,7 +121,7 @@ describe('CRM core (ported from Phase7-9 Domain/Services.gs)', () => {
       expect(firstDetail.conversation.assignedUserId).toBe(agentId); // first round-robin pick
 
       // close the customer's only conversation so the next inbound message opens a NEW one
-      await db.put(`conversations/${first.conversationId}`, { ...(await db.get(`conversations/${first.conversationId}`) as object), status: 'CLOSED' });
+      await db.put(`webapp_conversations/${first.conversationId}`, { ...(await db.get(`webapp_conversations/${first.conversationId}`) as object), status: 'CLOSED' });
 
       const second = await ingest('msg-2', '+919876543210');
       expect(second.conversationId).not.toBe(first.conversationId);

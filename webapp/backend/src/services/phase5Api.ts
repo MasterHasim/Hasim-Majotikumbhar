@@ -44,8 +44,8 @@ export class Phase5Api {
     this.numberAccess = repos.numberAccess;
     this.numbers = new Repository<WhatsAppNumber>(db, 'numbers');
     this.customers = new Repository<Customer>(db, 'customers');
-    this.conversations = new Repository<Conversation>(db, 'conversations');
-    this.messages = new Repository<Message>(db, 'messages');
+    this.conversations = new Repository<Conversation>(db, 'webapp_conversations');
+    this.messages = new Repository<Message>(db, 'webapp_messages');
   }
 
   async listMyNumbers(): Promise<WhatsAppNumber[]> {

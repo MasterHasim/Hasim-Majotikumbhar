@@ -110,7 +110,7 @@ describe('Phase14Api (ported from Phase14Services.gs)', () => {
     const result = await ingest('msg-1', '+919876543210');
     await new Phase7Api(db, ADMIN_EMAIL).reassignConversation(result.conversationId!, agentId);
     // Directly write a template-type message the same way Phase6Api.sendTemplateReply would, to avoid needing a real APPROVED template fixture here.
-    await db.put(`messages/msg_template_1`, {
+    await db.put(`webapp_messages/msg_template_1`, {
       id: 'msg_template_1', conversationId: result.conversationId, numberId, senderUserId: agentId,
       direction: 'OUTBOUND', messageType: 'template', messageText: '[Template: welcome]', providerMessageId: '', status: 'SENT', timestamp: new Date().toISOString(),
     });

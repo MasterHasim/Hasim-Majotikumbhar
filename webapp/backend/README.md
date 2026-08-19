@@ -9,11 +9,17 @@ deployed live — auth/roles/teams/number-access, messaging core, CRM core
 (location leads + Exotel click-to-call), templates/quick-replies/media,
 admin panel, search/notifications, dashboard & analytics, backup, and
 R2-backed local-file media upload. See PROGRESS.md for the full
-verification history. 123 automated tests cover the actual business logic
+verification history. 127 automated tests cover the actual business logic
 against a mocked Firebase and mocked Exotel WhatsApp + Voice endpoints
 (real RSA JWT signing/verification included, not stubbed out), plus an
 in-memory fake R2 binding for the upload path. Run `npm test`. Next up:
-parallel-run validation, then cutover.
+parallel-run validation, then cutover — see PROGRESS.md's "Parallel-run
+validation, round 1" for the data-isolation fix (webapp's `conversations`/
+`messages` collections are now `webapp_conversations`/`webapp_messages`,
+since they used to collide with apps-script's live data in the same
+Firebase project) and a real validation bug fixed (`Phase1Api.validatePatch`
+was missing `roleIds`/`numberIds`/`permissions` checks the apps-script
+original always had).
 
 ## Setup status
 
@@ -81,6 +87,13 @@ npm run typecheck
   `apps-script/src/Phase{10,11}Services.gs`: template draft → submit → sync
   workflow (real `ExotelProvider.createTemplate`/`getTemplates` calls,
   ADMIN-only) and quick-reply CRUD.
+- Every service's `conversations`/`messages` `Repository` is actually keyed
+  `webapp_conversations`/`webapp_messages` in Firebase — apps-script writes
+  its own live data to the plain `conversations`/`messages` paths in the
+  same Firebase project (`whatsapp-panel-db`), so this backend uses
+  separate paths to avoid colliding with data the daily-use system depends
+  on. Every other collection (`numbers`, `customers`, `users`, etc.) was
+  already exclusive to this backend, so nothing else needed renaming.
 - `src/lib/firebaseAdmin.ts`'s `FirebaseDb` has a request-scoped `list()`
   cache (writes invalidate their collection) — added after live logs
   (`wrangler tail`) showed `WorkspaceApi`'s aggregation hitting Cloudflare's

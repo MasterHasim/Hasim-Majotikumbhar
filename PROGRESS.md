@@ -313,6 +313,79 @@ be running — check `http://localhost:5173`) and sign in with your Google
 Workspace account. It already talks to the live backend, no local backend
 server needed.
 
+## ✅ Parallel-run validation, round 1: data isolation + a real bug fix (2026-08-19)
+
+Before any live-traffic parallel-run testing, found and fixed a real safety
+gap: **webapp and apps-script were pointed at the exact same Firebase
+Realtime Database** (`whatsapp-panel-db`), and both used the identical
+collection names `conversations`/`messages` for their live data. apps-script
+migrated those two tables to Firebase back on 2026-08-11 (see `memory/DECISIONS.md`);
+webapp's `.env.example`/`wrangler.toml` reused the same project from day
+one, since it was "already in use" — but nobody had checked whether the two
+builds' collection names actually collided. They did. In its current state
+this was mostly harmless (webapp's own webhook has never been pointed at
+real Exotel traffic, so it wasn't writing real conversations), but any
+parallel-run test that exercised webapp's ingestion for real would have
+written into the exact collection apps-script's live daily-use agents read
+from — with webapp's own independently-bootstrapped number/customer IDs, which
+wouldn't resolve on the apps-script side.
+
+**Fixed by renaming webapp's copies of those two collections** to
+`webapp_conversations`/`webapp_messages` — a code-only change (`Repository`
+constructor calls in 9 backend service files, the frontend's realtime
+EventSource URL in `lib/realtime.ts`), not a new Firebase project. Every
+other collection webapp uses (`numbers`, `customers`, `users`, `roles`,
+`teams`, `templates`, `quickReplies`, etc.) was already exclusive to
+webapp — apps-script keeps those on Sheets, not Firebase — so only these two
+needed touching. 127 backend tests passing (4 new), deployed and
+smoke-tested live.
+
+**One manual step left to fully finish this**: the browser's live "new
+message appears without refreshing" feature (`lib/realtime.ts`) reads
+`webapp_messages` directly via a Firebase security rule — and that rule
+only exists for the old `messages` path today (configured directly in the
+Firebase console, not in this repo). Until you duplicate that rule for
+`webapp_messages`, the realtime push feature will silently stop working in
+webapp (a normal refresh/reopen still shows new messages, just not
+instantly). **To fix**: Firebase Console → your project → Realtime
+Database → Rules → find the existing rule block for `messages` → duplicate
+it → rename the duplicate's key to `webapp_messages` → Publish. Same
+structure, new key, nothing else to figure out.
+
+**Also ran a full phase-by-phase logic-parity audit** (apps-script `.gs`
+originals vs. the webapp TypeScript port, all 15 phases, cross-referenced
+against git history on both sides for fixes that might not have carried
+over). Found and fixed one real, verified bug: **`Phase1Api.validatePatch`
+(`webapp/backend/src/services/phase1Api.ts`) was silently dropping
+`roleIds`/`numberIds`/`permissions` validation** that the apps-script
+original (`Phase1Services.gs`'s `validatePatch_`) has always had — a
+`PATCH /api/users/:id` with a `roleIds` array referencing a deleted/nonexistent
+role, or a non-array value, would previously be accepted without error
+(risking a later crash wherever `AccessControl` calls `.includes()` on it),
+and `PATCH /api/team-members/:id`'s `numberIds` had the same gap. Now
+validated identically to the original: array-of-strings + roles must
+actually exist. 4 new regression tests. Everything else audited (Phase 1
+core authorization, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 22, plus the
+repository/caching layers) came back semantically identical — no other
+drift found. Two more differences were noted but are deliberate, not bugs:
+no automatic scheduled backup exists in webapp (see above), and the old
+temp-password/forced-password-change flow has no equivalent since webapp
+uses Firebase Auth exclusively.
+
+**QA baseline confirmed green across the board**: apps-script's 24 Node
+test suites, webapp/backend's 127 Vitest tests, and webapp/frontend's
+typecheck + production build all pass with zero regressions.
+
+**Next for parallel-run validation**: with data isolation done, the
+remaining piece is verifying webapp's *behavior* against real traffic
+without disrupting apps-script — this still needs a deliberate decision
+about how (e.g. a temporary dual-webhook forward from apps-script's live
+endpoint, or manually replaying real captured payloads against webapp's
+`/webhook/exotel`) rather than pointing Exotel's dashboard at webapp
+directly, which would stop apps-script from receiving that number's
+messages entirely. Flagging this for a decision before proceeding further,
+rather than picking one unilaterally.
+
 ### Setup status — everything is now set
 
 1. ✅ Cloudflare account created, `wrangler login` done.
@@ -458,6 +531,8 @@ build:
 8. ~~[webapp] Click through the new Inbox UI~~ — ✅ done by you 2026-08-18. Registered all 10 numbers, confirmed the Inbox shell, a real inbound test message via the actual webhook pipeline, and a real reply sent successfully through Exotel.
 9. **[webapp] Place one real Exotel Voice call to verify Phase 22's click-to-call.** The Exotel Voice secrets are now set on the live backend, but `ExotelVoiceProvider`'s request/response field names are still UNVERIFIED (carried over from the Apps Script build's own unverified version) — a real agent needs a `phone` set (Admin Panel → Users, once that page exists on the new backend, or via the API directly for now) and a lead assigned to them, then click-to-call once so I can confirm/fix the response parsing against what Exotel actually returns.
 10. ~~[webapp] Enable R2 in the Cloudflare dashboard~~ — ✅ done by you 2026-08-19, no credit card needed. Bucket created, bound, and local-file media upload (the last piece of Phase 10/11) is built, tested, and deployed.
+11. **[webapp] Duplicate one Firebase security rule for the new `webapp_messages` path.** Firebase Console → Realtime Database → Rules → find the existing rule block for `messages` → duplicate it → rename the duplicate's key to `webapp_messages` → Publish. Needed because webapp's `conversations`/`messages` collections were just renamed to `webapp_conversations`/`webapp_messages` to stop colliding with apps-script's live data (see "Parallel-run validation, round 1" above) — until this rule exists, webapp's live "new message without refreshing" feature won't work (a manual refresh still shows new messages).
+12. **[webapp] Decide how real-traffic parallel-run testing should actually happen**, now that the data-isolation blocker is fixed. Exotel only supports one webhook URL per number, so pointing it at webapp even briefly would stop apps-script from receiving that number's messages — not something to do without your sign-off. Options to pick from when you're ready: (a) temporarily point one *spare/test* number's webhook at webapp instead of a live one, (b) have apps-script's webhook forward a copy of each payload to webapp's `/webhook/exotel` (dual-write, no Exotel reconfiguration), or (c) keep validating with replayed/synthetic payloads only, and defer real traffic until closer to actual cutover.
 
 ### Done (kept for history)
 

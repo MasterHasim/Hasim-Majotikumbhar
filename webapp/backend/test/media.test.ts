@@ -53,7 +53,7 @@ describe('Phase6Api.uploadConversationMedia (R2-backed, free-tier equivalent of 
       direction: 'INBOUND', messageType: 'text', text: 'Hi', timestamp: new Date().toISOString(), status: null,
     });
     conversationId = result.conversationId!;
-    await db.put(`conversations/${conversationId}`, { ...(await db.get(`conversations/${conversationId}`) as object), assignedUserId: agentId });
+    await db.put(`webapp_conversations/${conversationId}`, { ...(await db.get(`webapp_conversations/${conversationId}`) as object), assignedUserId: agentId });
   });
 
   afterEach(() => mock.restore());

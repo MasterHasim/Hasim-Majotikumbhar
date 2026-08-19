@@ -98,6 +98,37 @@ describe('Phase1Api (ported from apps-script/src/Phase1Services.gs)', () => {
     });
   });
 
+  describe('validatePatch (field validation on update — matches Phase1Services.gs validatePatch_)', () => {
+    it('updateUser rejects a roleIds patch that references a nonexistent role', async () => {
+      await expect(apiAs(ADMIN_EMAIL).updateUser(agentId, { roleIds: ['role_does_not_exist'] })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    });
+
+    it('updateUser rejects a roleIds patch that is not an array of strings', async () => {
+      await expect(apiAs(ADMIN_EMAIL).updateUser(agentId, { roleIds: 'not-an-array' })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    });
+
+    async function createSiteManagerOwnedTeam(name: string) {
+      const roles = await apiAs(ADMIN_EMAIL).listRoles();
+      const siteManagerRoleId = roles.find((r) => r.key === Roles.SITE_MANAGER)!.id;
+      const slug = name.toLowerCase().replace(/\s+/g, '-');
+      const owner = await apiAs(ADMIN_EMAIL).createUser({ email: `${slug}-owner@example.com`, displayName: 'Owner', roleIds: [siteManagerRoleId] });
+      return apiAs(ADMIN_EMAIL).createTeam({ name, ownerUserId: owner.id });
+    }
+
+    it('updateTeamMember rejects a numberIds patch that is not an array of strings', async () => {
+      const team = await createSiteManagerOwnedTeam('Team A');
+      const member = await apiAs(ADMIN_EMAIL).addTeamMember({ teamId: team.id, userId: agentId });
+      await expect(apiAs(ADMIN_EMAIL).updateTeamMember(member.id, { numberIds: 'not-an-array' })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    });
+
+    it('updateTeamMember accepts a valid numberIds patch', async () => {
+      const team = await createSiteManagerOwnedTeam('Team B');
+      const member = await apiAs(ADMIN_EMAIL).addTeamMember({ teamId: team.id, userId: agentId });
+      const updated = await apiAs(ADMIN_EMAIL).updateTeamMember(member.id, { numberIds: [numberId] });
+      expect(updated.numberIds).toEqual([numberId]);
+    });
+  });
+
   describe('requireConversationOperation (the core authorization gate)', () => {
     it('ADMIN can view/reply/reassign on any number without an explicit grant', async () => {
       const access = apiAs(ADMIN_EMAIL).access;
