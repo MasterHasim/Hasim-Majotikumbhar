@@ -232,6 +232,22 @@ as a separate nav item), and **Audit Log** (read-only, newest first, capped
 at 300 rows shown). Typechecks/builds clean, verified rendering with no
 console errors on a fresh load.
 
+**✅ Search/filters + needs-response badges (Phase 13) are ported —
+backend and frontend both.** Direct port of
+`apps-script/src/Phase13Services.gs`'s `Phase13Api`: `searchConversations`
+(spans every number the caller can access unless one is specified, filters
+by assignee/customer/stage/status/needs-response/unassigned/date range,
+free-text `query` matching customer name/phone or message text, all
+composed on top of `Phase5Api`'s already-enforced authorization rather than
+reimplementing it) and `getNeedsResponseCounts` (open + needs-response
+conversation counts per number). The Inbox's conversation list gained a
+status filter and needs-response/unassigned checkboxes (switches to the new
+search endpoint only when a filter or search text is active, otherwise
+keeps using the faster plain active-list fetch); the number picker and the
+sidebar's current-number pill both show live needs-response badges, polled
+every 20s. 8 new backend tests (110 total), deployed and smoke-tested live;
+frontend typechecks/builds clean, verified rendering with no console errors.
+
 **Deliberately not built yet: file upload for media** (Apps Script's
 `uploadConversationMedia` used Drive; the free-tier equivalent here is
 Cloudflare R2, and **R2 needs to be enabled once in the Cloudflare
@@ -240,8 +256,8 @@ failed with `Please enable R2 through the Cloudflare Dashboard [code:
 10042]`. `sendMediaReply` itself works today with any already-hosted URL;
 only "pick a local file and have the panel host it for you" is blocked on
 this one manual step — see the task list. Also not yet built: dashboard/
-reports and notifications/search — the remaining pieces of full Apps
-Script parity.
+reports and automated backups — the remaining pieces of full Apps Script
+parity.
 
 **How to see it**: run `npm run dev` in `webapp/frontend/` (or it may already
 be running — check `http://localhost:5173`) and sign in with your Google
@@ -292,7 +308,7 @@ build:
 4. ~~CRM core — assignment, remarks, reminders, stages~~ ✅ done, tested, live
 5. ~~Location leads + click-to-call (Phase 22)~~ ✅ done, tested, live (Voice call itself still needs a one-time real-call verification — see task list)
 6. ~~Templates, quick replies, media~~ ✅ done, tested, live (media *file upload* specifically waits on you enabling R2 — see task list)
-7. Admin panel ✅ done, live · notifications/search, dashboard, backup — **next**
+7. Admin panel ✅ done, live · notifications/search ✅ done, live · dashboard, backup — **next**
 8. Parallel-run validation, then cutover (Apps Script stays live and untouched the entire time)
 
 ---

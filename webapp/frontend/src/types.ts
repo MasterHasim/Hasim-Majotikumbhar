@@ -272,6 +272,19 @@ export interface NumberAssignmentUser {
   active: boolean;
 }
 
+export interface SearchFilters {
+  numberId?: string;
+  query?: string;
+  assignedUserId?: string;
+  status?: string;
+  needsResponse?: boolean;
+  unassigned?: boolean;
+}
+
+export interface SearchResultItem extends ConversationListItem {
+  numberDisplayName: string;
+}
+
 export interface AuditEntry {
   id: string;
   occurredAt: string;

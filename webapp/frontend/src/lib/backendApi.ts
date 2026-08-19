@@ -3,7 +3,7 @@ import { apiFetch } from './api';
 import type {
   AssignableUser, AuditEntry, CallLog, Conversation, ConversationListItem, Customer, CustomerStage, Lead, LeadRemark, LeadStageAssignment,
   LocationAssignmentConfig, LocationAssignmentUser, NumberAccess, NumberAssignmentConfig, NumberAssignmentUser, QuickReply, Remark, Reminder,
-  Role, SnoozeStatus, Stage, Team, TeamMember, Template, UploadLeadsResult, User, WhatsAppNumber, WhoAmI, Workspace,
+  Role, SearchFilters, SearchResultItem, SnoozeStatus, Stage, Team, TeamMember, Template, UploadLeadsResult, User, WhatsAppNumber, WhoAmI, Workspace,
 } from '../types';
 
 export const backendApi = {
@@ -20,6 +20,16 @@ export const backendApi = {
     apiFetch<WhatsAppNumber>(`/api/numbers/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) }),
 
   listConversations: (numberId: string) => apiFetch<ConversationListItem[]>(`/api/conversations?numberId=${encodeURIComponent(numberId)}`),
+
+  searchConversations: (filters: SearchFilters) => {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(filters)) {
+      if (value !== undefined && value !== '') params.set(key, String(value));
+    }
+    return apiFetch<SearchResultItem[]>(`/api/search-conversations?${params.toString()}`);
+  },
+
+  getNeedsResponseCounts: () => apiFetch<Record<string, number>>('/api/needs-response-counts'),
 
   getWorkspace: (conversationId: string, includeRealtime = false) =>
     apiFetch<Workspace>(`/api/workspace/${encodeURIComponent(conversationId)}${includeRealtime ? '?includeRealtime=true' : ''}`),

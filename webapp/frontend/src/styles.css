@@ -31,6 +31,8 @@ button, select, input, textarea { font-family: inherit; }
 .number-card:hover { box-shadow: 0 4px 14px rgba(15,42,32,.12); transform: translateY(-2px); border-color: var(--accent); }
 .number-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .number-card .name { font-size: 16px; font-weight: 700; padding-right: 26px; }
+.number-card .badge { position: absolute; top: 16px; right: 16px; background: var(--danger); color: #fff; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; }
+.current-number-pill .cn-badge { display: inline-block; margin-top: 4px; background: rgba(255,255,255,.25); color: #fff; font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 9px; }
 .number-card .phone { color: var(--text-secondary); font-size: 13px; margin-top: 5px; font-variant-numeric: tabular-nums; }
 
 /* ---- Sidebar ---- */

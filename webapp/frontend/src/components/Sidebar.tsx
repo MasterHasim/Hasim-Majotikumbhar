@@ -3,11 +3,12 @@ import type { WhatsAppNumber, WhoAmI } from '../types';
 export type Page = 'inbox' | 'leads' | 'admin';
 
 export function Sidebar({
-  number, whoAmI, page, onNavigate, onSwitchNumber, onSignOut,
+  number, whoAmI, page, needsResponseCount, onNavigate, onSwitchNumber, onSignOut,
 }: {
   number: WhatsAppNumber;
   whoAmI: WhoAmI;
   page: Page;
+  needsResponseCount: number;
   onNavigate: (page: Page) => void;
   onSwitchNumber: () => void;
   onSignOut: () => void;
@@ -22,6 +23,7 @@ export function Sidebar({
       <button className="current-number-pill" onClick={onSwitchNumber}>
         <div className="cn-name">{number.displayName}</div>
         <div className="cn-phone">{number.phoneNumber}</div>
+        {needsResponseCount > 0 && <div className="cn-badge">{needsResponseCount} need{needsResponseCount === 1 ? 's' : ''} reply</div>}
         <div className="cn-switch">Switch number ▾</div>
       </button>
       <div id="navList">

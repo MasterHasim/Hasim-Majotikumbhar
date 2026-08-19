@@ -3,7 +3,7 @@ import type { ConversationListItem, QuickReply, Stage, Template, WhatsAppNumber,
 import { backendApi } from '../lib/backendApi';
 import { ApiClientError } from '../lib/api';
 import { connectRealtimeMessages } from '../lib/realtime';
-import { ConversationList } from './ConversationList';
+import { ConversationList, DEFAULT_FILTERS, type ListFilters } from './ConversationList';
 import { ChatPane } from './ChatPane';
 import { DetailPanel } from './DetailPanel';
 
@@ -29,18 +29,28 @@ export function Inbox({ number, initialConversationId, onInitialConversationCons
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [search, setSearch] = useState('');
+  const [filters, setFilters] = useState<ListFilters>(DEFAULT_FILTERS);
   const [error, setError] = useState<string | null>(null);
   const selectedIdRef = useRef<string | null>(null);
   selectedIdRef.current = selectedId;
   const stopRealtimeRef = useRef<(() => void) | null>(null);
 
+  const isFiltering = !!search.trim() || !!filters.status || filters.needsResponse || filters.unassigned;
+
   const loadConversations = useCallback(async () => {
     try {
-      setConversations(await backendApi.listConversations(number.id));
+      if (isFiltering) {
+        setConversations(await backendApi.searchConversations({
+          numberId: number.id, query: search.trim() || undefined, status: filters.status || undefined,
+          needsResponse: filters.needsResponse || undefined, unassigned: filters.unassigned || undefined,
+        }));
+      } else {
+        setConversations(await backendApi.listConversations(number.id));
+      }
     } catch (err) {
       setError(err instanceof ApiClientError ? `${err.code}: ${err.message}` : String(err));
     }
-  }, [number.id]);
+  }, [number.id, isFiltering, search, filters]);
 
   const loadWorkspace = useCallback(async (conversationId: string, includeRealtime = false) => {
     try {
@@ -53,14 +63,20 @@ export function Inbox({ number, initialConversationId, onInitialConversationCons
     }
   }, []);
 
+  // Number switch: reset selection/filters and reload everything number-scoped.
   useEffect(() => {
     setSelectedId(null);
     setWorkspace(null);
+    setSearch('');
+    setFilters(DEFAULT_FILTERS);
     stopRealtimeRef.current?.();
     stopRealtimeRef.current = null;
-    void loadConversations();
     backendApi.listStages().then(setStages).catch(() => setStages([]));
-  }, [number.id, loadConversations]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [number.id]);
+
+  // Search/filter change (or number switch, or the poll interval): refresh the list without touching the open conversation.
+  useEffect(() => { void loadConversations(); }, [loadConversations]);
 
   // Quick replies and templates aren't number-scoped — fetch once, not on every number switch.
   useEffect(() => {
@@ -123,7 +139,7 @@ export function Inbox({ number, initialConversationId, onInitialConversationCons
       <h1 className="page-title" style={{ margin: '0 0 12px' }}>Inbox</h1>
       {error && <div className="compose-error" style={{ padding: '0 0 10px' }}>{error}</div>}
       <div className={`split${workspace ? '' : ' no-detail'}`}>
-        <ConversationList conversations={conversations} selectedId={selectedId} search={search} onSearchChange={setSearch} onSelect={(id) => void selectConversation(id)} />
+        <ConversationList conversations={conversations} selectedId={selectedId} search={search} filters={filters} onSearchChange={setSearch} onFiltersChange={setFilters} onSelect={(id) => void selectConversation(id)} />
         {workspace ? (
           <>
             <ChatPane workspace={workspace} quickReplies={quickReplies} templates={templates} onAfterSend={handleChanged} onResolve={() => void handleResolve()} />

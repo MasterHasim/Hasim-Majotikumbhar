@@ -36,6 +36,7 @@ export default function App() {
   const [activeNumber, setActiveNumber] = useState<WhatsAppNumber | null>(null);
   const [page, setPage] = useState<Page>('inbox');
   const [pendingConversationId, setPendingConversationId] = useState<string | null>(null);
+  const [needsResponseCounts, setNeedsResponseCounts] = useState<Record<string, number>>({});
   const [error, setError] = useState<string | null>(null);
 
   /** Leads.tsx's "Send WhatsApp" bridges into the Inbox on whichever number the lead's location resolves to — which may not be the number currently open. */
@@ -77,6 +78,16 @@ export default function App() {
     backendApi.listMyNumbers()
       .then(setNumbers)
       .catch((err) => setError(err instanceof ApiClientError ? `${err.code}: ${err.message}` : String(err)));
+  }, [whoAmI]);
+
+  useEffect(() => {
+    if (!whoAmI) { setNeedsResponseCounts({}); return; }
+    function load() {
+      backendApi.getNeedsResponseCounts().then(setNeedsResponseCounts).catch(() => {});
+    }
+    load();
+    const interval = setInterval(load, 20000);
+    return () => clearInterval(interval);
   }, [whoAmI]);
 
   async function completeBootstrap() {
@@ -137,6 +148,7 @@ export default function App() {
         <NumberPicker
           numbers={numbers}
           isAdmin={whoAmI.roleKeys.includes('ADMIN')}
+          needsResponseCounts={needsResponseCounts}
           onPick={setActiveNumber}
           onNumberCreated={(created) => setNumbers((prev) => [...(prev ?? []), created])}
         />
@@ -147,7 +159,7 @@ export default function App() {
 
   return (
     <div id="app">
-      <Sidebar number={activeNumber} whoAmI={whoAmI} page={page} onNavigate={setPage} onSwitchNumber={() => setActiveNumber(null)} onSignOut={() => void signOut(auth)} />
+      <Sidebar number={activeNumber} whoAmI={whoAmI} page={page} needsResponseCount={needsResponseCounts[activeNumber.id] ?? 0} onNavigate={setPage} onSwitchNumber={() => setActiveNumber(null)} onSignOut={() => void signOut(auth)} />
       <div id="mainArea">
         <div id="pageContent">
           {page === 'inbox' && (

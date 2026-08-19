@@ -74,5 +74,14 @@ their per-number scope), Numbers (create/edit/deactivate), Number Access
 enabled/fallback/working-hours/participants), Quick Replies, Templates, and
 a read-only Audit Log.
 
-Not built yet: dashboard/reports and notifications/search — see
-`PROGRESS.md` at the repo root for the full migration plan and status.
+**Search/filters + needs-response badges (Phase 13) are wired up.** The
+Inbox's conversation list gained a status filter (Open/Resolved/Any) and
+needs-response/unassigned checkboxes — switches to the server-side
+`searchConversations` endpoint only when a filter or search text is active
+(spanning every status, not just the active inbox), otherwise keeps using
+the faster plain active-list fetch. The number picker's cards and the
+sidebar's current-number pill both show live needs-response count badges,
+polled every 20s.
+
+Not built yet: dashboard/reports and automated backups — see `PROGRESS.md`
+at the repo root for the full migration plan and status.

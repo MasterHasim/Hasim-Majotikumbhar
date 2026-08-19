@@ -50,9 +50,10 @@ function AddNumberForm({ onCreated }: { onCreated: (number: WhatsAppNumber) => v
   );
 }
 
-export function NumberPicker({ numbers, isAdmin, onPick, onNumberCreated }: {
+export function NumberPicker({ numbers, isAdmin, needsResponseCounts, onPick, onNumberCreated }: {
   numbers: WhatsAppNumber[];
   isAdmin: boolean;
+  needsResponseCounts: Record<string, number>;
   onPick: (number: WhatsAppNumber) => void;
   onNumberCreated: (number: WhatsAppNumber) => void;
 }) {
@@ -73,6 +74,7 @@ export function NumberPicker({ numbers, isAdmin, onPick, onNumberCreated }: {
         <div className="number-cards">
           {numbers.map((number) => (
             <div key={number.id} className="number-card" role="button" tabIndex={0} onClick={() => onPick(number)} onKeyDown={(e) => { if (e.key === 'Enter') onPick(number); }}>
+              {!!needsResponseCounts[number.id] && <span className="badge">{needsResponseCounts[number.id]}</span>}
               <div className="name">{number.displayName}</div>
               <div className="phone">{number.phoneNumber}</div>
             </div>
