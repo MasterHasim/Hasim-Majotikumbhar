@@ -504,6 +504,53 @@ function AuditLogTab({ users }: { users: User[] }) {
 
 // ---------------------------------------------------------------------------
 
+function BackupTab() {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [lastBackupAt, setLastBackupAt] = useState<string | null>(null);
+
+  async function downloadBackup() {
+    setBusy(true);
+    setError(null);
+    try {
+      const snapshot = await backendApi.backupNow();
+      const name = `whatsapp-panel-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+      const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = name;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setLastBackupAt(new Date().toISOString());
+    } catch (err) {
+      setError(errMsg(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card">
+      <h2 className="section-title" style={{ marginTop: 0 }}>Backup</h2>
+      <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+        Downloads a full JSON export of the entire database (users, teams, numbers, customers, conversations, messages, leads — everything)
+        straight to your computer. There's no automatic scheduled backup yet — that needs a durable place to store it (Cloudflare R2), which
+        isn't set up. Doing this every so often, and keeping the file somewhere safe, is the manual equivalent for now.
+      </p>
+      {error && <div className="form-error">{error}</div>}
+      {lastBackupAt && <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Last downloaded: {fmt(lastBackupAt)}</p>}
+      <div className="form-row">
+        <button className="btn primary" disabled={busy} onClick={() => void downloadBackup()}>{busy ? 'Preparing…' : 'Download full backup (JSON)'}</button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
 function QuickRepliesSection() {
   const [items, setItems] = useState<QuickReply[]>([]);
   const [shortcut, setShortcut] = useState('');
@@ -658,7 +705,7 @@ function TemplatesSection() {
 
 // ---------------------------------------------------------------------------
 
-type AdminTab = 'users' | 'teams' | 'numbers' | 'access' | 'assignment' | 'quickReplies' | 'templates' | 'audit';
+type AdminTab = 'users' | 'teams' | 'numbers' | 'access' | 'assignment' | 'quickReplies' | 'templates' | 'audit' | 'backup';
 
 export function Admin() {
   const [tab, setTab] = useState<AdminTab>('users');
@@ -678,7 +725,7 @@ export function Admin() {
       <div className="settings-tabs">
         {([
           ['users', 'Users'], ['teams', 'Teams'], ['numbers', 'Numbers'], ['access', 'Number Access'],
-          ['assignment', 'Assignment Rules'], ['quickReplies', 'Quick Replies'], ['templates', 'Templates'], ['audit', 'Audit Log'],
+          ['assignment', 'Assignment Rules'], ['quickReplies', 'Quick Replies'], ['templates', 'Templates'], ['audit', 'Audit Log'], ['backup', 'Backup'],
         ] as [AdminTab, string][]).map(([key, label]) => (
           <button key={key} className={`settings-tab${tab === key ? ' active' : ''}`} onClick={() => setTab(key)}>{label}</button>
         ))}
@@ -692,6 +739,7 @@ export function Admin() {
       {tab === 'quickReplies' && <QuickRepliesSection />}
       {tab === 'templates' && <TemplatesSection />}
       {tab === 'audit' && <AuditLogTab users={users} />}
+      {tab === 'backup' && <BackupTab />}
     </>
   );
 }

@@ -192,6 +192,8 @@ export const backendApi = {
 
   getDashboardMetrics: (numberId?: string) =>
     apiFetch<DashboardMetrics>(`/api/dashboard${numberId ? `?numberId=${encodeURIComponent(numberId)}` : ''}`),
+
+  backupNow: () => apiFetch<Record<string, unknown>>('/api/backup', { method: 'POST' }),
 };
 
 export type { AssignableUser, Customer };

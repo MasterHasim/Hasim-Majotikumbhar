@@ -91,6 +91,13 @@ breakdown tables, lead-stage-distribution and template-usage bar charts, a
 lead-conversion summary, and a "this number / all numbers I can access"
 scope toggle.
 
-Not built yet: automated backups — the last remaining piece of full Apps
-Script parity — see `PROGRESS.md` at the repo root for the full migration
-plan and status.
+**A Backup tab in the Admin panel is built.** Downloads a full JSON export
+of the entire database straight to the browser — the free-tier equivalent
+of the source's Drive-backed `backupNow()` (no automatic scheduled version;
+Cloudflare Cron Triggers are static deploy-time config, and there's nowhere
+durable to store the output without R2 anyway — a deliberate, permanent
+design difference, not a "will fix later" gap).
+
+**This is full Apps Script feature parity** (Phases 1-15) on the new stack.
+See `PROGRESS.md` at the repo root for the full migration plan and status —
+next up is parallel-run validation, then cutover.

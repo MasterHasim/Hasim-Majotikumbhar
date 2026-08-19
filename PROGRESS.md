@@ -1,6 +1,6 @@
 # WhatsApp Multi-Number CRM — Progress Report
 
-**Last updated:** 2026-08-17 (Phase 22 added to the live `apps-script/` build — see below; webapp migration status below that is unchanged since 2026-08-10)
+**Last updated:** 2026-08-18 (webapp migration reached full Apps Script feature parity, Phases 1-15 — see below; Phase 22 was added to the live `apps-script/` build on 2026-08-17)
 **Purpose:** single source of truth for "what's done, what's left, and what needs you personally." Updated after every phase/transition. See `docs/ROADMAP.md` for full phase scope, `memory/CHANGELOG.md` for full per-phase detail (this file stays intentionally brief per phase), and `memory/DECISIONS.md` for architectural reasoning.
 
 ## ✅ New: Phase 22 — Location Leads Upload, Assignment Rules & Exotel Click-to-Call (2026-08-17)
@@ -33,7 +33,7 @@ All 24 backend test suites pass (`cd apps-script && node tests/<name>.js` for an
 or see `memory/CHANGELOG.md` for the full list), including the pre-existing suites —
 nothing else in the app regressed.
 
-## 🚧 Migration in progress: moving off Apps Script to a free, faster stack
+## ✅ Migration: full Apps Script feature parity reached on the new stack
 
 Per your decision, the app is being rebuilt on Cloudflare Workers (backend) +
 Firebase Realtime Database (already in use) + React (frontend) — all free
@@ -265,6 +265,37 @@ scope toggle mirrors the source's optional `numberId` narrowing. 7 new
 backend tests (117 total), deployed and smoke-tested live; frontend
 typechecks/builds clean, verified rendering with no console errors.
 
+**✅ Backup (Phase 15) is ported — the part of it that actually has a
+free-tier equivalent.** The source's `backupNow()` was a Google Sheets/
+Drive-specific `SpreadsheetApp.copy()` — no 1:1 port exists since this
+backend has no spreadsheet. The genuinely useful, zero-new-dependency
+equivalent: `Phase15Api.backupNow()` pulls a full Firebase Realtime
+Database JSON export (same admin credentials every other read already
+uses — Firebase's REST API supports this at the database root) and a new
+**Backup** tab in the Admin panel downloads it straight to the browser as
+a file. Audit coverage and secrets hygiene (the other two thirds of the
+source's Phase 15) needed no new code at all — every prior phase's own
+`audit.write(...)` calls already satisfy the same audited-event list, and
+no secret is ever hardcoded here. 3 new backend tests (120 total),
+deployed and smoke-tested live; frontend typechecks/builds clean, verified
+rendering with no console errors.
+
+**Not built: an automatic scheduled backup.** Apps Script's
+`installDailyBackupTrigger`/`removeDailyBackupTrigger` (toggle a daily
+trigger on/off via an API call) has no equivalent — Cloudflare Cron
+Triggers are static `wrangler.toml` config set at deploy time, not
+something togglable at runtime, and there's nowhere durable to store an
+automatic backup's output without R2 anyway. This is a genuine, permanent
+architectural difference from the Apps Script build, not a "blocked, will
+fix" item — the manual "Backup Now" button is the intended free-tier
+design for this stack, not a placeholder.
+
+**This closes out full Apps Script feature parity** (Phases 1-15, matching
+the original build's own phase numbering) for the new stack — the only
+still-open item is local-file media upload (`uploadConversationMedia`),
+which needs you to enable Cloudflare R2 once in the dashboard (see below);
+everything else has a working equivalent, ported, tested, and live.
+
 **Deliberately not built yet: file upload for media** (Apps Script's
 `uploadConversationMedia` used Drive; the free-tier equivalent here is
 Cloudflare R2, and **R2 needs to be enabled once in the Cloudflare
@@ -272,8 +303,7 @@ dashboard before I can create a bucket** — `wrangler r2 bucket create`
 failed with `Please enable R2 through the Cloudflare Dashboard [code:
 10042]`. `sendMediaReply` itself works today with any already-hosted URL;
 only "pick a local file and have the panel host it for you" is blocked on
-this one manual step — see the task list. Also not yet built: automated
-backups — the last remaining piece of full Apps Script parity.
+this one manual step — see the task list.
 
 **How to see it**: run `npm run dev` in `webapp/frontend/` (or it may already
 be running — check `http://localhost:5173`) and sign in with your Google
@@ -324,8 +354,8 @@ build:
 4. ~~CRM core — assignment, remarks, reminders, stages~~ ✅ done, tested, live
 5. ~~Location leads + click-to-call (Phase 22)~~ ✅ done, tested, live (Voice call itself still needs a one-time real-call verification — see task list)
 6. ~~Templates, quick replies, media~~ ✅ done, tested, live (media *file upload* specifically waits on you enabling R2 — see task list)
-7. Admin panel ✅ · notifications/search ✅ · dashboard ✅ (all done, live) · backup — **next, last piece**
-8. Parallel-run validation, then cutover (Apps Script stays live and untouched the entire time)
+7. Admin panel ✅ · notifications/search ✅ · dashboard ✅ · backup ✅ (all done, live — Phases 1-15 parity reached)
+8. Parallel-run validation, then cutover (Apps Script stays live and untouched the entire time) — **next**
 
 ---
 

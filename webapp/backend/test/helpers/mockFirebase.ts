@@ -122,9 +122,12 @@ export async function setupMockFirebase(projectId = 'test-project'): Promise<Moc
       const path = url.slice(databaseUrl.length + 1).replace(/\.json.*$/, '');
       const method = (init?.method ?? 'GET').toUpperCase();
       if (method === 'GET') {
-        const segments = path.split('/');
+        // path === '' is the database-root export (Phase15Api.backupNow) — the empty
+        // string isn't a real segment to walk into, it means "return the whole store".
         let node: unknown = store;
-        for (const seg of segments) node = (node as Record<string, unknown> | undefined)?.[seg];
+        if (path !== '') {
+          for (const seg of path.split('/')) node = (node as Record<string, unknown> | undefined)?.[seg];
+        }
         return new Response(node === undefined ? 'null' : JSON.stringify(node), { status: 200 });
       }
       if (method === 'PUT') {
