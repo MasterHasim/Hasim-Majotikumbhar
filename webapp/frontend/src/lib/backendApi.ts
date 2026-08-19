@@ -1,8 +1,9 @@
 /** Typed wrappers around apiFetch for the endpoints the Inbox UI needs — one-to-one with webapp/backend/src/routes/{phase1,messaging,crm,phase22}.ts. */
 import { apiFetch } from './api';
 import type {
-  AssignableUser, CallLog, Conversation, ConversationListItem, Customer, CustomerStage, Lead, LeadRemark, LeadStageAssignment,
-  LocationAssignmentConfig, LocationAssignmentUser, QuickReply, Remark, Reminder, SnoozeStatus, Stage, Template, UploadLeadsResult, User, WhatsAppNumber, WhoAmI, Workspace,
+  AssignableUser, AuditEntry, CallLog, Conversation, ConversationListItem, Customer, CustomerStage, Lead, LeadRemark, LeadStageAssignment,
+  LocationAssignmentConfig, LocationAssignmentUser, NumberAccess, NumberAssignmentConfig, NumberAssignmentUser, QuickReply, Remark, Reminder,
+  Role, SnoozeStatus, Stage, Team, TeamMember, Template, UploadLeadsResult, User, WhatsAppNumber, WhoAmI, Workspace,
 } from '../types';
 
 export const backendApi = {
@@ -10,8 +11,13 @@ export const backendApi = {
 
   listMyNumbers: () => apiFetch<WhatsAppNumber[]>('/api/my-numbers'),
 
+  listNumbers: () => apiFetch<WhatsAppNumber[]>('/api/numbers'),
+
   createNumber: (input: { displayName: string; phoneNumber: string; provider: string }) =>
     apiFetch<WhatsAppNumber>('/api/numbers', { method: 'POST', body: JSON.stringify(input) }),
+
+  updateNumber: (id: string, patch: Record<string, unknown>) =>
+    apiFetch<WhatsAppNumber>(`/api/numbers/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) }),
 
   listConversations: (numberId: string) => apiFetch<ConversationListItem[]>(`/api/conversations?numberId=${encodeURIComponent(numberId)}`),
 
@@ -55,8 +61,53 @@ export const backendApi = {
 
   listUsers: () => apiFetch<User[]>('/api/users'),
 
+  createUser: (input: { email: string; displayName: string; roleIds: string[] }) =>
+    apiFetch<User>('/api/users', { method: 'POST', body: JSON.stringify(input) }),
+
+  updateUser: (id: string, patch: Record<string, unknown>) =>
+    apiFetch<User>(`/api/users/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+
   setUserPhone: (userId: string, phone: string) =>
     apiFetch<User>(`/api/users/${encodeURIComponent(userId)}`, { method: 'PATCH', body: JSON.stringify({ phone }) }),
+
+  listRoles: () => apiFetch<Role[]>('/api/roles'),
+
+  listTeams: () => apiFetch<Team[]>('/api/teams'),
+
+  createTeam: (input: { ownerUserId: string; name: string }) =>
+    apiFetch<Team>('/api/teams', { method: 'POST', body: JSON.stringify(input) }),
+
+  listTeamMembers: (teamId: string) => apiFetch<TeamMember[]>(`/api/teams/${encodeURIComponent(teamId)}/members`),
+
+  addTeamMember: (input: { teamId: string; userId: string; numberIds?: string[] }) =>
+    apiFetch<TeamMember>('/api/team-members', { method: 'POST', body: JSON.stringify(input) }),
+
+  updateTeamMember: (id: string, patch: Record<string, unknown>) =>
+    apiFetch<TeamMember>(`/api/team-members/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+
+  listNumberAccess: () => apiFetch<NumberAccess[]>('/api/number-access'),
+
+  grantNumberAccess: (userId: string, numberId: string) =>
+    apiFetch<NumberAccess>('/api/number-access', { method: 'POST', body: JSON.stringify({ userId, numberId }) }),
+
+  revokeNumberAccess: (id: string) => apiFetch<NumberAccess>(`/api/number-access/${encodeURIComponent(id)}/revoke`, { method: 'POST' }),
+
+  reactivateNumberAccess: (id: string) => apiFetch<NumberAccess>(`/api/number-access/${encodeURIComponent(id)}/reactivate`, { method: 'POST' }),
+
+  getNumberAssignmentConfig: (numberId: string) => apiFetch<NumberAssignmentConfig | null>(`/api/numbers/${encodeURIComponent(numberId)}/assignment-config`),
+
+  setNumberAssignmentConfig: (numberId: string, patch: Record<string, unknown>) =>
+    apiFetch<NumberAssignmentConfig>(`/api/numbers/${encodeURIComponent(numberId)}/assignment-config`, { method: 'POST', body: JSON.stringify(patch) }),
+
+  listNumberAssignmentParticipants: (numberId: string) => apiFetch<NumberAssignmentUser[]>(`/api/numbers/${encodeURIComponent(numberId)}/assignment-participants`),
+
+  addNumberAssignmentParticipant: (numberId: string, userId: string, sequenceOrder?: number) =>
+    apiFetch<NumberAssignmentUser>(`/api/numbers/${encodeURIComponent(numberId)}/assignment-participants`, { method: 'POST', body: JSON.stringify({ userId, sequenceOrder }) }),
+
+  updateNumberAssignmentParticipant: (id: string, patch: Record<string, unknown>) =>
+    apiFetch<NumberAssignmentUser>(`/api/assignment-participants/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+
+  listAuditLog: () => apiFetch<AuditEntry[]>('/api/audit-log'),
 
   // --- Phase 22: location leads + Exotel click-to-call ---
 

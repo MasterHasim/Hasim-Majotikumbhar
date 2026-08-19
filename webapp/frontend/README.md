@@ -61,13 +61,18 @@ there's no Admin Users page yet). All wired to the already-tested
 box (`components/ChatPane.tsx`) now has a quick-reply picker, a template
 picker (inline `{{n}}` variable inputs, only APPROVED templates offered),
 and a "send media by URL" form; inbound/outbound media renders inline in the
-thread (image preview or a link, depending on type). A new ADMIN-only
-**Settings** page (`components/Settings.tsx`) manages quick replies and the
-template draft → submit → sync workflow. Picking a local file to upload
-isn't built yet — it's blocked on you enabling Cloudflare R2 (see
+thread (image preview or a link, depending on type). Picking a local file to
+upload isn't built yet — it's blocked on you enabling Cloudflare R2 (see
 `webapp/backend/README.md`); sending media you already have a URL for works
 today.
 
-Not built yet: dashboard/reports and a proper admin panel (users/teams/
-numbers/broader settings) — see `PROGRESS.md` at the repo root for the full
-migration plan and status.
+**The Admin Panel (`components/Admin.tsx`) is built** — a new sidebar item
+(ADMIN-only, replaces the old standalone Settings page) with 8 tabs: Users
+(create, edit phone/status, toggle roles), Teams (create, manage members +
+their per-number scope), Numbers (create/edit/deactivate), Number Access
+(grant/revoke), Assignment Rules (per-number round-robin config —
+enabled/fallback/working-hours/participants), Quick Replies, Templates, and
+a read-only Audit Log.
+
+Not built yet: dashboard/reports and notifications/search — see
+`PROGRESS.md` at the repo root for the full migration plan and status.

@@ -8,7 +8,7 @@ import { NumberPicker } from './components/NumberPicker';
 import { Sidebar, type Page } from './components/Sidebar';
 import { Inbox } from './components/Inbox';
 import { Leads } from './components/Leads';
-import { Settings } from './components/Settings';
+import { Admin } from './components/Admin';
 
 async function signIn() {
   try {
@@ -154,7 +154,7 @@ export default function App() {
             <Inbox number={activeNumber} initialConversationId={pendingConversationId} onInitialConversationConsumed={() => setPendingConversationId(null)} />
           )}
           {page === 'leads' && <Leads whoAmI={whoAmI} onOpenConversation={openConversationFromLead} />}
-          {page === 'settings' && whoAmI.roleKeys.includes('ADMIN') && <Settings />}
+          {page === 'admin' && whoAmI.roleKeys.includes('ADMIN') && <Admin />}
         </div>
       </div>
     </div>

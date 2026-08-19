@@ -173,6 +173,11 @@ table.data-table tr.clickable { cursor: pointer; }
 .lead-remark-item { padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
 .lead-remark-meta { color: var(--text-secondary); font-size: 11px; margin-top: 2px; }
 
+.settings-tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.settings-tab { padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--text-secondary); border: none; background: transparent; border-bottom: 2px solid transparent; }
+.settings-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+label.inline { display: flex; align-items: center; gap: 4px; font-size: 13px; }
+
 /* ---- Full-page loading/error states ---- */
 .centered-message { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-secondary); font-size: 13px; }
 .fatal-error { color: var(--danger); padding: 16px; }

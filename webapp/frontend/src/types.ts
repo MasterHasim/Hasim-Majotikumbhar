@@ -219,4 +219,65 @@ export interface User {
   displayName: string;
   status: string;
   phone: string;
+  roleIds: string[];
+}
+
+// --- Phase 12 (admin panel: users, teams, numbers, number access, assignment rules, audit log) ---
+
+export interface Role {
+  id: string;
+  key: string;
+  name: string;
+  permissions: string[];
+  status: 'active' | 'inactive';
+}
+
+export interface Team {
+  id: string;
+  name: string;
+  ownerUserId: string;
+  status: 'active' | 'inactive';
+}
+
+export interface TeamMember {
+  id: string;
+  teamId: string;
+  userId: string;
+  status: 'active' | 'inactive';
+  numberIds: string[];
+}
+
+export interface NumberAccess {
+  id: string;
+  userId: string;
+  numberId: string;
+  granted: boolean;
+  status: 'active' | 'inactive';
+}
+
+export interface NumberAssignmentConfig {
+  id: string;
+  numberId: string;
+  roundRobinEnabled: boolean;
+  fallbackUserId: string;
+  workingHoursStart: string;
+  workingHoursEnd: string;
+}
+
+export interface NumberAssignmentUser {
+  id: string;
+  numberId: string;
+  userId: string;
+  sequenceOrder: number;
+  active: boolean;
+}
+
+export interface AuditEntry {
+  id: string;
+  occurredAt: string;
+  actorUserId: string | null;
+  action: string;
+  targetType: string;
+  targetId: string;
+  metadata: Record<string, unknown>;
 }

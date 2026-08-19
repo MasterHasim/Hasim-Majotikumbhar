@@ -212,10 +212,25 @@ anyone can list), and `Phase6Api.sendTemplateReply`/`sendMediaReply`
 Inbound media (`mediaUrl` from Exotel's webhook) is now persisted into a
 `messageMedia` collection and shown inline in the chat thread. The Inbox
 compose box got a quick-reply picker, a template picker (with inline
-variable inputs), and a "send media by URL" form; a new ADMIN-only
-**Settings** page manages quick replies and templates (draft/submit/sync).
+variable inputs), and a "send media by URL" form.
 12 new backend tests (102 total), deployed and smoke-tested live; frontend
 typechecks/builds clean, verified rendering with no console errors.
+
+**✅ Admin Panel (Phase 12) is built — frontend only, since the backend CRUD
+for almost all of it already existed.** A new **Admin** sidebar item
+(ADMIN-only) with 8 tabs: **Users** (create, edit phone/status, toggle
+roles via checkboxes), **Teams** (create, expand a team to manage members
+and their per-number scope), **Numbers** (create/edit/deactivate — this
+already existed via the number-picker's add form, now also manageable
+here), **Number Access** (grant/revoke per user × number), **Assignment
+Rules** (per-number round-robin: enabled toggle, fallback agent, working
+hours, ordered participant list — `NumberAssignmentConfigApi` was actually
+built ahead of schedule during the CRM-core phase specifically so this
+moment wouldn't need new backend work), **Quick Replies** and **Templates**
+(moved here from the old standalone Settings page, which no longer exists
+as a separate nav item), and **Audit Log** (read-only, newest first, capped
+at 300 rows shown). Typechecks/builds clean, verified rendering with no
+console errors on a fresh load.
 
 **Deliberately not built yet: file upload for media** (Apps Script's
 `uploadConversationMedia` used Drive; the free-tier equivalent here is
@@ -225,8 +240,8 @@ failed with `Please enable R2 through the Cloudflare Dashboard [code:
 10042]`. `sendMediaReply` itself works today with any already-hosted URL;
 only "pick a local file and have the panel host it for you" is blocked on
 this one manual step — see the task list. Also not yet built: dashboard/
-reports and a proper admin panel (users/teams/numbers/settings beyond the
-new Settings page's quick-replies/templates scope).
+reports and notifications/search — the remaining pieces of full Apps
+Script parity.
 
 **How to see it**: run `npm run dev` in `webapp/frontend/` (or it may already
 be running — check `http://localhost:5173`) and sign in with your Google
@@ -277,7 +292,7 @@ build:
 4. ~~CRM core — assignment, remarks, reminders, stages~~ ✅ done, tested, live
 5. ~~Location leads + click-to-call (Phase 22)~~ ✅ done, tested, live (Voice call itself still needs a one-time real-call verification — see task list)
 6. ~~Templates, quick replies, media~~ ✅ done, tested, live (media *file upload* specifically waits on you enabling R2 — see task list)
-7. Admin panel, notifications, dashboard, audit/backup — **next**
+7. Admin panel ✅ done, live · notifications/search, dashboard, backup — **next**
 8. Parallel-run validation, then cutover (Apps Script stays live and untouched the entire time)
 
 ---

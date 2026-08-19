@@ -1,6 +1,6 @@
 import type { WhatsAppNumber, WhoAmI } from '../types';
 
-export type Page = 'inbox' | 'leads' | 'settings';
+export type Page = 'inbox' | 'leads' | 'admin';
 
 export function Sidebar({
   number, whoAmI, page, onNavigate, onSwitchNumber, onSignOut,
@@ -34,9 +34,9 @@ export function Sidebar({
           <span className="nav-label">Leads</span>
         </button>
         {whoAmI.roleKeys.includes('ADMIN') && (
-          <button className={`nav-item${page === 'settings' ? ' active' : ''}`} onClick={() => onNavigate('settings')}>
+          <button className={`nav-item${page === 'admin' ? ' active' : ''}`} onClick={() => onNavigate('admin')}>
             <span className="nav-icon">⚙️</span>
-            <span className="nav-label">Settings</span>
+            <span className="nav-label">Admin</span>
           </button>
         )}
       </div>
