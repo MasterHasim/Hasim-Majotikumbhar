@@ -7,14 +7,13 @@ no credit card required. Live at `https://whatsapp-panel-backend.hasim-c9e.worke
 deployed live — auth/roles/teams/number-access, messaging core, CRM core
 (round-robin assignment, lead stages, remarks, reminders, snooze), Phase 22
 (location leads + Exotel click-to-call), templates/quick-replies/media,
-admin panel, search/notifications, dashboard & analytics, and backup. See
-PROGRESS.md for the full verification history. 120 automated tests cover
-the actual business logic against a mocked Firebase and mocked Exotel
-WhatsApp + Voice endpoints (real RSA JWT signing/verification included, not
-stubbed out). Run `npm test`. Next up: parallel-run validation, then
-cutover. Local-file media upload is blocked on you enabling R2 in the
-Cloudflare dashboard (`sendMediaReply` itself works today with any
-already-hosted URL) — see PROGRESS.md's task list.
+admin panel, search/notifications, dashboard & analytics, backup, and
+R2-backed local-file media upload. See PROGRESS.md for the full
+verification history. 123 automated tests cover the actual business logic
+against a mocked Firebase and mocked Exotel WhatsApp + Voice endpoints
+(real RSA JWT signing/verification included, not stubbed out), plus an
+in-memory fake R2 binding for the upload path. Run `npm test`. Next up:
+parallel-run validation, then cutover.
 
 ## Setup status
 
@@ -71,7 +70,13 @@ npm run typecheck
   `apps-script/src/Phase{3,4,5,6}Services.gs`, `WorkspaceServices.gs`, and
   `RealtimeListenServices.gs`. `phase6Api.ts` now also has `sendTemplateReply`/
   `sendMediaReply`; `phase4Api.ts` persists inbound `mediaUrl` from the
-  webhook into `messageMedia`.
+  webhook into `messageMedia`. `phase6Api.ts`'s `uploadConversationMedia`
+  is the free-tier equivalent of the source's Drive-backed upload: decodes
+  a base64 file, writes it to the `MEDIA_BUCKET` R2 binding
+  (`whatsapp-panel-media`, configured in `wrangler.toml`), and returns a key.
+  `routes/messaging.ts`'s `GET /media/:key` serves it back publicly (no
+  Firebase auth — Exotel's servers, not a signed-in browser, must be able to
+  fetch it), with the real stored Content-Type, not sniffed.
 - `src/services/phase10Api.ts` / `phase11Api.ts` — direct ports of
   `apps-script/src/Phase{10,11}Services.gs`: template draft → submit → sync
   workflow (real `ExotelProvider.createTemplate`/`getTemplates` calls,

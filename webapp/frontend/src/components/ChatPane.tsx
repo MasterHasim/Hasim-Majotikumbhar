@@ -15,6 +15,23 @@ function templateVariableSlots(template: Template): string[] {
   return [...new Set(matches.map((m) => m[1]!))].sort((a, b) => Number(a) - Number(b));
 }
 
+function mediaTypeForMime(mimeType: string): string {
+  if (mimeType.startsWith('image/')) return 'image';
+  if (mimeType.startsWith('video/')) return 'video';
+  if (mimeType.startsWith('audio/')) return 'audio';
+  return 'document';
+}
+
+/** FileReader's result for readAsDataURL is "data:<mime>;base64,<data>" — Phase6Api.uploadConversationMedia wants just the base64 payload. */
+function readFileAsBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(',')[1] ?? '');
+    reader.onerror = () => reject(reader.error ?? new Error('Failed to read file'));
+    reader.readAsDataURL(file);
+  });
+}
+
 function MediaAttachment({ media }: { media: NonNullable<Workspace['messages'][number]['media']> }) {
   if (media.mediaType === 'image') {
     return <img src={media.mediaUrl} alt={media.caption || 'attachment'} className="media-image" onClick={() => window.open(media.mediaUrl, '_blank')} />;
@@ -38,6 +55,9 @@ export function ChatPane({ workspace, quickReplies, templates, onAfterSend, onRe
   const [mediaType, setMediaType] = useState('image');
   const [mediaUrl, setMediaUrl] = useState('');
   const [mediaCaption, setMediaCaption] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [uploadedFileName, setUploadedFileName] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [templateId, setTemplateId] = useState('');
   const [templateVars, setTemplateVars] = useState<Record<string, string>>({});
   const messagesRef = useRef<HTMLDivElement>(null);
@@ -60,6 +80,23 @@ export function ChatPane({ workspace, quickReplies, templates, onAfterSend, onRe
     if (!trimmed || sending) return;
     setText('');
     await guard(() => backendApi.sendReply(workspace.conversation.id, trimmed));
+  }
+
+  async function handleFileChosen(file: File) {
+    setUploading(true);
+    setError(null);
+    try {
+      const base64Data = await readFileAsBase64(file);
+      const { url } = await backendApi.uploadConversationMedia(workspace.conversation.id, base64Data, file.name, file.type || 'application/octet-stream');
+      setMediaUrl(url);
+      setMediaType(mediaTypeForMime(file.type || ''));
+      setUploadedFileName(file.name);
+    } catch (err) {
+      setError(err instanceof ApiClientError ? `${err.code}: ${err.message}` : String(err));
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   }
 
   const approvedTemplates = templates.filter((t) => t.status === 'APPROVED');
@@ -151,15 +188,30 @@ export function ChatPane({ workspace, quickReplies, templates, onAfterSend, onRe
               <option value="video">Video</option>
               <option value="audio">Audio</option>
             </select>
-            <input placeholder="Media URL (hosted image/file link)" style={{ flex: 1, minWidth: 180 }} value={mediaUrl} onChange={(e) => setMediaUrl(e.target.value)} />
+            <input
+              placeholder="Media URL, or choose a file →"
+              style={{ flex: 1, minWidth: 180 }}
+              value={mediaUrl}
+              onChange={(e) => { setMediaUrl(e.target.value); setUploadedFileName(''); }}
+            />
+            <input
+              ref={fileInputRef}
+              type="file"
+              style={{ display: 'none' }}
+              onChange={(e) => { const file = e.target.files?.[0]; if (file) void handleFileChosen(file); }}
+            />
+            <button disabled={uploading || sending} onClick={() => fileInputRef.current?.click()}>
+              {uploading ? 'Uploading…' : uploadedFileName ? `📁 ${uploadedFileName}` : '📁 Choose file'}
+            </button>
             <input placeholder="Caption (optional)" style={{ maxWidth: 160 }} value={mediaCaption} onChange={(e) => setMediaCaption(e.target.value)} />
             <button
-              disabled={sending || !mediaUrl.trim()}
+              disabled={sending || uploading || !mediaUrl.trim()}
               onClick={() => {
                 const url = mediaUrl.trim();
                 const caption = mediaCaption.trim();
                 setMediaUrl('');
                 setMediaCaption('');
+                setUploadedFileName('');
                 setShowMedia(false);
                 void guard(() => backendApi.sendMediaReply(workspace.conversation.id, mediaType, url, caption));
               }}

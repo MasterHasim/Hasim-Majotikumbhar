@@ -21,6 +21,8 @@ export interface Env {
   ALLOWED_ORIGINS?: string;
   /** The one identity allowed to call POST /api/bootstrap and become the first ADMIN — same role Script Property `wap.phase1.bootstrapAdminEmail` played in the Apps Script build. */
   BOOTSTRAP_ADMIN_EMAIL?: string;
+  /** Free-tier host for agent-uploaded media (Phase 6/11's uploadConversationMedia) — the equivalent of the Apps Script build's Drive-backed upload, since Workers has no local/persistent disk of its own. */
+  MEDIA_BUCKET: R2Bucket;
 }
 
 export function parseServiceAccount(env: Env): FirebaseServiceAccount {

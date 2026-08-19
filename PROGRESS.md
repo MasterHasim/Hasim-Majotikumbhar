@@ -290,20 +290,23 @@ architectural difference from the Apps Script build, not a "blocked, will
 fix" item — the manual "Backup Now" button is the intended free-tier
 design for this stack, not a placeholder.
 
-**This closes out full Apps Script feature parity** (Phases 1-15, matching
-the original build's own phase numbering) for the new stack — the only
-still-open item is local-file media upload (`uploadConversationMedia`),
-which needs you to enable Cloudflare R2 once in the dashboard (see below);
-everything else has a working equivalent, ported, tested, and live.
+**✅ Local-file media upload is done too — you enabled R2 the same day.**
+`Phase6Api.uploadConversationMedia` (the free-tier equivalent of the Apps
+Script build's Drive-backed upload) is R2-backed: the compose box's
+"📁 Choose file" button reads the file as base64, uploads it to a new
+`whatsapp-panel-media` R2 bucket, and a new public `GET /media/:key` route
+serves it back with the real Content-Type set (not sniffed) — the same fix
+the Drive version needed after `export=download` served everything as a
+generic binary blob. No card was required to enable R2. 3 new backend
+tests (123 total) using an in-memory fake R2 binding (native R2 has no HTTP
+surface the existing mock-fetch harness could intercept), deployed and
+smoke-tested live; frontend typechecks/builds clean.
 
-**Deliberately not built yet: file upload for media** (Apps Script's
-`uploadConversationMedia` used Drive; the free-tier equivalent here is
-Cloudflare R2, and **R2 needs to be enabled once in the Cloudflare
-dashboard before I can create a bucket** — `wrangler r2 bucket create`
-failed with `Please enable R2 through the Cloudflare Dashboard [code:
-10042]`. `sendMediaReply` itself works today with any already-hosted URL;
-only "pick a local file and have the panel host it for you" is blocked on
-this one manual step — see the task list.
+**This closes out full Apps Script feature parity** (Phases 1-15, matching
+the original build's own phase numbering) for the new stack, completely —
+every phase now has a working, tested, live equivalent. The only remaining
+piece is the deliberate architectural difference noted above (no automatic
+scheduled backup).
 
 **How to see it**: run `npm run dev` in `webapp/frontend/` (or it may already
 be running — check `http://localhost:5173`) and sign in with your Google

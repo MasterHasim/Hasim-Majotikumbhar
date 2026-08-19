@@ -11,3 +11,11 @@ compatibility_flags = ["nodejs_compat"]
 [vars]
 FIREBASE_DATABASE_URL = "https://whatsapp-panel-db-default-rtdb.asia-southeast1.firebasedatabase.app"
 ENVIRONMENT = "development"
+
+# R2 free tier: 10 GB storage, 1M Class A + 10M Class B operations/month, no
+# credit card required. Hosts agent-uploaded media (Phase 6/11's
+# uploadConversationMedia) — the free-tier equivalent of the Apps Script
+# build's Drive-backed upload, since Workers has no local/persistent disk.
+[[r2_buckets]]
+binding = "MEDIA_BUCKET"
+bucket_name = "whatsapp-panel-media"

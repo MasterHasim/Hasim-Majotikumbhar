@@ -78,6 +78,28 @@ export function registerMessagingRoutes(router: RouterType) {
     const body = (await json(request)) as { mediaType: string; mediaUrl: string; caption?: string };
     return Response.json(await new Phase6Api(ctx.db, ctx.identityEmail, env).sendMediaReply(param(request, 'id'), body.mediaType, body.mediaUrl, body.caption ?? ''));
   });
+  router.post('/api/conversations/:id/upload-media', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    const body = (await json(request)) as { base64Data: string; filename: string; mimeType: string };
+    const { key } = await new Phase6Api(ctx.db, ctx.identityEmail, env).uploadConversationMedia(param(request, 'id'), body.base64Data, body.filename, body.mimeType);
+    const url = `${new URL(request.url).origin}/media/${encodeURIComponent(key)}`;
+    return Response.json({ url, key });
+  });
+
+  // --- Public media serving (no Firebase auth — the uploaded file must be fetchable by
+  // Exotel's servers, not a signed-in browser, same "Anyone with the link" model the
+  // Apps Script build's Drive-based upload used). Content-Type is set from what the
+  // uploader recorded, not sniffed, so WhatsApp can tell an image from a generic blob —
+  // the same real bug Drive's export=download link had before switching to export=view. ---
+  router.get('/media/:key', async (request: IRequest, env: Env) => {
+    const key = param(request, 'key');
+    const object = await env.MEDIA_BUCKET.get(key);
+    if (!object) return new Response('Not found', { status: 404 });
+    const headers = new Headers();
+    object.writeHttpMetadata(headers);
+    headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+    return new Response(object.body, { headers });
+  });
 
   // --- Exotel webhook (no Firebase auth — shared secret token instead, same as apps-script/src/Phase4Webhook.gs) ---
   router.post('/webhook/exotel', async (request: IRequest, env: Env) => {

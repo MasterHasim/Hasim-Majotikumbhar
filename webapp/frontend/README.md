@@ -60,11 +60,10 @@ there's no Admin Users page yet). All wired to the already-tested
 **Templates, quick replies, and media are also wired up.** The Inbox compose
 box (`components/ChatPane.tsx`) now has a quick-reply picker, a template
 picker (inline `{{n}}` variable inputs, only APPROVED templates offered),
-and a "send media by URL" form; inbound/outbound media renders inline in the
-thread (image preview or a link, depending on type). Picking a local file to
-upload isn't built yet — it's blocked on you enabling Cloudflare R2 (see
-`webapp/backend/README.md`); sending media you already have a URL for works
-today.
+a "send media by URL" form, and a "📁 Choose file" button that uploads a
+local file straight to the R2-backed `uploadConversationMedia` endpoint and
+auto-fills the URL/type fields on success; inbound/outbound media renders
+inline in the thread (image preview or a link, depending on type).
 
 **The Admin Panel (`components/Admin.tsx`) is built** — a new sidebar item
 (ADMIN-only, replaces the old standalone Settings page) with 8 tabs: Users

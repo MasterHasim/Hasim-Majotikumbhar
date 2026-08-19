@@ -1,9 +1,10 @@
 /**
  * Direct port of apps-script/src/Phase6Services.gs's Phase6Api — agent/admin replies
- * and conversation resolution, now including sendTemplateReply (Phase 10) and
- * sendMediaReply (Phase 11, URL-based — uploadConversationMedia's R2-backed file
- * upload lives in routes/media.ts, blocked on the user enabling R2 in the Cloudflare
- * dashboard; sendMediaReply itself just needs an already-hosted URL and doesn't).
+ * and conversation resolution, now including sendTemplateReply (Phase 10),
+ * sendMediaReply (Phase 11, URL-based), and uploadConversationMedia (Phase 11,
+ * R2-backed — the free-tier equivalent of the source's Drive-backed upload; the
+ * bucket binding is only required by this one method, so it's optional on the
+ * constructor the same way Phase22Api's Voice env is).
  *
  * The bookkeeping-isolation fix from the Apps Script build (2026-08-13 — a secondary
  * conversation-metadata/audit-log failure must not turn an already-successful send
@@ -66,8 +67,9 @@ export class Phase6Api {
   private templates: Repository<Template>;
   private messageMedia: Repository<MessageMedia>;
   private exotelConfig: ExotelConfig;
+  private mediaBucket?: R2Bucket;
 
-  constructor(db: FirebaseDb, identityEmail: string, env: { EXOTEL_API_KEY?: string; EXOTEL_API_TOKEN?: string; EXOTEL_ACCOUNT_SID?: string; EXOTEL_SUBDOMAIN?: string }) {
+  constructor(db: FirebaseDb, identityEmail: string, env: { EXOTEL_API_KEY?: string; EXOTEL_API_TOKEN?: string; EXOTEL_ACCOUNT_SID?: string; EXOTEL_SUBDOMAIN?: string; MEDIA_BUCKET?: R2Bucket }) {
     const repos = buildPhase1Repositories(db);
     this.audit = new AuditLogService(db);
     this.access = new AccessControl(repos, this.audit, identityEmail);
@@ -78,6 +80,7 @@ export class Phase6Api {
     this.templates = new Repository<Template>(db, 'templates');
     this.messageMedia = new Repository<MessageMedia>(db, 'messageMedia');
     this.exotelConfig = requireExotelConfig(env);
+    this.mediaBucket = env.MEDIA_BUCKET;
   }
 
   async sendReply(conversationId: string, text: string): Promise<Message> {
@@ -103,6 +106,31 @@ export class Phase6Api {
     const message = await this.sendOutbound(conversationId, 'media', displayText, (provider, number, customer) => provider.sendMedia(toE164(number.phoneNumber), toE164(customer.phone), validMediaType, validMediaUrl, caption || ''));
     await this.messageMedia.create({ id: Ids.create('media'), messageId: message.id, mediaType: validMediaType, mediaUrl: validMediaUrl, caption: caption || '' });
     return message;
+  }
+
+  /**
+   * Uploads a locally-picked file (base64, from the compose box's file input) to R2 and
+   * returns a key the caller turns into a public URL (routes/media.ts serves it back with
+   * the real Content-Type, same "don't let the recipient see a generic binary blob" fix
+   * the source's Drive-based upload needed). Gated on the same 'reply' tier as
+   * sendMediaReply/sendReply, scoped to the specific conversation, so this can't be used
+   * as an open file-upload endpoint.
+   */
+  async uploadConversationMedia(conversationId: string, base64Data: string, filename: string, mimeType: string): Promise<{ key: string }> {
+    const conversation = await this.conversations.get(conversationId);
+    if (!conversation) throw new ApiError(404, 'NOT_FOUND', 'Conversation was not found.');
+    const teamId = await this.access.resolveTeamIdForNumber(conversation.numberId);
+    await this.access.requireConversationOperation('reply', { numberId: conversation.numberId, teamId, assignedUserId: conversation.assignedUserId });
+    const validBase64 = Validation.requiredString(base64Data, 'base64Data');
+    const validFilename = Validation.requiredString(filename, 'filename');
+    const validMimeType = Validation.requiredString(mimeType, 'mimeType');
+    if (!this.mediaBucket) throw new ApiError(500, 'CONFIGURATION_ERROR', 'Media storage is not configured.');
+
+    const bytes = Uint8Array.from(atob(validBase64), (c) => c.charCodeAt(0));
+    const safeName = validFilename.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const key = `${Ids.create('media')}-${safeName}`;
+    await this.mediaBucket.put(key, bytes, { httpMetadata: { contentType: validMimeType } });
+    return { key };
   }
 
   async resolveConversation(conversationId: string): Promise<Conversation> {

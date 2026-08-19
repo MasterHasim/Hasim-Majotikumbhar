@@ -47,6 +47,9 @@ export const backendApi = {
   sendMediaReply: (conversationId: string, mediaType: string, mediaUrl: string, caption: string) =>
     apiFetch<unknown>(`/api/conversations/${encodeURIComponent(conversationId)}/send-media`, { method: 'POST', body: JSON.stringify({ mediaType, mediaUrl, caption }) }),
 
+  uploadConversationMedia: (conversationId: string, base64Data: string, filename: string, mimeType: string) =>
+    apiFetch<{ url: string; key: string }>(`/api/conversations/${encodeURIComponent(conversationId)}/upload-media`, { method: 'POST', body: JSON.stringify({ base64Data, filename, mimeType }) }),
+
   reassignConversation: (conversationId: string, newUserId: string) =>
     apiFetch<Conversation>(`/api/conversations/${encodeURIComponent(conversationId)}/reassign`, { method: 'POST', body: JSON.stringify({ newUserId }) }),
 
