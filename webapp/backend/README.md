@@ -9,11 +9,12 @@ core (numbers/customers/conversations/messages/webhook/send) + CRM core
 (location leads + Exotel click-to-call) + Phase 10/11 (templates, quick
 replies, media send/receive) + Phase 12 (admin panel — no new backend
 needed, this CRUD already existed) + Phase 13 (search/filters,
-needs-response counts) ported, tested, and deployed live — see PROGRESS.md
-for the full verification history. 110 automated tests cover the actual
-business logic against a mocked Firebase and mocked Exotel WhatsApp + Voice
-endpoints (real RSA JWT signing/verification included, not stubbed out).
-Run `npm test`. Next up: dashboard/reports, automated backups. Local-file
+needs-response counts) + Phase 14 (dashboard & analytics) ported, tested,
+and deployed live — see PROGRESS.md for the full verification history. 117
+automated tests cover the actual business logic against a mocked Firebase
+and mocked Exotel WhatsApp + Voice endpoints (real RSA JWT signing/
+verification included, not stubbed out). Run `npm test`. Next up (and last
+remaining piece of full Apps Script parity): automated backups. Local-file
 media upload is blocked on you enabling R2 in the Cloudflare dashboard
 (`sendMediaReply` itself works today with any already-hosted URL) — see
 PROGRESS.md's task list.
@@ -107,11 +108,14 @@ npm run typecheck
   of it) and `getNeedsResponseCounts`. Phase 12 (admin panel) needed no new
   backend service at all — `Phase1Api`/`Phase3Api`/`NumberAssignmentConfigApi`
   already covered every bit of CRUD it uses.
+- `src/services/phase14Api.ts` — direct port of
+  `apps-script/src/Phase14Services.gs`: dashboard/analytics metrics, also
+  scoped through `Phase5Api.listMyNumbers()`, gated on `REPORTS_VIEW`.
 - `src/routes/phase1.ts` / `messaging.ts` / `crm.ts` / `phase22.ts` /
-  `templates.ts` / `search.ts` — HTTP endpoints, one-to-one with
-  `apps-script/src/Phase1Endpoints.gs` / `Phase6Endpoints.gs` /
+  `templates.ts` / `search.ts` / `dashboard.ts` — HTTP endpoints, one-to-one
+  with `apps-script/src/Phase1Endpoints.gs` / `Phase6Endpoints.gs` /
   `Phase4Webhook.gs` / the Phase 7-9 endpoint files / `Phase22Endpoints.gs` /
-  the Phase 10-11 endpoint files / `Phase13Endpoints.gs`.
+  the Phase 10-11 endpoint files / `Phase13Endpoints.gs` / `Phase14Endpoints.gs`.
 - `test/helpers/mockFirebase.ts` — mocks Google's OAuth2/JWK endpoints, the
   Firebase REST API, and a fake Exotel endpoint for tests, the same "mock the
   external boundary, run the real code" pattern `apps-script/tests/*.js` used.

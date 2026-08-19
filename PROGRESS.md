@@ -248,6 +248,23 @@ sidebar's current-number pill both show live needs-response badges, polled
 every 20s. 8 new backend tests (110 total), deployed and smoke-tested live;
 frontend typechecks/builds clean, verified rendering with no console errors.
 
+**✅ Dashboard & Analytics (Phase 14) is ported — backend and frontend
+both.** Direct port of `apps-script/src/Phase14Services.gs`'s `Phase14Api`:
+conversation totals/open/unassigned/needs-response/resolved, total
+customers, "assigned to me," per-number and per-agent breakdowns, average
+first-response time (createdAt → first OUTBOUND message), lead-stage
+distribution, template usage (parsed from a message's `"[Template: name]"`
+display-text marker, since `Message` has no `templateId` field of its own
+— same constraint the source documents), and lead conversion rate — all
+scoped through `Phase5Api.listMyNumbers()`, gated on `REPORTS_VIEW`
+(SUPERVISOR/SITE_MANAGER/VIEWER/ADMIN; AGENT does not have it, same as the
+source). A new **Dashboard** sidebar item (hidden for AGENT-only users)
+with a KPI row, per-number and per-agent tables, and bar-chart-style stage/
+template-usage breakdowns — a "this number / all numbers I can access"
+scope toggle mirrors the source's optional `numberId` narrowing. 7 new
+backend tests (117 total), deployed and smoke-tested live; frontend
+typechecks/builds clean, verified rendering with no console errors.
+
 **Deliberately not built yet: file upload for media** (Apps Script's
 `uploadConversationMedia` used Drive; the free-tier equivalent here is
 Cloudflare R2, and **R2 needs to be enabled once in the Cloudflare
@@ -255,9 +272,8 @@ dashboard before I can create a bucket** — `wrangler r2 bucket create`
 failed with `Please enable R2 through the Cloudflare Dashboard [code:
 10042]`. `sendMediaReply` itself works today with any already-hosted URL;
 only "pick a local file and have the panel host it for you" is blocked on
-this one manual step — see the task list. Also not yet built: dashboard/
-reports and automated backups — the remaining pieces of full Apps Script
-parity.
+this one manual step — see the task list. Also not yet built: automated
+backups — the last remaining piece of full Apps Script parity.
 
 **How to see it**: run `npm run dev` in `webapp/frontend/` (or it may already
 be running — check `http://localhost:5173`) and sign in with your Google
@@ -308,7 +324,7 @@ build:
 4. ~~CRM core — assignment, remarks, reminders, stages~~ ✅ done, tested, live
 5. ~~Location leads + click-to-call (Phase 22)~~ ✅ done, tested, live (Voice call itself still needs a one-time real-call verification — see task list)
 6. ~~Templates, quick replies, media~~ ✅ done, tested, live (media *file upload* specifically waits on you enabling R2 — see task list)
-7. Admin panel ✅ done, live · notifications/search ✅ done, live · dashboard, backup — **next**
+7. Admin panel ✅ · notifications/search ✅ · dashboard ✅ (all done, live) · backup — **next, last piece**
 8. Parallel-run validation, then cutover (Apps Script stays live and untouched the entire time)
 
 ---

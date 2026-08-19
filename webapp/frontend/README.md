@@ -83,5 +83,14 @@ the faster plain active-list fetch. The number picker's cards and the
 sidebar's current-number pill both show live needs-response count badges,
 polled every 20s.
 
-Not built yet: dashboard/reports and automated backups — see `PROGRESS.md`
-at the repo root for the full migration plan and status.
+**The Dashboard (`components/Dashboard.tsx`) is built** — a new sidebar item
+(hidden for AGENT-only users, matching the backend's `REPORTS_VIEW` gate): a
+KPI row (totals, open, needs-reply, unassigned, resolved, assigned-to-me,
+total customers, average first-response time), per-number and per-agent
+breakdown tables, lead-stage-distribution and template-usage bar charts, a
+lead-conversion summary, and a "this number / all numbers I can access"
+scope toggle.
+
+Not built yet: automated backups — the last remaining piece of full Apps
+Script parity — see `PROGRESS.md` at the repo root for the full migration
+plan and status.

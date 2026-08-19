@@ -8,6 +8,7 @@ import { registerCrmRoutes } from './routes/crm';
 import { registerPhase22Routes } from './routes/phase22';
 import { registerTemplateRoutes } from './routes/templates';
 import { registerSearchRoutes } from './routes/search';
+import { registerDashboardRoutes } from './routes/dashboard';
 
 const router = Router();
 
@@ -19,6 +20,7 @@ registerCrmRoutes(router);
 registerPhase22Routes(router);
 registerTemplateRoutes(router);
 registerSearchRoutes(router);
+registerDashboardRoutes(router);
 
 router.all('*', () => new Response('Not found', { status: 404 }));
 

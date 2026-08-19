@@ -1,9 +1,10 @@
 /** Typed wrappers around apiFetch for the endpoints the Inbox UI needs — one-to-one with webapp/backend/src/routes/{phase1,messaging,crm,phase22}.ts. */
 import { apiFetch } from './api';
 import type {
-  AssignableUser, AuditEntry, CallLog, Conversation, ConversationListItem, Customer, CustomerStage, Lead, LeadRemark, LeadStageAssignment,
-  LocationAssignmentConfig, LocationAssignmentUser, NumberAccess, NumberAssignmentConfig, NumberAssignmentUser, QuickReply, Remark, Reminder,
-  Role, SearchFilters, SearchResultItem, SnoozeStatus, Stage, Team, TeamMember, Template, UploadLeadsResult, User, WhatsAppNumber, WhoAmI, Workspace,
+  AssignableUser, AuditEntry, CallLog, Conversation, ConversationListItem, Customer, CustomerStage, DashboardMetrics, Lead, LeadRemark,
+  LeadStageAssignment, LocationAssignmentConfig, LocationAssignmentUser, NumberAccess, NumberAssignmentConfig, NumberAssignmentUser, QuickReply,
+  Remark, Reminder, Role, SearchFilters, SearchResultItem, SnoozeStatus, Stage, Team, TeamMember, Template, UploadLeadsResult, User, WhatsAppNumber,
+  WhoAmI, Workspace,
 } from '../types';
 
 export const backendApi = {
@@ -188,6 +189,9 @@ export const backendApi = {
 
   updateQuickReply: (id: string, patch: Record<string, unknown>) =>
     apiFetch<QuickReply>(`/api/quick-replies/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+
+  getDashboardMetrics: (numberId?: string) =>
+    apiFetch<DashboardMetrics>(`/api/dashboard${numberId ? `?numberId=${encodeURIComponent(numberId)}` : ''}`),
 };
 
 export type { AssignableUser, Customer };

@@ -294,3 +294,25 @@ export interface AuditEntry {
   targetId: string;
   metadata: Record<string, unknown>;
 }
+
+// --- Phase 14 (dashboard & analytics) ---
+
+export interface ConversationSummary {
+  total: number;
+  open: number;
+  unassigned: number;
+  needsResponse: number;
+  resolved: number;
+}
+
+export interface DashboardMetrics {
+  conversations: ConversationSummary;
+  totalCustomers: number;
+  assignedToMe: number;
+  byNumber: (ConversationSummary & { numberId: string; displayName: string })[];
+  byAgent: { userId: string; displayName: string; open: number; needsResponse: number }[];
+  responseTime: { averageFirstResponseMinutes: number | null; sampleSize: number };
+  stageDistribution: { stageId: string; name: string; count: number }[];
+  templateUsage: { name: string; count: number }[];
+  leadConversion: { totalCustomersWithStage: number; wonCount: number; conversionRate: number | null };
+}

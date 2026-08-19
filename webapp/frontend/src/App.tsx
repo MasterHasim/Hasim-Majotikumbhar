@@ -9,6 +9,7 @@ import { Sidebar, type Page } from './components/Sidebar';
 import { Inbox } from './components/Inbox';
 import { Leads } from './components/Leads';
 import { Admin } from './components/Admin';
+import { Dashboard } from './components/Dashboard';
 
 async function signIn() {
   try {
@@ -166,6 +167,7 @@ export default function App() {
             <Inbox number={activeNumber} initialConversationId={pendingConversationId} onInitialConversationConsumed={() => setPendingConversationId(null)} />
           )}
           {page === 'leads' && <Leads whoAmI={whoAmI} onOpenConversation={openConversationFromLead} />}
+          {page === 'dashboard' && <Dashboard number={activeNumber} />}
           {page === 'admin' && whoAmI.roleKeys.includes('ADMIN') && <Admin />}
         </div>
       </div>

@@ -1,6 +1,8 @@
 import type { WhatsAppNumber, WhoAmI } from '../types';
 
-export type Page = 'inbox' | 'leads' | 'admin';
+export type Page = 'inbox' | 'leads' | 'dashboard' | 'admin';
+
+const REPORTS_ROLES = ['ADMIN', 'SUPERVISOR', 'SITE_MANAGER', 'VIEWER'];
 
 export function Sidebar({
   number, whoAmI, page, needsResponseCount, onNavigate, onSwitchNumber, onSignOut,
@@ -35,6 +37,12 @@ export function Sidebar({
           <span className="nav-icon">📍</span>
           <span className="nav-label">Leads</span>
         </button>
+        {whoAmI.roleKeys.some((r) => REPORTS_ROLES.includes(r)) && (
+          <button className={`nav-item${page === 'dashboard' ? ' active' : ''}`} onClick={() => onNavigate('dashboard')}>
+            <span className="nav-icon">📊</span>
+            <span className="nav-label">Dashboard</span>
+          </button>
+        )}
         {whoAmI.roleKeys.includes('ADMIN') && (
           <button className={`nav-item${page === 'admin' ? ' active' : ''}`} onClick={() => onNavigate('admin')}>
             <span className="nav-icon">⚙️</span>
