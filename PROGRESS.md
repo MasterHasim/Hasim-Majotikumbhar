@@ -457,7 +457,7 @@ build:
 7. **Read `docs/ZOHO_PHASE_2.md` and answer its 5 open questions** whenever you're ready to think about Zoho.
 8. ~~[webapp] Click through the new Inbox UI~~ — ✅ done by you 2026-08-18. Registered all 10 numbers, confirmed the Inbox shell, a real inbound test message via the actual webhook pipeline, and a real reply sent successfully through Exotel.
 9. **[webapp] Place one real Exotel Voice call to verify Phase 22's click-to-call.** The Exotel Voice secrets are now set on the live backend, but `ExotelVoiceProvider`'s request/response field names are still UNVERIFIED (carried over from the Apps Script build's own unverified version) — a real agent needs a `phone` set (Admin Panel → Users, once that page exists on the new backend, or via the API directly for now) and a lead assigned to them, then click-to-call once so I can confirm/fix the response parsing against what Exotel actually returns.
-10. **[webapp] Enable R2 in the Cloudflare dashboard** (Cloudflare's own account-level gate — `wrangler r2 bucket create` fails with `Please enable R2 through the Cloudflare Dashboard [code: 10042]` until this is done once). Cloudflare's R2 free tier itself needs no credit card, but the dashboard flow to switch it on has to be done by you, the account owner — I can't do this via the API. Once enabled, tell me and I'll create the bucket, bind it, and wire up the local-file media upload that's currently the one missing piece of Phase 10/11.
+10. ~~[webapp] Enable R2 in the Cloudflare dashboard~~ — ✅ done by you 2026-08-19, no credit card needed. Bucket created, bound, and local-file media upload (the last piece of Phase 10/11) is built, tested, and deployed.
 
 ### Done (kept for history)
 
