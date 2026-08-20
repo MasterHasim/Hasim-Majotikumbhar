@@ -25,11 +25,40 @@ function doPost(e) {
     return jsonResponse_(outcome);
   } finally {
     logWebhookDebug_(params, body, outcome);
+    forwardToWebappParallelRun_(e, body);
   }
 }
 
 function jsonResponse_(body) {
   return ContentService.createTextOutput(JSON.stringify(body)).setMimeType(ContentService.MimeType.JSON);
+}
+
+/**
+ * Parallel-run validation (2026-08-20): best-effort forward of the exact raw webhook
+ * body to the new webapp/ backend, so it can independently process the same real
+ * traffic this webhook just handled, without ever risking the real response Exotel is
+ * waiting on. Off by default -- only fires when the WEBAPP_PARALLEL_RUN_WEBHOOK_URL
+ * Script Property is set (the full URL including webapp's own ?token=... query param,
+ * set directly in the Apps Script editor, same as every other credential in this
+ * project -- never pasted into chat). Clear the property to turn this off instantly.
+ *
+ * Apps Script's UrlFetchApp has no configurable timeout, so if webapp is ever slow or
+ * unreachable this adds real latency to the live webhook response -- acceptable for a
+ * deliberate, temporary testing window, not meant to be left on permanently.
+ */
+function forwardToWebappParallelRun_(e, body) {
+  try {
+    var url = PropertiesService.getScriptProperties().getProperty('WEBAPP_PARALLEL_RUN_WEBHOOK_URL');
+    if (!url) return;
+    UrlFetchApp.fetch(url, {
+      method: 'post',
+      contentType: (e && e.postData && e.postData.type) || 'application/json',
+      payload: body || '',
+      muteHttpExceptions: true
+    });
+  } catch (ignored) {
+    // Never let the parallel-run forward affect the real webhook response.
+  }
 }
 
 function logWebhookDebug_(params, body, outcome) {

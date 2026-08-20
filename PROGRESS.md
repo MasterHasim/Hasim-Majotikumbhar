@@ -386,6 +386,44 @@ directly, which would stop apps-script from receiving that number's
 messages entirely. Flagging this for a decision before proceeding further,
 rather than picking one unilaterally.
 
+## ✅ Parallel-run validation, round 2: dual-write forward built (2026-08-20)
+
+Per your decision, went with option B: apps-script keeps handling every real
+webhook exactly as it does today — same response, same speed, same
+reliability — and, after that's done, makes a **best-effort** attempt to
+forward the exact same raw payload to webapp's own `/webhook/exotel`, so
+webapp independently processes the identical real traffic apps-script just
+handled. If the forward fails or times out for any reason, it's swallowed
+silently and never affects the real response Exotel is waiting on — proven
+by a new test that makes the forward throw and confirms the webhook still
+returns normally.
+
+**Off by default.** Nothing changes until you opt in. `apps-script/src/Phase4Webhook.gs`'s
+`doPost` now checks a Script Property, `WEBAPP_PARALLEL_RUN_WEBHOOK_URL`,
+after processing each webhook — if it's unset (the current state), no
+forward is attempted at all, zero behavior change from before.
+
+**To turn it on when you're ready**: Apps Script editor → Project Settings
+→ Script Properties → add a property named `WEBAPP_PARALLEL_RUN_WEBHOOK_URL`
+with the value `https://whatsapp-panel-backend.hasim-c9e.workers.dev/webhook/exotel?token=<paste webapp's WEBHOOK_SECRET_TOKEN value here>`
+(same secret-handling pattern as every other credential in this project —
+I never see or ask for the actual token value, you paste it directly into
+the Apps Script property). **To turn it off**: delete that property, or
+clear its value — takes effect on the very next webhook call, no redeploy
+needed either way.
+
+**One honest caveat**: Apps Script's `UrlFetchApp` has no configurable
+timeout, so while this is on, if webapp is ever slow or unreachable it adds
+real latency to the *live* webhook response apps-script sends back to
+Exotel (normally Cloudflare Workers responds in well under a second, so
+this should be unnoticeable in practice) — meant for a deliberate, bounded
+testing window, not to be left on indefinitely.
+
+3 new tests in `tests/phase4-webhook-verification.js` (off-by-default, fires
+correctly when configured, never breaks the real response on failure). All
+24 apps-script test suites still passing. Pushed to Apps Script via
+`clasp push`.
+
 ### Setup status — everything is now set
 
 1. ✅ Cloudflare account created, `wrangler login` done.
@@ -531,8 +569,8 @@ build:
 8. ~~[webapp] Click through the new Inbox UI~~ — ✅ done by you 2026-08-18. Registered all 10 numbers, confirmed the Inbox shell, a real inbound test message via the actual webhook pipeline, and a real reply sent successfully through Exotel.
 9. **[webapp] Place one real Exotel Voice call to verify Phase 22's click-to-call.** The Exotel Voice secrets are now set on the live backend, but `ExotelVoiceProvider`'s request/response field names are still UNVERIFIED (carried over from the Apps Script build's own unverified version) — a real agent needs a `phone` set (Admin Panel → Users, once that page exists on the new backend, or via the API directly for now) and a lead assigned to them, then click-to-call once so I can confirm/fix the response parsing against what Exotel actually returns.
 10. ~~[webapp] Enable R2 in the Cloudflare dashboard~~ — ✅ done by you 2026-08-19, no credit card needed. Bucket created, bound, and local-file media upload (the last piece of Phase 10/11) is built, tested, and deployed.
-11. **[webapp] Duplicate one Firebase security rule for the new `webapp_messages` path.** Firebase Console → Realtime Database → Rules → find the existing rule block for `messages` → duplicate it → rename the duplicate's key to `webapp_messages` → Publish. Needed because webapp's `conversations`/`messages` collections were just renamed to `webapp_conversations`/`webapp_messages` to stop colliding with apps-script's live data (see "Parallel-run validation, round 1" above) — until this rule exists, webapp's live "new message without refreshing" feature won't work (a manual refresh still shows new messages).
-12. **[webapp] Decide how real-traffic parallel-run testing should actually happen**, now that the data-isolation blocker is fixed. Exotel only supports one webhook URL per number, so pointing it at webapp even briefly would stop apps-script from receiving that number's messages — not something to do without your sign-off. Options to pick from when you're ready: (a) temporarily point one *spare/test* number's webhook at webapp instead of a live one, (b) have apps-script's webhook forward a copy of each payload to webapp's `/webhook/exotel` (dual-write, no Exotel reconfiguration), or (c) keep validating with replayed/synthetic payloads only, and defer real traffic until closer to actual cutover.
+11. ~~[webapp] Duplicate one Firebase security rule for the new `webapp_messages` path~~ — ✅ done by you 2026-08-20, published with no error. I confirmed both `messages` and `webapp_messages` are live and correctly locked down (401 Permission denied to anonymous requests, apps-script's original rule undisturbed). **One thing still to confirm on your end**: open a real conversation in webapp and have someone message it without refreshing — if it appears live, the rule is fully correct end to end (an anonymous check can't prove the authenticated path works).
+12. ~~[webapp] Decide how real-traffic parallel-run testing should actually happen~~ — ✅ decided 2026-08-20: option (b), dual-write forward from apps-script. Built and pushed — see "Parallel-run validation, round 2" above. **Your action**: set the `WEBAPP_PARALLEL_RUN_WEBHOOK_URL` Script Property when you're ready to start a testing window (exact steps in that section above); leave it unset to keep this off.
 
 ### Done (kept for history)
 

@@ -104,4 +104,36 @@ assert.strictEqual(new MessageRepository().list().length, 1);
 response = JSON.parse(doPost({ parameter: { token: 'secret123' }, postData: { contents: 'not json' } }).text);
 assert.strictEqual(response.status, 'error');
 
+// Parallel-run forward (2026-08-20): off by default -- no WEBAPP_PARALLEL_RUN_WEBHOOK_URL
+// property set, so no forward attempt at all.
+let forwardCalls = [];
+const priorFetch = global.UrlFetchApp.fetch;
+global.UrlFetchApp.fetch = function (url, options) {
+  if (url === 'https://webapp.example.com/webhook/exotel?token=webapp-secret') { forwardCalls.push({ url: url, options: options }); return { getResponseCode: () => 200, getContentText: () => '{}' }; }
+  return priorFetch(url, options);
+};
+response = JSON.parse(doPost({ parameter: { token: 'secret123' }, postData: { contents: JSON.stringify(inboundPayload), type: 'application/json' } }).text);
+assert.strictEqual(response.status, 'ok');
+assert.strictEqual(forwardCalls.length, 0);
+
+// Property set: the exact raw body is forwarded to webapp's own webhook URL, and the
+// real response is unaffected either way.
+properties.WEBAPP_PARALLEL_RUN_WEBHOOK_URL = 'https://webapp.example.com/webhook/exotel?token=webapp-secret';
+response = JSON.parse(doPost({ parameter: { token: 'secret123' }, postData: { contents: JSON.stringify(inboundPayload), type: 'application/json' } }).text);
+assert.strictEqual(response.status, 'ok');
+assert.strictEqual(forwardCalls.length, 1);
+assert.strictEqual(forwardCalls[0].options.payload, JSON.stringify(inboundPayload));
+assert.strictEqual(forwardCalls[0].options.method, 'post');
+
+// If the forward itself throws (webapp unreachable), the real webhook response is
+// still returned normally -- the forward can never break the live path.
+global.UrlFetchApp.fetch = function (url) {
+  if (url === 'https://webapp.example.com/webhook/exotel?token=webapp-secret') throw new Error('webapp unreachable');
+  return priorFetch.apply(null, arguments);
+};
+response = JSON.parse(doPost({ parameter: { token: 'secret123' }, postData: { contents: JSON.stringify(inboundPayload), type: 'application/json' } }).text);
+assert.strictEqual(response.status, 'ok');
+global.UrlFetchApp.fetch = priorFetch;
+delete properties.WEBAPP_PARALLEL_RUN_WEBHOOK_URL;
+
 console.log('Phase 4 webhook verification: PASS');
