@@ -35,6 +35,10 @@ export function registerPhase1Routes(router: RouterType) {
     const ctx = await buildContext(request, env);
     return Response.json(await ctx.phase1.updateUser(param(request, 'id'), await json(request)));
   });
+  router.post('/api/users/:id/welcome-email', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    return Response.json(await ctx.phase1.sendWelcomeEmail(param(request, 'id')));
+  });
   router.get('/api/users', async (request: IRequest, env: Env) => {
     const ctx = await buildContext(request, env);
     return Response.json(await ctx.phase1.listUsers());

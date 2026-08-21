@@ -101,6 +101,9 @@ export const backendApi = {
   setUserPhone: (userId: string, phone: string) =>
     apiFetch<User>(`/api/users/${encodeURIComponent(userId)}`, { method: 'PATCH', body: JSON.stringify({ phone }) }),
 
+  sendWelcomeEmail: (userId: string) =>
+    apiFetch<{ sent: true }>(`/api/users/${encodeURIComponent(userId)}/welcome-email`, { method: 'POST' }),
+
   listRoles: () => apiFetch<Role[]>('/api/roles'),
 
   listTeams: () => apiFetch<Team[]>('/api/teams'),

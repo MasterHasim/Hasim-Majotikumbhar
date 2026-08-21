@@ -1,0 +1,12 @@
+name = "whatsapp-panel-frontend"
+compatibility_date = "2025-01-01"
+
+# Static hosting for the built SPA (dist/) via Workers Static Assets — the
+# modern replacement for Cloudflare Pages, and consistent with the backend
+# already being deployed as a Worker rather than a separate product.
+# not_found_handling = "single-page-application" makes every unmatched path
+# (e.g. a hard refresh on a client-side route) fall back to index.html
+# instead of a raw 404, since this is a client-routed SPA.
+[assets]
+directory = "./dist"
+not_found_handling = "single-page-application"

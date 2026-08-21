@@ -3,7 +3,7 @@
  * Same method names, same validation rules, same audit actions — see that file
  * for the original synchronous version this is ported from.
  */
-import { ApiError } from '../types';
+import { ApiError, type Env } from '../types';
 import { ALL_PERMISSIONS, Ids, Permissions, RoleDefinitions, ROLE_KEYS, Roles, Status, Validation, type Permission, type RoleKey } from '../domain/phase1';
 import type { AssignmentEligibility, Availability, NumberAccess, Role, Team, TeamMember, User } from '../domain/types';
 import { Repository } from '../lib/repository';
@@ -11,6 +11,7 @@ import { AccessControl, type Phase1Repositories } from '../lib/accessControl';
 import { AuditLogService } from '../lib/auditLog';
 import { FirebaseDb } from '../lib/firebaseAdmin';
 import { buildPhase1Repositories } from '../lib/phase1Repositories';
+import { getEmailConfig, sendEmail, welcomeEmailHtml, type EmailConfig } from '../lib/email';
 
 // The Apps Script build's sanitizeUserRecord_ stripped passwordHash/passwordSalt
 // before any user record reached the client (see Phase1Services.gs) — not needed
@@ -68,8 +69,9 @@ export class Phase1Api {
   private teamMembers: Repository<TeamMember>;
   private availabilityRepo: Repository<Availability>;
   private eligibilityRepo: Repository<AssignmentEligibility>;
+  private emailConfig: EmailConfig | null;
 
-  constructor(db: FirebaseDb, identityEmail: string) {
+  constructor(db: FirebaseDb, identityEmail: string, env?: Env) {
     this.repos = buildPhase1Repositories(db);
     this.audit = new AuditLogService(db);
     this.access = new AccessControl(this.repos, this.audit, identityEmail);
@@ -77,6 +79,12 @@ export class Phase1Api {
     this.availabilityRepo = new Repository<Availability>(db, 'availability');
     this.eligibilityRepo = new Repository<AssignmentEligibility>(db, 'assignmentEligibility');
     this.eligibilitySvc = new AssignmentEligibilityService(this.repos.users, this.eligibilityRepo, this.availabilityRepo, this.repos.numberAccess, this.teamMembers, this.repos.teams);
+    this.emailConfig = env ? getEmailConfig(env) : null;
+  }
+
+  private async roleNamesFor(roleIds: string[]): Promise<string[]> {
+    const roles = await this.repos.roles.list();
+    return roleIds.map((id) => roles.find((r) => r.id === id)?.name).filter((n): n is string => !!n);
   }
 
   async bootstrap(profile: { email: string; displayName: string }, bootstrapAdminEmail: string | undefined, identityEmail: string): Promise<User> {
@@ -115,7 +123,26 @@ export class Phase1Api {
     const record: User = { id: Ids.create('user'), email, displayName: Validation.requiredString(input.displayName, 'displayName'), status, roleIds, phone: (input.phone || '').toString().trim(), createdAt: now, updatedAt: now };
     await this.repos.users.create(record);
     await this.audit.write(actor.id, 'user.created', 'user', record.id, { email: record.email });
+    // Best-effort — a failed or unconfigured email notification never blocks the user from actually being created.
+    if (this.emailConfig) {
+      const roleNames = await this.roleNamesFor(roleIds);
+      const sent = await sendEmail(this.emailConfig, record.email, 'Welcome to ECHT Connect', welcomeEmailHtml(this.emailConfig, record.displayName, roleNames));
+      if (sent) await this.audit.write(actor.id, 'user.welcomeEmailSent', 'user', record.id, {});
+    }
     return record;
+  }
+
+  /** Manual re-send for the Admin UI's per-row button — e.g. the automatic send at creation failed, or someone wants to re-notify an existing user. Unlike createUser's best-effort send, this one surfaces a clear error when email isn't configured yet, since the admin explicitly asked for it. */
+  async sendWelcomeEmail(userId: string): Promise<{ sent: true }> {
+    const actor = await this.access.require(Permissions.USERS_MANAGE);
+    const user = await this.repos.users.get(userId);
+    if (!user) throw new ApiError(404, 'NOT_FOUND', 'User was not found.');
+    if (!this.emailConfig) throw new ApiError(500, 'CONFIGURATION_ERROR', 'Email is not configured yet — set RESEND_API_KEY, RESEND_FROM_EMAIL, and FRONTEND_URL.');
+    const roleNames = await this.roleNamesFor(user.roleIds);
+    const sent = await sendEmail(this.emailConfig, user.email, 'Welcome to ECHT Connect', welcomeEmailHtml(this.emailConfig, user.displayName, roleNames));
+    if (!sent) throw new ApiError(502, 'EMAIL_SEND_FAILED', 'Resend rejected the email — check the Worker logs for details.');
+    await this.audit.write(actor.id, 'user.welcomeEmailSent', 'user', userId, {});
+    return { sent: true };
   }
 
   async updateUser(id: string, patch: Record<string, unknown>): Promise<User> {

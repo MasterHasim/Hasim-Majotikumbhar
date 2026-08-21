@@ -80,6 +80,33 @@ describe('Phase1Api (ported from apps-script/src/Phase1Services.gs)', () => {
     });
   });
 
+  describe('welcome email', () => {
+    function apiAsWithEmail(email: string) {
+      return new Phase1Api(db, email, mock.emailEnv as never);
+    }
+
+    it('createUser sends a best-effort welcome email when Resend is configured, and is silent when it is not', async () => {
+      await apiAsWithEmail(ADMIN_EMAIL).createUser({ email: 'new1@example.com', displayName: 'New One' });
+      expect(mock.resendCalls).toHaveLength(1);
+      expect(mock.resendCalls[0]!.to).toEqual(['new1@example.com']);
+      expect(mock.resendCalls[0]!.subject).toContain('ECHT Connect');
+
+      await apiAs(ADMIN_EMAIL).createUser({ email: 'new2@example.com', displayName: 'New Two' });
+      expect(mock.resendCalls).toHaveLength(1); // unchanged — no env means no attempt, not an error
+    });
+
+    it('does not fail user creation when Resend rejects the send', async () => {
+      mock.setNextResendResponse(500, { message: 'nope' });
+      await expect(apiAsWithEmail(ADMIN_EMAIL).createUser({ email: 'new3@example.com', displayName: 'New Three' })).resolves.toMatchObject({ email: 'new3@example.com' });
+    });
+
+    it('sendWelcomeEmail throws CONFIGURATION_ERROR when Resend is not configured, and succeeds when it is', async () => {
+      await expect(apiAs(ADMIN_EMAIL).sendWelcomeEmail(agentId)).rejects.toMatchObject({ code: 'CONFIGURATION_ERROR' });
+      await expect(apiAsWithEmail(ADMIN_EMAIL).sendWelcomeEmail(agentId)).resolves.toMatchObject({ sent: true });
+      expect(mock.resendCalls.some((c) => c.to.includes(AGENT_EMAIL))).toBe(true);
+    });
+  });
+
   describe('number access', () => {
     it('grant -> revoke -> reactivate round-trips correctly', async () => {
       const granted = await apiAs(ADMIN_EMAIL).grantNumberAccess({ userId: agentId, numberId });

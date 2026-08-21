@@ -34,7 +34,7 @@ export function Sidebar({
       <div id="sidebar" className={open ? 'open' : ''}>
         <div className="brand">
           <span className="logo">💬</span>
-          <span>WhatsApp Panel</span>
+          <span>ECHT Connect</span>
         </div>
         <button className="current-number-pill" onClick={() => { onSwitchNumber(); setOpen(false); }}>
           <div className="cn-name">{number.displayName}</div>

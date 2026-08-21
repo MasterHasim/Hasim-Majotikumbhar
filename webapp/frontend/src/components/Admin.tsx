@@ -23,6 +23,7 @@ function UsersTab({ roles }: { roles: Role[] }) {
   const [newRoleIds, setNewRoleIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [emailStatus, setEmailStatus] = useState<Record<string, string>>({});
 
   function reload() {
     backendApi.listUsers().then(setUsers).catch((err) => setError(errMsg(err)));
@@ -40,14 +41,21 @@ function UsersTab({ roles }: { roles: Role[] }) {
     void guard(() => backendApi.updateUser(userId, { roleIds: next }));
   }
 
+  function sendWelcomeEmail(userId: string) {
+    setEmailStatus((prev) => ({ ...prev, [userId]: '…' }));
+    backendApi.sendWelcomeEmail(userId)
+      .then(() => setEmailStatus((prev) => ({ ...prev, [userId]: 'Sent!' })))
+      .catch((err) => setEmailStatus((prev) => ({ ...prev, [userId]: errMsg(err) })));
+  }
+
   return (
     <div className="card" style={{ maxWidth: 'none' }}>
       <h2 className="section-title" style={{ marginTop: 0 }}>Users</h2>
       <div style={{ overflowX: 'auto' }}>
         <table className="data-table">
-          <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Status</th><th>Roles</th></tr></thead>
+          <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Status</th><th>Roles</th><th></th></tr></thead>
           <tbody>
-            {users === null && <tr><td colSpan={5} className="empty">Loading…</td></tr>}
+            {users === null && <tr><td colSpan={6} className="empty">Loading…</td></tr>}
             {users?.map((u) => (
               <tr key={u.id}>
                 <td>{u.displayName}</td>
@@ -74,9 +82,15 @@ function UsersTab({ roles }: { roles: Role[] }) {
                     </label>
                   ))}
                 </td>
+                <td>
+                  <button className="btn" style={{ fontSize: 11 }} disabled={emailStatus[u.id] === '…'} onClick={() => sendWelcomeEmail(u.id)}>
+                    Send welcome email
+                  </button>
+                  {emailStatus[u.id] && <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 2 }}>{emailStatus[u.id]}</div>}
+                </td>
               </tr>
             ))}
-            {users?.length === 0 && <tr><td colSpan={5} className="empty">No users yet.</td></tr>}
+            {users?.length === 0 && <tr><td colSpan={6} className="empty">No users yet.</td></tr>}
           </tbody>
         </table>
       </div>

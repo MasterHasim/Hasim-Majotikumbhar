@@ -118,7 +118,7 @@ export default function App() {
         <div className="landing-header">
           <span className="logo">💬</span>
           <div>
-            <h1>WhatsApp Panel</h1>
+            <h1>ECHT Connect</h1>
             <div className="subtitle">Sign in with your Google Workspace account to continue.</div>
           </div>
         </div>

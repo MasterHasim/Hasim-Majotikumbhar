@@ -21,6 +21,12 @@ export interface Env {
   ALLOWED_ORIGINS?: string;
   /** The one identity allowed to call POST /api/bootstrap and become the first ADMIN — same role Script Property `wap.phase1.bootstrapAdminEmail` played in the Apps Script build. */
   BOOTSTRAP_ADMIN_EMAIL?: string;
+  /** Onboarding email (Resend API, `wrangler secret put RESEND_API_KEY`) — sent best-effort when a new user is created; absence just means no email goes out, never blocks user creation itself. */
+  RESEND_API_KEY?: string;
+  /** e.g. "ECHT Connect <notifications@echt.co.in>" — must be on a domain verified in the Resend dashboard. */
+  RESEND_FROM_EMAIL?: string;
+  /** The hosted frontend's own URL, linked from the onboarding email so a new user knows where to sign in. */
+  FRONTEND_URL?: string;
   /** Free-tier host for agent-uploaded media (Phase 6/11's uploadConversationMedia) — the equivalent of the Apps Script build's Drive-backed upload, since Workers has no local/persistent disk of its own. */
   MEDIA_BUCKET: R2Bucket;
 }

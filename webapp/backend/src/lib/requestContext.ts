@@ -19,5 +19,5 @@ export async function buildContext(request: Request, env: Env): Promise<RequestC
   const decoded = await verifyIdToken(token, serviceAccount.project_id);
   if (!decoded.email) throw new ApiError(401, 'UNAUTHENTICATED', 'Signed-in identity has no email.');
   const db = new FirebaseDb(serviceAccount, env.FIREBASE_DATABASE_URL);
-  return { db, identityEmail: decoded.email.toLowerCase(), phase1: new Phase1Api(db, decoded.email.toLowerCase()), env };
+  return { db, identityEmail: decoded.email.toLowerCase(), phase1: new Phase1Api(db, decoded.email.toLowerCase(), env), env };
 }

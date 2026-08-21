@@ -1,6 +1,6 @@
 # WhatsApp Multi-Number CRM — Progress Report
 
-**Last updated:** 2026-08-21 (found and fixed two real gaps while setting up real agents: round-robin was silently skipping everyone, and creating a Team crashed on an RTDB quirk — see below; also Inbox call button + Lead tagging system; webapp is now mobile/tablet responsive; Leads Upload surfaces assignment-rule status + bulk reassign/set-stage; webapp UI expansion — dark theme reskin, Leads Kanban board, Reminders & Customers pages — all also 2026-08-21; webapp migration reached full Apps Script feature parity, Phases 1-15, on 2026-08-18; Phase 22 was added to the live `apps-script/` build on 2026-08-17)
+**Last updated:** 2026-08-22 (webapp renamed to **ECHT Connect** and given a real hosted URL — `https://whatsapp-panel-frontend.hasim-c9e.workers.dev` — plus a new-user welcome-email system, ready to go live as soon as Resend is configured — see below. 2026-08-21: found and fixed two real gaps while setting up real agents — round-robin was silently skipping everyone, and creating a Team crashed on an RTDB quirk; also Inbox call button + Lead tagging system; webapp is now mobile/tablet responsive; Leads Upload surfaces assignment-rule status + bulk reassign/set-stage; webapp UI expansion — dark theme reskin, Leads Kanban board, Reminders & Customers pages. Webapp migration reached full Apps Script feature parity, Phases 1-15, on 2026-08-18; Phase 22 was added to the live `apps-script/` build on 2026-08-17)
 **Purpose:** single source of truth for "what's done, what's left, and what needs you personally." Updated after every phase/transition. See `docs/ROADMAP.md` for full phase scope, `memory/CHANGELOG.md` for full per-phase detail (this file stays intentionally brief per phase), and `memory/DECISIONS.md` for architectural reasoning.
 
 ## ✅ New: Phase 22 — Location Leads Upload, Assignment Rules & Exotel Click-to-Call (2026-08-17)
@@ -504,7 +504,32 @@ The webapp frontend got a real visual and functional expansion this session, on 
 
 4 new backend regression tests (128/128 passing), frontend typecheck and production build clean, backend deployed live to `https://whatsapp-panel-backend.hasim-c9e.workers.dev`. Verified end-to-end in a real signed-in browser session against real production data (a real lead dragged across Kanban columns and confirmed persisted after a hard reload; a real reminder created, listed, and completed; a real customer edited and searched) — not just typechecked. Committed as `e0fa234` and pushed to `origin/main`.
 
-## 🔴 Second real gap found while setting up Teams: RTDB silently drops empty arrays, crashing 4 call sites (2026-08-21)
+## 🟡 App renamed to ECHT Connect, hosted live, welcome-email system built — needs your Resend account to actually send (2026-08-22)
+
+**Renamed to ECHT Connect.** You asked for a name that represents the company, ready for the mobile app you're planning next — picked from three options (your own "ECHT Communication Portal," "ECHT Connect," "ECHT Hub") — you chose **ECHT Connect**. Updated everywhere it showed: browser tab title, the sign-in screen, the number-picker screen, and the sidebar brand.
+
+**Hosted the frontend for real, live at `https://whatsapp-panel-frontend.hasim-c9e.workers.dev`.** You asked "how, this is on a local server?" — worth restating here: the *frontend* was only ever served from a local dev server on this machine; the *data* was always the real production backend/Firebase. This closes that gap by deploying the frontend itself as a Cloudflare Workers static-assets project (not Pages — the new Pages integration needs Vite 6+, and Cloudflare is steering new projects to Workers anyway, matching how the backend is already deployed). Needed two follow-up fixes to actually work: the backend's CORS allowlist (`ALLOWED_ORIGINS`) now includes this URL, and the new domain had to be added to Firebase Auth's authorized domains list (a one-time Console change — done).
+
+**Created 2 test ADMIN accounts** — Hasim Test (`test@echt.co.in`) and Hitesh Bhojwani (`hitesh@echt.co.in`) — so you can test the hosted panel yourself while Saket and Aneri aren't available. Both can sign in immediately with their Google accounts; no invite step is required for that part.
+
+**Built a welcome-email system, not yet live.** You asked for members to get notified and be able to log in when added. Login itself doesn't need an email — see above — but a proactive notification does, and there was zero email infrastructure anywhere in this backend before now. Built: a small Resend API wrapper (`lib/email.ts`, no SDK dependency), a "Welcome to ECHT Connect" HTML email with a sign-in link, an automatic best-effort send on every `createUser` (never blocks account creation if email fails or isn't configured), and a manual **"Send welcome email"** button per row in Admin → Users for re-sends or catching up existing accounts. 4 new backend regression tests, including one that stubs a failed Resend response to prove account creation still succeeds. Verified live: clicked "Send welcome email" for Hasim Test and got back exactly the expected `CONFIGURATION_ERROR` — proving the whole path is wired correctly and is just waiting on real credentials.
+
+**Action needed from you to make it actually send:**
+1. Sign up at [resend.com](https://resend.com) (free tier: 3,000 emails/month, 100/day).
+2. Verify a sending domain — recommend `echt.co.in` or a subdomain like `notify.echt.co.in` — via the DNS TXT/DKIM records Resend gives you (added wherever `echt.co.in`'s DNS is managed).
+3. Create an API key in the Resend dashboard.
+4. Run this yourself (keeps the key out of chat history):
+```bash
+cd "C:\DP\Whats App Panel\webapp\backend" && npx wrangler secret put RESEND_API_KEY
+```
+   Paste the key when prompted.
+5. Tell me once it's set — I'll redeploy nothing (secrets apply immediately) and verify a real send.
+
+If `RESEND_FROM_EMAIL` (currently `"ECHT Connect <notifications@echt.co.in>"` in `webapp/backend/wrangler.toml`) should be a different address, let me know and I'll update it before you verify the domain in Resend.
+
+**WhatsApp notification (the "Both" you asked for) — not started yet.** This needs a Meta-approved message template (review takes time) and capturing a new user's phone number at creation (the Add User form doesn't collect one today). Planned as a fast-follow once email is confirmed working.
+
+## ✅ Second real gap found while setting up Teams: RTDB silently drops empty arrays, crashing 4 call sites (2026-08-21)
 
 Following up on the Assignment Eligibility fix above, went to actually set up a Team for Saket and Aneri (Admin → Teams) so they'd stop showing `NO_ACTIVE_ELIGIBLE_TEAM`. No teams existed yet, so this was a real first-use of that feature. Creating a team and adding a member with the numbers scope left blank (the natural "all my granted numbers" choice) crashed the whole Admin page with `Cannot read properties of undefined (reading 'length')`.
 

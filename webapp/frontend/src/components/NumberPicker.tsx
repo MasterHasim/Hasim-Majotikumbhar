@@ -62,7 +62,7 @@ export function NumberPicker({ numbers, isAdmin, needsResponseCounts, onPick, on
       <div className="landing-header">
         <span className="logo">💬</span>
         <div>
-          <h1>WhatsApp Panel</h1>
+          <h1>ECHT Connect</h1>
           <div className="subtitle">Pick a number to open its inbox.</div>
         </div>
       </div>

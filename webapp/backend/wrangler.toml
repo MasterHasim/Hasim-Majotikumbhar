@@ -11,6 +11,17 @@ compatibility_flags = ["nodejs_compat"]
 [vars]
 FIREBASE_DATABASE_URL = "https://whatsapp-panel-db-default-rtdb.asia-southeast1.firebasedatabase.app"
 ENVIRONMENT = "development"
+# Frontend origins allowed to call this API — see lib/cors.ts. Keep localhost:5173 so the
+# dev server keeps working alongside the hosted frontend.
+ALLOWED_ORIGINS = "http://localhost:5173,https://whatsapp-panel-frontend.hasim-c9e.workers.dev"
+
+# New-user onboarding email (lib/email.ts) — RESEND_API_KEY is a secret (`wrangler secret put
+# RESEND_API_KEY`), not set here. RESEND_FROM_EMAIL's domain must be verified in the Resend
+# dashboard first, or every send will fail. Until the API key secret is set, createUser simply
+# skips sending (never blocks user creation) and the manual "Send welcome email" button in
+# Admin -> Users shows a clear CONFIGURATION_ERROR instead of silently doing nothing.
+RESEND_FROM_EMAIL = "ECHT Connect <notifications@echt.co.in>"
+FRONTEND_URL = "https://whatsapp-panel-frontend.hasim-c9e.workers.dev"
 
 # R2 free tier: 10 GB storage, 1M Class A + 10M Class B operations/month, no
 # credit card required. Hosts agent-uploaded media (Phase 6/11's

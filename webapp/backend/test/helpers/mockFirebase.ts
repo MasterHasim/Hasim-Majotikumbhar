@@ -31,6 +31,12 @@ export interface MockFirebaseContext {
   exotelVoiceCalls: { path: string; params: Record<string, string> }[];
   /** Override the next Exotel Voice response (status + body) — defaults to a 200 with a fake call sid. */
   setNextExotelVoiceResponse(status: number, body: unknown): void;
+  /** Mock Resend/email env, matching src/lib/email.ts's getEmailConfig() expects. */
+  emailEnv: { RESEND_API_KEY: string; RESEND_FROM_EMAIL: string; FRONTEND_URL: string };
+  /** Every call made to the mock Resend endpoint, for assertions. */
+  resendCalls: { to: string[]; subject: string; html: string }[];
+  /** Override the next Resend response (status + body) — defaults to a 200. */
+  setNextResendResponse(status: number, body: unknown): void;
 }
 
 function base64UrlFromBuffer(bytes: ArrayBuffer): string {
@@ -82,6 +88,10 @@ export async function setupMockFirebase(projectId = 'test-project'): Promise<Moc
   let nextExotelVoiceResponse: { status: number; body: unknown } | null = null;
   let exotelVoiceCallSidCounter = 0;
 
+  const emailEnv = { RESEND_API_KEY: 'test-resend-key', RESEND_FROM_EMAIL: 'ECHT Connect <test@example.com>', FRONTEND_URL: 'https://example.test' };
+  const resendCalls: { to: string[]; subject: string; html: string }[] = [];
+  let nextResendResponse: { status: number; body: unknown } | null = null;
+
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
@@ -110,6 +120,17 @@ export async function setupMockFirebase(projectId = 'test-project'): Promise<Moc
       }
       exotelVoiceCallSidCounter += 1;
       return new Response(JSON.stringify({ Call: { Sid: `mock-call-sid-${exotelVoiceCallSidCounter}`, Status: 'in-progress' } }), { status: 200 });
+    }
+
+    if (url === 'https://api.resend.com/emails') {
+      const body = JSON.parse(init!.body as string) as { to: string[]; subject: string; html: string };
+      resendCalls.push(body);
+      if (nextResendResponse) {
+        const { status, body: respBody } = nextResendResponse;
+        nextResendResponse = null;
+        return new Response(JSON.stringify(respBody), { status });
+      }
+      return new Response(JSON.stringify({ id: 'mock-email-id' }), { status: 200 });
     }
 
     if (url === 'https://oauth2.googleapis.com/token') {
@@ -160,6 +181,9 @@ export async function setupMockFirebase(projectId = 'test-project'): Promise<Moc
     exotelVoiceConfig,
     exotelVoiceCalls,
     setNextExotelVoiceResponse: (status: number, body: unknown) => { nextExotelVoiceResponse = { status, body }; },
+    emailEnv,
+    resendCalls,
+    setNextResendResponse: (status: number, body: unknown) => { nextResendResponse = { status, body }; },
     restore: () => {
       globalThis.fetch = originalFetch;
     },
