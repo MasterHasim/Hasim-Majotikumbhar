@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { LEAD_LOCATIONS, type Lead, type LocationAssignmentConfig, type Stage, type User, type WhoAmI } from '../types';
 import { backendApi } from '../lib/backendApi';
 import { ApiClientError } from '../lib/api';
@@ -133,6 +133,13 @@ export function Leads({ whoAmI, onOpenConversation }: { whoAmI: WhoAmI; onOpenCo
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isManager]);
 
+  /** Every tag already in use across loaded leads, for the detail modal's add-tag suggestions — encourages reusing "Hot"/"Budget constrained" wording instead of near-duplicate variants. */
+  const allTags = useMemo(() => {
+    const set = new Set<string>();
+    for (const lead of leads ?? []) for (const tag of lead.tags ?? []) set.add(tag);
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [leads]);
+
   function toggleSelect(id: string) {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -234,7 +241,7 @@ export function Leads({ whoAmI, onOpenConversation }: { whoAmI: WhoAmI; onOpenCo
                       <input type="checkbox" checked={leads.length > 0 && selectedIds.size === leads.length} onChange={() => toggleSelectAll(leads.map((l) => l.id))} />
                     </th>
                   )}
-                  <th>Name</th><th>Phone</th><th>Location</th><th>Status</th><th>Assigned</th><th>Created</th>
+                  <th>Name</th><th>Phone</th><th>Location</th><th>Status</th><th>Tags</th><th>Assigned</th><th>Created</th>
                 </tr>
               </thead>
               <tbody>
@@ -249,11 +256,19 @@ export function Leads({ whoAmI, onOpenConversation }: { whoAmI: WhoAmI; onOpenCo
                     <td>{lead.phone}</td>
                     <td>{lead.location}</td>
                     <td><span className={`lead-status-tag ${lead.status}`}>{lead.status}</span></td>
+                    <td>
+                      {lead.tags && lead.tags.length > 0 ? (
+                        <div className="tag-row">
+                          {lead.tags.slice(0, 2).map((tag) => <span key={tag} className="tag-chip">{tag}</span>)}
+                          {lead.tags.length > 2 && <span className="tag-chip-more">+{lead.tags.length - 2}</span>}
+                        </div>
+                      ) : '—'}
+                    </td>
                     <td>{lead.assignedUserId ? (users.find((u) => u.id === lead.assignedUserId)?.displayName ?? (lead.assignedUserId === whoAmI.id ? whoAmI.displayName : lead.assignedUserId)) : '—'}</td>
                     <td>{fmt(lead.createdAt)}</td>
                   </tr>
                 ))}
-                {leads.length === 0 && <tr><td colSpan={isManager ? 7 : 6} className="empty">No leads {locationFilter || statusFilter ? 'match this filter' : 'yet'}.</td></tr>}
+                {leads.length === 0 && <tr><td colSpan={isManager ? 8 : 7} className="empty">No leads {locationFilter || statusFilter ? 'match this filter' : 'yet'}.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -269,6 +284,7 @@ export function Leads({ whoAmI, onOpenConversation }: { whoAmI: WhoAmI; onOpenCo
           isManager={isManager}
           currentUserId={whoAmI.id}
           managers={users}
+          allTags={allTags}
           onClose={() => setSelectedLead(null)}
           onChanged={loadLeads}
           onOpenConversation={onOpenConversation}

@@ -257,6 +257,21 @@ describe('Phase22Api (ported from Phase22Domain.gs + Phase22Services.gs)', () =>
       await expect(new Phase22Api(db, AGENT2_EMAIL).addLeadRemark(leadId, 'Hi')).rejects.toMatchObject({ code: 'FORBIDDEN' });
     });
 
+    it('the assigned agent can set tags; an unrelated agent cannot; a manager always can', async () => {
+      const lead = await new Phase22Api(db, AGENT_EMAIL).updateLeadTags(leadId, ['Hot', 'Budget constrained']);
+      expect(lead.tags).toEqual(['Hot', 'Budget constrained']);
+      await expect(new Phase22Api(db, AGENT2_EMAIL).updateLeadTags(leadId, ['Nope'])).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      await expect(new Phase22Api(db, ADMIN_EMAIL).updateLeadTags(leadId, ['Manager tag'])).resolves.toMatchObject({ tags: ['Manager tag'] });
+    });
+
+    it('trims, drops blanks, dedupes case-insensitively, and caps tags at 20', async () => {
+      const lead = await new Phase22Api(db, AGENT_EMAIL).updateLeadTags(leadId, [' Hot ', '', 'hot', 'Cold']);
+      expect(lead.tags).toEqual(['Hot', 'Cold']);
+      const many = Array.from({ length: 25 }, (_, i) => `tag${i}`);
+      const capped = await new Phase22Api(db, AGENT_EMAIL).updateLeadTags(leadId, many);
+      expect(capped.tags).toHaveLength(20);
+    });
+
     it('a manager can touch any lead regardless of assignment', async () => {
       await expect(new Phase22Api(db, ADMIN_EMAIL).setLeadStage(leadId, stageId)).resolves.toMatchObject({ stageId });
     });

@@ -80,6 +80,11 @@ export function registerPhase22Routes(router: RouterType) {
     const ctx = await buildContext(request, env);
     return Response.json(await new Phase22Api(ctx.db, ctx.identityEmail).getLeadStage(param(request, 'id')));
   });
+  router.post('/api/leads/:id/tags', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    const body = (await json(request)) as { tags: unknown };
+    return Response.json(await new Phase22Api(ctx.db, ctx.identityEmail).updateLeadTags(param(request, 'id'), body.tags));
+  });
   router.post('/api/leads/:id/remarks', async (request: IRequest, env: Env) => {
     const ctx = await buildContext(request, env);
     const body = (await json(request)) as { text: string };

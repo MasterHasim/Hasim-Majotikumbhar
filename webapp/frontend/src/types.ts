@@ -178,6 +178,7 @@ export interface Lead {
   createdAt: string;
   /** Denormalized on the lead record when setLeadStage is called — see backend Lead type. */
   stageId?: string;
+  tags?: string[];
 }
 
 export type LocationAssignmentMode = 'single' | 'round_robin' | 'manual';

@@ -54,6 +54,7 @@ export function ChatPane({ workspace, quickReplies, templates, onAfterSend, onRe
 }) {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  const [calling, setCalling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showMedia, setShowMedia] = useState(false);
   const [mediaType, setMediaType] = useState('image');
@@ -84,6 +85,19 @@ export function ChatPane({ workspace, quickReplies, templates, onAfterSend, onRe
     if (!trimmed || sending) return;
     setText('');
     await guard(() => backendApi.sendReply(workspace.conversation.id, trimmed));
+  }
+
+  async function call() {
+    if (calling) return;
+    setCalling(true);
+    setError(null);
+    try {
+      await backendApi.initiateConversationCall(workspace.conversation.id);
+    } catch (err) {
+      setError(err instanceof ApiClientError ? `${err.code}: ${err.message}` : String(err));
+    } finally {
+      setCalling(false);
+    }
   }
 
   async function handleFileChosen(file: File) {
@@ -119,6 +133,11 @@ export function ChatPane({ workspace, quickReplies, templates, onAfterSend, onRe
           {workspace.customer?.phone} · Assigned to {workspace.assignedUserName || 'nobody'}
         </div>
         <div className="chat-actions">
+          {workspace.customer?.phone && (
+            <button className="btn call" disabled={calling} onClick={() => void call()}>
+              {calling ? 'Calling…' : '📞 Call'}
+            </button>
+          )}
           {workspace.conversation.status === 'OPEN' && (
             <button className="btn" onClick={onResolve}>Resolve</button>
           )}

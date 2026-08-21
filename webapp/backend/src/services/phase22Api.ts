@@ -254,6 +254,19 @@ export class Phase22Api {
     return remark;
   }
 
+  /** Same authorization shape as addLeadRemark: lead's assigned agent or a lead manager. Replaces the full tag set (not a single add/remove) — simplest contract for a small, client-editable list. */
+  async updateLeadTags(leadId: string, tags: unknown): Promise<Lead> {
+    const lead = await this.leads.get(leadId);
+    if (!lead) throw new ApiError(404, 'NOT_FOUND', 'Lead was not found.');
+    const actor = await this.access.currentUser();
+    if (!(await this.canTouchLead(actor, lead))) await this.denied(actor, leadId);
+    await this.access.require(Permissions.REMARKS_MANAGE);
+    const validTags = Phase22Validation.tags(tags);
+    const record = await this.leads.update(leadId, { tags: validTags });
+    await this.audit.write(actor.id, 'lead.tagsUpdated', 'lead', leadId, { tags: validTags });
+    return record;
+  }
+
   async listLeadRemarks(leadId: string): Promise<LeadRemark[]> {
     const lead = await this.leads.get(leadId);
     if (!lead) throw new ApiError(404, 'NOT_FOUND', 'Lead was not found.');

@@ -31,4 +31,21 @@ export const Phase22Validation = {
   callerId(value: unknown): string {
     return String(value).replace(/[\s-]/g, '').trim();
   },
+  /** Trims, drops blanks, dedupes case-insensitively (keeping first casing seen), caps count
+   * and per-tag length so one bad paste can't bloat a lead record. */
+  tags(value: unknown): string[] {
+    if (!Array.isArray(value)) throw new ApiError(400, 'VALIDATION_ERROR', 'tags must be an array of strings.');
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const raw of value) {
+      const tag = String(raw ?? '').trim().slice(0, 40);
+      if (!tag) continue;
+      const key = tag.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      result.push(tag);
+      if (result.length >= 20) break;
+    }
+    return result;
+  },
 };

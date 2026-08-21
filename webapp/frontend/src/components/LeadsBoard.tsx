@@ -39,6 +39,12 @@ function LeadCard({ lead, users, currentUserId, dragging, onOpen, onDragStart, o
         <span>📍 {lead.location}</span>
         <span>{assigneeName ? `👤 ${assigneeName}` : 'Unassigned'}</span>
       </div>
+      {lead.tags && lead.tags.length > 0 && (
+        <div className="tag-row" style={{ marginTop: 6 }}>
+          {lead.tags.slice(0, 3).map((tag) => <span key={tag} className="tag-chip">{tag}</span>)}
+          {lead.tags.length > 3 && <span className="tag-chip-more">+{lead.tags.length - 3}</span>}
+        </div>
+      )}
     </div>
   );
 }

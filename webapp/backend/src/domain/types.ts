@@ -247,6 +247,10 @@ export interface Lead extends Record_ {
    * of needing a separate getLeadStage() call per lead. leadStageAssignments stays
    * the source of truth (setByUserId, audit trail); this is a read-speed mirror. */
   stageId?: string;
+  /** Free-form labels (e.g. "Hot", "Budget constrained", "Decision maker") an agent or
+   * manager attaches to help others reading the lead understand context at a glance —
+   * unlike stage there's no fixed vocabulary or admin CRUD, just per-lead tags. */
+  tags?: string[];
 }
 
 export type LocationAssignmentMode = 'single' | 'round_robin' | 'manual';

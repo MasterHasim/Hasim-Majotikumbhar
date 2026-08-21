@@ -117,6 +117,16 @@ input::placeholder, textarea::placeholder { color: var(--text-muted); }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 700; box-shadow: 0 0 16px rgba(34,233,166,.35); }
 .btn.primary:hover:not(:disabled) { color: var(--bg); filter: brightness(1.08); }
 .btn.danger { background: var(--danger-light); border-color: var(--danger); color: var(--danger); }
+.btn.call { background: var(--call-light); border-color: var(--call); color: var(--call); }
+.btn.call:hover:not(:disabled) { border-color: var(--call); color: var(--call); filter: brightness(1.15); }
+
+.tag-row { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.tag-chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; background: var(--surface2); border: 1px solid var(--border); color: var(--text-secondary); }
+.tag-chip-remove { border: none; background: none; padding: 0; margin: 0; font-size: 12px; line-height: 1; color: var(--text-muted); cursor: pointer; }
+.tag-chip-remove:hover { color: var(--danger); }
+.tag-chip-more { font-size: 11px; color: var(--text-muted); }
+.tag-add-row { display: flex; gap: 6px; align-items: center; margin-top: 6px; }
+.tag-add-row input { flex: 1; min-width: 0; padding: 5px 9px; font-size: 12px; }
 select.btn { -webkit-appearance: none; appearance: none; }
 .messages { flex: 1; overflow-y: auto; padding: 18px; background: var(--bg); scroll-behavior: smooth; }
 .message-row { display: flex; align-items: flex-end; gap: 8px; margin-bottom: 12px; }

@@ -9,13 +9,15 @@ function fmt(iso: string): string {
 }
 
 export function LeadDetailModal({
-  lead, stages, isManager, currentUserId, managers, onClose, onChanged, onOpenConversation,
+  lead, stages, isManager, currentUserId, managers, allTags, onClose, onChanged, onOpenConversation,
 }: {
   lead: Lead;
   stages: Stage[];
   isManager: boolean;
   currentUserId: string;
   managers: User[];
+  /** Tags already in use across other leads, offered as <datalist> suggestions so wording stays consistent (e.g. everyone writes "Hot", not a mix of "hot"/"Hot lead"). */
+  allTags: string[];
   onClose: () => void;
   onChanged: () => void;
   onOpenConversation: (conversationId: string, numberId: string) => void;
@@ -23,6 +25,8 @@ export function LeadDetailModal({
   const [stageId, setStageId] = useState('');
   const [remarks, setRemarks] = useState<{ id: string; text: string; createdAt: string }[]>([]);
   const [remarkText, setRemarkText] = useState('');
+  const [tags, setTags] = useState<string[]>(lead.tags ?? []);
+  const [tagInput, setTagInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,7 +35,25 @@ export function LeadDetailModal({
   useEffect(() => {
     backendApi.getLeadStage(lead.id).then((s) => setStageId(s?.stageId ?? '')).catch(() => setStageId(''));
     backendApi.listLeadRemarks(lead.id).then(setRemarks).catch(() => setRemarks([]));
+    setTags(lead.tags ?? []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lead.id]);
+
+  function saveTags(next: string[]) {
+    setTags(next);
+    void guard(async () => { await backendApi.updateLeadTags(lead.id, next); onChanged(); });
+  }
+
+  function addTag() {
+    const value = tagInput.trim();
+    setTagInput('');
+    if (!value || tags.some((t) => t.toLowerCase() === value.toLowerCase())) return;
+    saveTags([...tags, value]);
+  }
+
+  function removeTag(tag: string) {
+    saveTags(tags.filter((t) => t !== tag));
+  }
 
   function guard<T>(fn: () => Promise<T>) {
     setBusy(true);
@@ -73,6 +95,35 @@ export function LeadDetailModal({
                 <option value="">Unassigned</option>
                 {managers.map((u) => <option key={u.id} value={u.id}>{u.displayName}</option>)}
               </select>
+            </div>
+          )}
+        </div>
+
+        <div style={{ marginBottom: 10 }}>
+          <span className="field-label" style={{ display: 'block', marginBottom: 4 }}>Tags</span>
+          <div className="tag-row">
+            {tags.length === 0 && <span className="tag-chip-more">No tags yet.</span>}
+            {tags.map((tag) => (
+              <span key={tag} className="tag-chip">
+                {tag}
+                {canTouch && <button className="tag-chip-remove" disabled={busy} aria-label={`Remove tag ${tag}`} onClick={() => removeTag(tag)}>✕</button>}
+              </span>
+            ))}
+          </div>
+          {canTouch && (
+            <div className="tag-add-row">
+              <input
+                list="lead-tag-suggestions"
+                placeholder="Add a tag (e.g. Hot, Budget constrained)…"
+                disabled={busy}
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(); } }}
+              />
+              <datalist id="lead-tag-suggestions">
+                {allTags.filter((t) => !tags.includes(t)).map((t) => <option key={t} value={t} />)}
+              </datalist>
+              <button className="btn" disabled={busy || !tagInput.trim()} onClick={addTag}>Add</button>
             </div>
           )}
         </div>

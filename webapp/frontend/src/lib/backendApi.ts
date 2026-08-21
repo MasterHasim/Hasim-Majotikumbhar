@@ -173,6 +173,16 @@ export const backendApi = {
 
   initiateLeadCall: (leadId: string) => apiFetch<CallLog>(`/api/leads/${encodeURIComponent(leadId)}/call`, { method: 'POST' }),
 
+  updateLeadTags: (leadId: string, tags: string[]) =>
+    apiFetch<Lead>(`/api/leads/${encodeURIComponent(leadId)}/tags`, { method: 'POST', body: JSON.stringify({ tags }) }),
+
+  /** Calls the conversation's customer via Exotel Voice, ringing the agent's own phone first —
+   * same underlying provider as initiateLeadCall, just not tied to a Lead record. Uses the
+   * WhatsApp number's own phone as caller ID so the customer sees the number they're already
+   * chatting with. */
+  initiateConversationCall: (conversationId: string) =>
+    apiFetch<CallLog>(`/api/conversations/${encodeURIComponent(conversationId)}/call`, { method: 'POST' }),
+
   listLeadCallLog: (leadId: string) => apiFetch<CallLog[]>(`/api/leads/${encodeURIComponent(leadId)}/call-log`),
 
   setLeadStage: (leadId: string, stageId: string) =>
