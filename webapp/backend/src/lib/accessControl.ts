@@ -109,13 +109,14 @@ export class AccessControl {
       const owned = teams.filter((t) => t.status === Status.ACTIVE && t.ownerUserId === user.id);
       const members = await this.repos.teamMembers.list();
       for (const team of owned) {
-        const hasNumber = members.some((m) => m.teamId === team.id && m.status === Status.ACTIVE && m.numberIds.includes(numberId));
+        // numberIds can be undefined for a member RTDB stored with an empty array — see phase1Api.ts's evaluate() for why.
+        const hasNumber = members.some((m) => m.teamId === team.id && m.status === Status.ACTIVE && (m.numberIds ?? []).includes(numberId));
         if (hasNumber) return team.id;
       }
     }
     if (await this.hasRole(user, Roles.SUPERVISOR)) {
       const members = await this.repos.teamMembers.list();
-      const membership = members.find((m) => m.userId === user.id && m.status === Status.ACTIVE && m.numberIds.includes(numberId));
+      const membership = members.find((m) => m.userId === user.id && m.status === Status.ACTIVE && (m.numberIds ?? []).includes(numberId));
       if (membership) return membership.teamId;
     }
     return null;

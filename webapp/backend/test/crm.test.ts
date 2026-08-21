@@ -169,6 +169,31 @@ describe('CRM core (ported from Phase7-9 Domain/Services.gs)', () => {
       it('a plain AGENT with no team cannot list assignable users', async () => {
         await expect(new Phase7Api(db, AGENT_EMAIL).listAssignableUsers(numberId)).rejects.toMatchObject({ code: 'FORBIDDEN' });
       });
+
+      /**
+       * Regression test for a real crash: addTeamMember always writes numberIds: [] for a
+       * "blank = all numbers" member, but Firebase RTDB drops empty arrays/objects on write —
+       * so a round-tripped record comes back with numberIds simply absent, not []. Every
+       * `.numberIds.length`/`.includes()` call site used to assume the array always existed and
+       * threw a TypeError the first time this ever happened in real data (discovered live while
+       * setting up Assignment Eligibility for real pilot agents). Simulated here by writing the
+       * record without the field, matching what RTDB actually round-trips.
+       */
+      it('treats a team member whose numberIds field is entirely absent (RTDB-dropped empty array) as "all numbers" for eligibility, not a crash', async () => {
+        const siteManagerRoleId = (await new Phase1Api(db, ADMIN_EMAIL).listRoles()).find((r) => r.key === Roles.SITE_MANAGER)!.id;
+        const manager = await new Phase1Api(db, ADMIN_EMAIL).createUser({ email: 'manager@example.com', displayName: 'Manager', roleIds: [siteManagerRoleId] });
+        const team = await new Phase1Api(db, ADMIN_EMAIL).createTeam({ name: 'Team A', ownerUserId: manager.id });
+        const member = await new Phase1Api(db, ADMIN_EMAIL).addTeamMember({ teamId: team.id, userId: agentId, numberIds: [] });
+        const raw = (await db.get<Record<string, unknown>>(`teamMembers/${member.id}`))!;
+        delete raw.numberIds;
+        await db.put(`teamMembers/${member.id}`, raw);
+
+        await new Phase1Api(db, ADMIN_EMAIL).setAssignmentEligibility({ userId: agentId, numberId, teamId: team.id, eligible: true });
+        await new Phase1Api(db, AGENT_EMAIL).setAvailability('available');
+
+        const status = await new Phase1Api(db, ADMIN_EMAIL).getAssignmentEligibility(agentId, numberId);
+        expect(status).toMatchObject({ assignmentEligible: true, assignableNow: true, reasons: [] });
+      });
     });
   });
 

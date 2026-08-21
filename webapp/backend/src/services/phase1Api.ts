@@ -44,11 +44,14 @@ class AssignmentEligibilityService {
     const access = await this.numberAccess.findOne((item) => item.userId === userId && item.numberId === numberId && item.status === Status.ACTIVE);
     if (!access || access.granted !== true) return { assignmentEligible: false, availability: availabilityStatus, assignableNow: false, reasons: ['NO_GRANTED_NUMBER_ACCESS'] };
 
+    // member.numberIds can come back undefined even though addTeamMember always writes []: Firebase
+    // RTDB drops empty arrays/objects on write, so "blank = all numbers" round-trips as no field at
+    // all rather than []. `?? []` everywhere numberIds is read guards against that, here and below.
     const memberships = (await this.teamMembers.list()).filter((m) => m.userId === userId && m.status === Status.ACTIVE);
     const teams = await this.teams.list();
     const enabled = memberships.some((member) => {
       const team = teams.find((t) => t.id === member.teamId && t.status === Status.ACTIVE);
-      return !!team && (member.numberIds.length === 0 || member.numberIds.includes(numberId));
+      return !!team && ((member.numberIds ?? []).length === 0 || (member.numberIds ?? []).includes(numberId));
     });
     if (!enabled) return { assignmentEligible: false, availability: availabilityStatus, assignableNow: false, reasons: ['NO_ACTIVE_ELIGIBLE_TEAM'] };
 

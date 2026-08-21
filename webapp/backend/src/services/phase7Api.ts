@@ -152,7 +152,8 @@ export class Phase7Api {
     const teamId = await this.access.resolveTeamIdForNumber(numberId);
     if (!teamId) throw new ApiError(403, 'FORBIDDEN', 'Access is denied.');
     await this.access.requireTeamOperation(Permissions.CONVERSATIONS_REASSIGN_TEAM, teamId);
-    const members = (await this.phase1Repos.teamMembers.list()).filter((m) => m.teamId === teamId && m.status === Status.ACTIVE && (m.numberIds.length === 0 || m.numberIds.includes(numberId)));
+    // numberIds can be undefined for a "blank = all numbers" member — RTDB drops empty arrays on write (see phase1Api.ts's evaluate()).
+    const members = (await this.phase1Repos.teamMembers.list()).filter((m) => m.teamId === teamId && m.status === Status.ACTIVE && ((m.numberIds ?? []).length === 0 || (m.numberIds ?? []).includes(numberId)));
     const users: User[] = [];
     for (const member of members) {
       const user = await this.phase1Repos.users.get(member.userId);

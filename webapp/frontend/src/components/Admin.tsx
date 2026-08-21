@@ -171,7 +171,7 @@ function TeamsTab({ users, roles }: { users: User[]; roles: Role[] }) {
                           {(members[t.id] ?? []).map((m) => (
                             <tr key={m.id}>
                               <td>{userName(m.userId)}</td>
-                              <td>{m.numberIds.length ? m.numberIds.join(', ') : 'all granted numbers'}</td>
+                              <td>{(m.numberIds ?? []).length ? m.numberIds.join(', ') : 'all granted numbers'}</td>
                               <td>
                                 <input
                                   type="checkbox"
