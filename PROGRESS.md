@@ -1,6 +1,6 @@
 # WhatsApp Multi-Number CRM — Progress Report
 
-**Last updated:** 2026-08-18 (webapp migration reached full Apps Script feature parity, Phases 1-15 — see below; Phase 22 was added to the live `apps-script/` build on 2026-08-17)
+**Last updated:** 2026-08-21 (webapp UI expansion — dark theme reskin, Leads Kanban board, Reminders & Customers pages — see below; webapp migration reached full Apps Script feature parity, Phases 1-15, on 2026-08-18; Phase 22 was added to the live `apps-script/` build on 2026-08-17)
 **Purpose:** single source of truth for "what's done, what's left, and what needs you personally." Updated after every phase/transition. See `docs/ROADMAP.md` for full phase scope, `memory/CHANGELOG.md` for full per-phase detail (this file stays intentionally brief per phase), and `memory/DECISIONS.md` for architectural reasoning.
 
 ## ✅ New: Phase 22 — Location Leads Upload, Assignment Rules & Exotel Click-to-Call (2026-08-17)
@@ -470,6 +470,20 @@ build:
 6. ~~Templates, quick replies, media~~ ✅ done, tested, live (media *file upload* specifically waits on you enabling R2 — see task list)
 7. Admin panel ✅ · notifications/search ✅ · dashboard ✅ · backup ✅ (all done, live — Phases 1-15 parity reached)
 8. Parallel-run validation, then cutover (Apps Script stays live and untouched the entire time) — **next**
+
+## ✅ Webapp UI expansion: dark theme reskin, Leads Kanban board, Reminders & Customers pages (2026-08-21)
+
+The webapp frontend got a real visual and functional expansion this session, on top of the Phase 1-15 parity reached on 2026-08-18. **Nothing here needs you personally** — no manual setup, no blocked items, purely additive UI/UX work, already deployed and verified live.
+
+**Dark theme reskin.** Ported a techy dark-theme design concept — built and approved screen-by-screen in Penpot first (see `memory/whatsapp-crm-penpot-design-concept` if picking this up in a fresh session) — into `webapp/frontend`: Space Grotesk/Inter/JetBrains Mono typography, WhatsApp-green + Exotel-blue accent colors, glow effects on primary actions. Same CSS class names throughout, so no component structure changed — purely `styles.css` plus font links in `index.html`.
+
+**Leads Kanban board.** The Leads page now has a Board/Table toggle (defaults to Board) — drag-and-drop columns keyed to a configurable stage pipeline, seeded with your requested funnel: New Leads → Contacted → Interested → Not Interested → Lead Won / Lead Lost. New **Admin → Lead Stages** tab to rename/reorder/add/deactivate stages — there was previously no way to manage this at all. Backend: `Lead.stageId` is now denormalized onto the lead record itself when set, so the board reads every lead's stage in one `listLeads()` call instead of N+1 per-lead fetches.
+
+**My Reminders and Customers pages** (new Sidebar nav items) — both were fully-built backend endpoints (`listMyReminders`, `listCustomers`, `updateCustomer`) with no frontend page until now, the same gap apps-script's equivalent pages closed. Reminders shows your pending reminders across every conversation, overdue ones highlighted, with an "Open chat" bridge into the Inbox. Customers is a searchable directory with inline-editable name/email/company and a "View conversation" bridge. Fixed a real N+1 in `listMyReminders` while wiring it up (was calling `.get()` per reminder in a loop; now two bulk reads).
+
+**Loading-state fix, swept across the whole Admin section + Leads.** Every list-fetching component now distinguishes "still loading" from "confirmed empty" (an `X[] | null` pattern instead of defaulting to `[]`) — previously a slow fetch could briefly flash a misleading "No X yet." message, which looked like data loss. Caught originally on the Admin Users tab (real data, just a loading-state race, not an actual bug), then swept the same fix to Teams/Numbers/Number Access/Assignment Rules/Audit Log/Quick Replies/Templates/Lead Stages/Leads.
+
+4 new backend regression tests (128/128 passing), frontend typecheck and production build clean, backend deployed live to `https://whatsapp-panel-backend.hasim-c9e.workers.dev`. Verified end-to-end in a real signed-in browser session against real production data (a real lead dragged across Kanban columns and confirmed persisted after a hard reload; a real reminder created, listed, and completed; a real customer edited and searched) — not just typechecked. Committed as `e0fa234` and pushed to `origin/main`.
 
 ---
 
