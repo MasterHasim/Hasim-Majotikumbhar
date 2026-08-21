@@ -1,6 +1,6 @@
 # WhatsApp Multi-Number CRM — Progress Report
 
-**Last updated:** 2026-08-21 (Leads Upload now surfaces assignment-rule status per location + bulk reassign/set-stage — see below; webapp UI expansion — dark theme reskin, Leads Kanban board, Reminders & Customers pages — also 2026-08-21; webapp migration reached full Apps Script feature parity, Phases 1-15, on 2026-08-18; Phase 22 was added to the live `apps-script/` build on 2026-08-17)
+**Last updated:** 2026-08-21 (webapp is now mobile/tablet responsive — see below; Leads Upload surfaces assignment-rule status + bulk reassign/set-stage, also 2026-08-21; webapp UI expansion — dark theme reskin, Leads Kanban board, Reminders & Customers pages — also 2026-08-21; webapp migration reached full Apps Script feature parity, Phases 1-15, on 2026-08-18; Phase 22 was added to the live `apps-script/` build on 2026-08-17)
 **Purpose:** single source of truth for "what's done, what's left, and what needs you personally." Updated after every phase/transition. See `docs/ROADMAP.md` for full phase scope, `memory/CHANGELOG.md` for full per-phase detail (this file stays intentionally brief per phase), and `memory/DECISIONS.md` for architectural reasoning.
 
 ## ✅ New: Phase 22 — Location Leads Upload, Assignment Rules & Exotel Click-to-Call (2026-08-17)
@@ -471,6 +471,17 @@ build:
 7. Admin panel ✅ · notifications/search ✅ · dashboard ✅ · backup ✅ (all done, live — Phases 1-15 parity reached)
 8. Parallel-run validation, then cutover (Apps Script stays live and untouched the entire time) — **next**
 
+## ✅ Mobile and tablet responsiveness (2026-08-21)
+
+`webapp/frontend`'s CSS had zero `@media` queries anywhere — the fixed-width sidebar (236px) and the Inbox's fixed 3-column split (320px/1fr/300px) genuinely broke below ~900px: on a phone the sidebar alone would eat the whole screen and the app would horizontally scroll. Fixed:
+
+- **Sidebar** becomes an off-canvas drawer below 900px, opened by a hamburger button, closes on navigating/switching number/tapping the backdrop.
+- **Inbox** becomes one pane at a time below 900px (conversation list *or* chat, never both), with the customer detail panel sliding in as an overlay (info button in the chat header) instead of a third column, plus a back button to return to the list.
+- **Leads/Reminders/Customers tables** get horizontal-scroll wrappers so a wide table scrolls in place instead of breaking the page.
+- Desktop and tablet-landscape (≥900px) are provably unchanged — every element renders the same markup at every width, only CSS visibility/position changes below the breakpoint.
+
+**One honest limitation**: this environment couldn't physically resize the real browser window or report altered viewport dimensions to the page, so I verified the implementation by exercising the actual state transitions via the DOM against the live app (confirmed the drawer, back/info/close buttons, and pane-switching all correctly toggle the right classes on the real elements) rather than a narrow-viewport screenshot. The CSS itself uses standard, well-established responsive patterns (off-canvas drawer, single-column grid, slide-in overlay) — **please click through it on an actual phone/tablet when you get a chance**, same "I can't fully substitute for you actually using it" caveat as every other frontend change in this project.
+
 ## ✅ Leads Upload ↔ Assignment Rules visibility + bulk lead actions (2026-08-21)
 
 **A real gap found while checking this connection, not something you need to act on urgently, but worth knowing:** `Phase22Api.uploadLeads` has always auto-assigned each uploaded lead per that location's assignment rule (`assignLead`) — that part of the wiring was correct and already tested. What was missing was visibility: nothing in the UI showed *whether* a location actually had a rule configured before you uploaded into it. The Upload Leads modal now shows a live status line per location (configured/active, manual, or not configured) with a one-click "Configure" link straight into Assignment Rules. Checking this live surfaced that **none of your 6 locations have an assignment rule configured yet** — every lead uploaded so far has landed `UNASSIGNED`. Worth noting this isn't necessarily an oversight: there's currently only one real user account in the system (yours), so round-robin/single-agent modes don't have much to route between yet — this becomes actionable once more agent accounts exist (Admin → Users).
@@ -593,6 +604,7 @@ The webapp frontend got a real visual and functional expansion this session, on 
 10. ~~[webapp] Enable R2 in the Cloudflare dashboard~~ — ✅ done by you 2026-08-19, no credit card needed. Bucket created, bound, and local-file media upload (the last piece of Phase 10/11) is built, tested, and deployed.
 11. ~~[webapp] Duplicate one Firebase security rule for the new `webapp_messages` path~~ — ✅ done by you 2026-08-20, published with no error. I confirmed both `messages` and `webapp_messages` are live and correctly locked down (401 Permission denied to anonymous requests, apps-script's original rule undisturbed). **One thing still to confirm on your end**: open a real conversation in webapp and have someone message it without refreshing — if it appears live, the rule is fully correct end to end (an anonymous check can't prove the authenticated path works).
 12. ~~[webapp] Decide how real-traffic parallel-run testing should actually happen~~ — ✅ decided 2026-08-20: option (b), dual-write forward from apps-script. Built and pushed — see "Parallel-run validation, round 2" above. **Your action**: set the `WEBAPP_PARALLEL_RUN_WEBHOOK_URL` Script Property when you're ready to start a testing window (exact steps in that section above); leave it unset to keep this off.
+13. **[webapp] Click through the mobile/tablet responsive layout on an actual phone and tablet.** Built 2026-08-21 (sidebar drawer, Inbox single-pane-at-a-time, table horizontal scroll) — verified the underlying state/class transitions are correct via the DOM, but this environment couldn't physically render or screenshot a narrow viewport, so nobody has actually looked at it on a real small screen yet.
 
 ### Done (kept for history)
 
