@@ -9,6 +9,7 @@ import { Sidebar, type Page } from './components/Sidebar';
 import { Inbox } from './components/Inbox';
 import { Leads } from './components/Leads';
 import { Reminders } from './components/Reminders';
+import { CallHistory } from './components/CallHistory';
 import { Customers } from './components/Customers';
 import { Admin } from './components/Admin';
 import { Dashboard } from './components/Dashboard';
@@ -172,6 +173,7 @@ export default function App() {
           )}
           {page === 'leads' && <Leads whoAmI={whoAmI} onOpenConversation={openConversation} />}
           {page === 'reminders' && <Reminders number={activeNumber} onOpenConversation={openConversation} />}
+          {page === 'callHistory' && <CallHistory isManager={whoAmI.roleKeys.includes('ADMIN') || whoAmI.roleKeys.includes('SITE_MANAGER')} onOpenConversation={openConversation} />}
           {page === 'customers' && <Customers number={activeNumber} onOpenConversation={openConversation} />}
           {page === 'dashboard' && <Dashboard number={activeNumber} />}
           {page === 'admin' && whoAmI.roleKeys.includes('ADMIN') && <Admin />}

@@ -1,6 +1,7 @@
 /** Direct port of apps-script/src/Phase8Domain.gs + Phase8Services.gs's Phase8Api — lead stages, customer stage, remarks, customer directory. */
 import { ApiError } from '../types';
 import { Ids, Permissions, Roles, Validation } from '../domain/phase1';
+import { Phase22Validation } from '../domain/phase22';
 import type { Conversation, Customer, CustomerStage, Remark, Stage, User } from '../domain/types';
 import { Repository } from '../lib/repository';
 import { AccessControl, type Phase1Repositories } from '../lib/accessControl';
@@ -152,11 +153,11 @@ export class Phase8Api {
     if (!(await this.access.hasRole(actor, Roles.ADMIN)) && !(await this.canSeeCustomer(actor, customerId))) {
       throw new ApiError(403, 'FORBIDDEN', 'Access is denied.');
     }
-    const allowed = ['name', 'email', 'company'];
+    const allowed = ['name', 'email', 'company', 'tags'];
     const safePatch: Record<string, unknown> = {};
     for (const key of Object.keys(patch || {})) {
       if (!allowed.includes(key)) throw new ApiError(400, 'VALIDATION_ERROR', `Field cannot be updated: ${key}`);
-      safePatch[key] = patch[key];
+      safePatch[key] = key === 'tags' ? Phase22Validation.tags(patch[key]) : patch[key];
     }
     const record = await this.customers.update(customerId, safePatch as Partial<Customer>);
     await this.audit.write(actor.id, 'customer.updated', 'customer', customerId, {});

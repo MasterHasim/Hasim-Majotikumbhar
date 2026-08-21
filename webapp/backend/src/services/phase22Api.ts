@@ -17,7 +17,7 @@ import { ApiError } from '../types';
 import { Ids, Permissions, Roles, Status, Validation } from '../domain/phase1';
 import { Phase22AssignmentModes, Phase22LeadStatus, Phase22Locations, Phase22Validation, type Phase22Location } from '../domain/phase22';
 import type {
-  CallLog, Conversation, Customer, Lead, LeadRemark, LeadStageAssignment, LocationAssignmentConfig,
+  CallLog, CallLogWithContext, Conversation, Customer, Lead, LeadRemark, LeadStageAssignment, LocationAssignmentConfig,
   LocationAssignmentUser, Stage, User, WhatsAppNumber,
 } from '../domain/types';
 import { Repository } from '../lib/repository';
@@ -215,6 +215,53 @@ export class Phase22Api {
   }
 
   /**
+   * "Was this customer actually called?" for the conversation detail panel — matches on
+   * this conversation's own conversationId (calls placed via initiateConversationCall) AND
+   * on the customer's phone number (calls placed via the Leads path, initiateCall, which
+   * stamps leadPhone but has no conversationId of its own) so a call made from either
+   * surface shows up here. Same view-level authorization as remarks/reminders.
+   */
+  async listConversationCallHistory(conversationId: string): Promise<CallLog[]> {
+    const conversation = await this.conversations.get(conversationId);
+    if (!conversation) throw new ApiError(404, 'NOT_FOUND', 'Conversation was not found.');
+    const teamId = await this.access.resolveTeamIdForNumber(conversation.numberId);
+    await this.access.requireConversationOperation('view', { numberId: conversation.numberId, teamId, assignedUserId: conversation.assignedUserId });
+    const customer = await this.customers.get(conversation.customerId);
+    if (!customer) return [];
+    return (await this.callLog.list())
+      .filter((call) => call.conversationId === conversationId || call.leadPhone === customer.phone)
+      .sort((a, b) => (b.initiatedAt || '').localeCompare(a.initiatedAt || ''));
+  }
+
+  /** Every call placed through either click-to-call path (lead-assigned or conversation-based),
+   * newest first. A lead manager sees every agent's calls; anyone else sees only their own —
+   * same scoping shape as listLeads(). */
+  async listCallHistory(): Promise<CallLogWithContext[]> {
+    const actor = await this.access.currentUser();
+    const isManager = await this.isLeadManager(actor);
+    const all = await this.callLog.list();
+    const scoped = isManager ? all : all.filter((call) => call.agentUserId === actor.id);
+    if (scoped.length === 0) return [];
+
+    const leadById = new Map((await this.leads.list()).map((l) => [l.id, l]));
+    const usersById = new Map((await this.phase1Repos.users.list()).map((u) => [u.id, u]));
+    const customerByPhone = new Map((await this.customers.list()).map((c) => [c.phone, c]));
+
+    return scoped
+      .map((call): CallLogWithContext => {
+        const lead = call.leadId ? leadById.get(call.leadId) : undefined;
+        const customer = !lead ? customerByPhone.get(call.leadPhone) : undefined;
+        return {
+          ...call,
+          agentName: usersById.get(call.agentUserId)?.displayName || call.agentUserId,
+          subjectName: lead?.name || customer?.name || call.leadPhone,
+          subjectLocation: lead?.location,
+        };
+      })
+      .sort((a, b) => (b.initiatedAt || '').localeCompare(a.initiatedAt || ''));
+  }
+
+  /**
    * Stage/remarks reuse Phase8Api's exact authorization shape — a manager (LEADS_MANAGE) can
    * touch any lead; anyone else needs both the generic permission (LEAD_STAGES_MANAGE/
    * REMARKS_MANAGE — AGENT already has both) AND ownership of that specific lead.
@@ -325,7 +372,7 @@ export class Phase22Api {
     if (!customer) throw new ApiError(404, 'NOT_FOUND', 'Customer was not found.');
     const result = await new ExotelVoiceProvider(this.requireVoiceConfig()).connectCall(agentPhone, customer.phone, number.phoneNumber);
     const now = Ids.now();
-    const record: CallLog = { id: Ids.create('call'), leadId: '', agentUserId: actor.id, exotelCallSid: result.callSid || '', agentPhone, leadPhone: customer.phone, callerId: result.callerId || '', status: result.status || 'INITIATED', initiatedAt: now, updatedAt: now };
+    const record: CallLog = { id: Ids.create('call'), leadId: '', conversationId, numberId: conversation.numberId, agentUserId: actor.id, exotelCallSid: result.callSid || '', agentPhone, leadPhone: customer.phone, callerId: result.callerId || '', status: result.status || 'INITIATED', initiatedAt: now, updatedAt: now };
     await this.callLog.create(record);
     await this.audit.write(actor.id, 'conversation.called', 'conversation', conversationId, { callId: record.id, callSid: record.exotelCallSid });
     return record;

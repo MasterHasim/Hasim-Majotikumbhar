@@ -1,10 +1,10 @@
 /** Typed wrappers around apiFetch for the endpoints the Inbox UI needs — one-to-one with webapp/backend/src/routes/{phase1,messaging,crm,phase22}.ts. */
 import { apiFetch } from './api';
 import type {
-  AssignableUser, AuditEntry, CallLog, Conversation, ConversationListItem, Customer, CustomerStage, DashboardMetrics, Lead, LeadRemark,
-  LeadStageAssignment, LocationAssignmentConfig, LocationAssignmentUser, NumberAccess, NumberAssignmentConfig, NumberAssignmentUser, QuickReply,
-  Remark, Reminder, ReminderWithContext, Role, SearchFilters, SearchResultItem, SnoozeStatus, Stage, Team, TeamMember, Template, UploadLeadsResult,
-  User, WhatsAppNumber, WhoAmI, Workspace,
+  AssignableUser, AuditEntry, Availability, AvailabilityStatus, CallLog, CallLogWithContext, Conversation, ConversationListItem, Customer,
+  CustomerStage, DashboardMetrics, Lead, LeadRemark, LeadStageAssignment, LocationAssignmentConfig, LocationAssignmentUser, NumberAccess,
+  NumberAssignmentConfig, NumberAssignmentUser, QuickReply, Remark, Reminder, ReminderWithContext, Role, SearchFilters, SearchResultItem,
+  SnoozeStatus, Stage, Team, TeamMember, Template, UploadLeadsResult, User, WhatsAppNumber, WhoAmI, Workspace,
 } from '../types';
 
 export const backendApi = {
@@ -175,6 +175,11 @@ export const backendApi = {
 
   updateLeadTags: (leadId: string, tags: string[]) =>
     apiFetch<Lead>(`/api/leads/${encodeURIComponent(leadId)}/tags`, { method: 'POST', body: JSON.stringify({ tags }) }),
+
+  listCallHistory: () => apiFetch<CallLogWithContext[]>('/api/call-history'),
+
+  getAvailability: (userId: string) => apiFetch<Availability | null>(`/api/availability/${encodeURIComponent(userId)}`),
+  setAvailability: (status: AvailabilityStatus) => apiFetch<Availability>('/api/availability', { method: 'POST', body: JSON.stringify({ status }) }),
 
   /** Calls the conversation's customer via Exotel Voice, ringing the agent's own phone first —
    * same underlying provider as initiateLeadCall, just not tied to a Lead record. Uses the

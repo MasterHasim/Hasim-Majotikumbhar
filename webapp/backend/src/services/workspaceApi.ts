@@ -10,13 +10,14 @@
  * shipped this unconditionally at first, found the extra per-call cost live, and
  * fixed it; this port starts from that fix instead of re-learning it.
  */
-import type { CustomerStage, Message, MessageMedia, Reminder, Stage, User } from '../domain/types';
+import type { CallLog, CustomerStage, Message, MessageMedia, Reminder, Stage, User } from '../domain/types';
 import { Repository } from '../lib/repository';
 import { FirebaseDb } from '../lib/firebaseAdmin';
 import { Phase5Api, type ConversationDetail } from './phase5Api';
 import { Phase7Api } from './phase7Api';
 import { Phase8Api } from './phase8Api';
 import { Phase9Api } from './phase9Api';
+import { Phase22Api } from './phase22Api';
 import { RealtimeListenApi, type RealtimeListenToken } from './realtimeListenApi';
 
 export interface Workspace {
@@ -30,6 +31,8 @@ export interface Workspace {
   reminders: Reminder[] | null;
   snoozeStatus: Awaited<ReturnType<Phase9Api['getSnoozeStatus']>> | null;
   assignableUsers: User[];
+  /** Whether/when this customer was actually called, from either click-to-call surface — see Phase22Api.listConversationCallHistory. */
+  calls: CallLog[] | null;
   realtime?: RealtimeListenToken | null;
 }
 
@@ -38,6 +41,7 @@ export class WorkspaceApi {
   private phase7: Phase7Api;
   private phase8: Phase8Api;
   private phase9: Phase9Api;
+  private phase22: Phase22Api;
   private realtime: RealtimeListenApi;
   private users: Repository<User>;
   private messageMedia: Repository<MessageMedia>;
@@ -47,6 +51,7 @@ export class WorkspaceApi {
     this.phase7 = new Phase7Api(db, identityEmail);
     this.phase8 = new Phase8Api(db, identityEmail);
     this.phase9 = new Phase9Api(db, identityEmail);
+    this.phase22 = new Phase22Api(db, identityEmail);
     this.realtime = new RealtimeListenApi(db, identityEmail, env);
     this.users = new Repository<User>(db, 'users');
     this.messageMedia = new Repository<MessageMedia>(db, 'messageMedia');
@@ -60,7 +65,7 @@ export class WorkspaceApi {
       conversation: detail.conversation, customer: detail.customer, number: detail.number,
       messages: await this.enrichMessages(detail.messages),
       assignedUserName: assignedUser ? assignedUser.displayName : null,
-      stage: null, remarks: null, reminders: null, snoozeStatus: null, assignableUsers: [],
+      stage: null, remarks: null, reminders: null, snoozeStatus: null, assignableUsers: [], calls: null,
     };
 
     try { workspace.stage = detail.customer ? await this.phase8.getCustomerStage(detail.customer.id) : null; } catch (e) { console.error('workspace.stage failed', e); workspace.stage = null; }
@@ -68,6 +73,7 @@ export class WorkspaceApi {
     try { workspace.reminders = await this.phase9.listReminders(conversationId); } catch (e) { console.error('workspace.reminders failed', e); workspace.reminders = null; }
     try { workspace.snoozeStatus = await this.phase9.getSnoozeStatus(conversationId); } catch (e) { console.error('workspace.snoozeStatus failed', e); workspace.snoozeStatus = null; }
     try { workspace.assignableUsers = await this.phase7.listAssignableUsers(detail.conversation.numberId); } catch (e) { console.error('workspace.assignableUsers failed', e); workspace.assignableUsers = []; }
+    try { workspace.calls = await this.phase22.listConversationCallHistory(conversationId); } catch (e) { console.error('workspace.calls failed', e); workspace.calls = null; }
 
     if (includeRealtime) {
       try { workspace.realtime = await this.realtime.getRealtimeListenToken(); } catch (e) { console.error('workspace.realtime failed', e); workspace.realtime = null; }

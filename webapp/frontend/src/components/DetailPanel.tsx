@@ -21,6 +21,7 @@ export function DetailPanel({ workspace, stages, onChanged, mobileOpen, onCloseM
   const [remarkText, setRemarkText] = useState('');
   const [reminderText, setReminderText] = useState('');
   const [reminderDue, setReminderDue] = useState('');
+  const [tagInput, setTagInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,6 +35,23 @@ export function DetailPanel({ workspace, stages, onChanged, mobileOpen, onCloseM
   }
 
   const customer = workspace.customer;
+  const tags = customer?.tags ?? [];
+
+  function saveTags(next: string[]) {
+    if (!customer) return;
+    void guard(() => backendApi.updateCustomer(customer.id, { tags: next }));
+  }
+
+  function addTag() {
+    const value = tagInput.trim();
+    setTagInput('');
+    if (!value || tags.some((t) => t.toLowerCase() === value.toLowerCase())) return;
+    saveTags([...tags, value]);
+  }
+
+  function removeTag(tag: string) {
+    saveTags(tags.filter((t) => t !== tag));
+  }
 
   return (
     <div id="detailCol" className={`col${mobileOpen ? ' mobile-open' : ''}`}>
@@ -75,24 +93,28 @@ export function DetailPanel({ workspace, stages, onChanged, mobileOpen, onCloseM
             ))}
           </select>
         </div>
-        <div className="field-row">
-          <span className="field-label">Snooze</span>
-          {workspace.snoozeStatus?.snoozed ? (
-            <button className="btn" disabled={busy} onClick={() => void guard(() => backendApi.unsnoozeConversation(workspace.conversation.id))}>
-              Snoozed — unsnooze
-            </button>
-          ) : (
-            <button
-              className="btn"
-              disabled={busy}
-              onClick={() => {
-                const until = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
-                void guard(() => backendApi.snoozeConversation(workspace.conversation.id, until));
-              }}
-            >
-              Snooze 24h
-            </button>
-          )}
+      </div>
+
+      <div style={{ margin: '0 0 14px' }}>
+        <span className="field-label" style={{ display: 'block', marginBottom: 4 }}>Tags</span>
+        <div className="tag-row">
+          {tags.length === 0 && <span className="tag-chip-more">No tags yet.</span>}
+          {tags.map((tag) => (
+            <span key={tag} className="tag-chip">
+              {tag}
+              <button className="tag-chip-remove" disabled={busy} aria-label={`Remove tag ${tag}`} onClick={() => removeTag(tag)}>✕</button>
+            </span>
+          ))}
+        </div>
+        <div className="tag-add-row">
+          <input
+            placeholder="Add a tag (e.g. Hot, VIP)…"
+            disabled={busy || !customer}
+            value={tagInput}
+            onChange={(e) => setTagInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(); } }}
+          />
+          <button className="btn" disabled={busy || !customer || !tagInput.trim()} onClick={addTag}>Add</button>
         </div>
       </div>
 
@@ -153,6 +175,19 @@ export function DetailPanel({ workspace, stages, onChanged, mobileOpen, onCloseM
               Add reminder
             </button>
           </div>
+        </div>
+      </details>
+
+      <details className="detail-section">
+        <summary>Calls ({(workspace.calls ?? []).length})</summary>
+        <div className="detail-section-body">
+          {(workspace.calls ?? []).length === 0 && <div className="note-item" style={{ color: 'var(--text-secondary)' }}>No calls placed to this customer yet.</div>}
+          {(workspace.calls ?? []).map((call) => (
+            <div key={call.id} className="note-item">
+              <div>{call.leadId ? 'Called via Lead' : 'Called from chat'} — <span className={`lead-status-tag ${call.status === 'INITIATED' ? 'CALLED' : call.status}`}>{call.status}</span></div>
+              <div className="note-meta">{fmtDue(call.initiatedAt)}</div>
+            </div>
+          ))}
         </div>
       </details>
     </div>

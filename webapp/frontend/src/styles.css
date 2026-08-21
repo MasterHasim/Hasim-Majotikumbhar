@@ -66,6 +66,8 @@ input::placeholder, textarea::placeholder { color: var(--text-muted); }
 .nav-item .nav-label { flex: 1; }
 .nav-item .nav-badge { background: var(--surface2); color: var(--text-secondary); font-size: 10.5px; font-weight: 700; padding: 1px 8px; border-radius: 9px; font-family: var(--font-mono); }
 .nav-item.active .nav-badge { background: var(--accent); color: var(--bg); }
+.sidebar-availability { padding: 10px 16px; border-top: 1px solid var(--border); }
+.sidebar-availability #availabilitySelect { width: 100%; box-sizing: border-box; text-align: left; }
 .sidebar-footer { padding: 14px 16px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 8px; font-size: 12px; }
 .sidebar-footer button { margin-left: auto; background: transparent; border: 1px solid var(--border); color: var(--sidebar-text); border-radius: 6px; padding: 4px 8px; font-size: 11px; }
 .sidebar-footer button:hover { background: var(--sidebar-hover); color: var(--text); }

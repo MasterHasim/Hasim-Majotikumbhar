@@ -323,5 +323,37 @@ describe('Phase22Api (ported from Phase22Domain.gs + Phase22Services.gs)', () =>
       expect(call.callerId).toBe('079-485-02801');
       expect(mock.exotelVoiceCalls.at(-1)!.params.CallerId).toBe('079-485-02801');
     });
+
+    it('listCallHistory enriches lead and conversation calls with subject context, newest first; an unrelated agent sees only their own', async () => {
+      await new Phase22Api(db, AGENT_EMAIL, mock.exotelVoiceConfig as never).initiateCall(leadId);
+      await new Phase1Api(db, ADMIN_EMAIL).grantNumberAccess({ userId: agentId, numberId });
+      const { conversationId } = await new Phase22Api(db, AGENT_EMAIL).startWhatsAppFromLead(leadId);
+      await db.put(`webapp_conversations/${conversationId}`, { ...(await db.get(`webapp_conversations/${conversationId}`) as object), assignedUserId: agentId });
+      await new Phase22Api(db, AGENT_EMAIL, mock.exotelVoiceConfig as never).initiateConversationCall(conversationId);
+
+      const agentHistory = await new Phase22Api(db, AGENT_EMAIL).listCallHistory();
+      expect(agentHistory).toHaveLength(2);
+      expect(agentHistory[0]!.conversationId).toBe(conversationId); // newest first
+      expect(agentHistory[0]!.numberId).toBe(numberId);
+      expect(agentHistory[0]!.subjectName).toBe('Priya');
+      expect(agentHistory[1]!.subjectName).toBe('Priya');
+      expect(agentHistory[1]!.subjectLocation).toBe('Raipur');
+      expect(agentHistory.every((c) => c.agentName === 'Agent')).toBe(true);
+
+      expect(await new Phase22Api(db, AGENT2_EMAIL).listCallHistory()).toEqual([]);
+      expect(await new Phase22Api(db, ADMIN_EMAIL).listCallHistory()).toHaveLength(2);
+    });
+
+    it('listConversationCallHistory matches by conversationId and by the customer\'s phone (a call placed on the Lead before the conversation existed)', async () => {
+      await new Phase22Api(db, AGENT_EMAIL, mock.exotelVoiceConfig as never).initiateCall(leadId); // pre-conversation lead call
+      await new Phase1Api(db, ADMIN_EMAIL).grantNumberAccess({ userId: agentId, numberId });
+      const { conversationId } = await new Phase22Api(db, AGENT_EMAIL).startWhatsAppFromLead(leadId);
+      await db.put(`webapp_conversations/${conversationId}`, { ...(await db.get(`webapp_conversations/${conversationId}`) as object), assignedUserId: agentId });
+      await new Phase22Api(db, AGENT_EMAIL, mock.exotelVoiceConfig as never).initiateConversationCall(conversationId);
+
+      const history = await new Phase22Api(db, AGENT_EMAIL).listConversationCallHistory(conversationId);
+      expect(history).toHaveLength(2); // both the lead call and the conversation call show up
+      expect(history[0]!.conversationId).toBe(conversationId); // newest first
+    });
   });
 });

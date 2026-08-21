@@ -13,6 +13,7 @@ export interface Customer {
   name: string;
   email: string;
   company: string;
+  tags?: string[];
 }
 
 export interface Conversation {
@@ -151,6 +152,7 @@ export interface Workspace {
   reminders: Reminder[] | null;
   snoozeStatus: SnoozeStatus | null;
   assignableUsers: AssignableUser[];
+  calls: CallLog[] | null;
   realtime?: RealtimeListenToken | null;
 }
 
@@ -159,6 +161,13 @@ export interface WhoAmI {
   email: string;
   displayName: string;
   roleKeys: string[];
+}
+
+export type AvailabilityStatus = 'available' | 'busy' | 'offline' | 'on_leave';
+
+export interface Availability {
+  userId: string;
+  status: AvailabilityStatus;
 }
 
 // --- Phase 22 (location leads + Exotel click-to-call) ---
@@ -220,8 +229,17 @@ export interface CallLog {
   leadId: string;
   agentUserId: string;
   exotelCallSid: string;
+  leadPhone: string;
   status: string;
   initiatedAt: string;
+  conversationId?: string;
+  numberId?: string;
+}
+
+export interface CallLogWithContext extends CallLog {
+  agentName: string;
+  subjectName: string;
+  subjectLocation?: string;
 }
 
 export interface UploadLeadsResult {

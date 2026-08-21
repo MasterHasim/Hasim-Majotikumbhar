@@ -235,6 +235,13 @@ describe('CRM core (ported from Phase7-9 Domain/Services.gs)', () => {
       expect(updated.name).toBe('Eva');
       await expect(new Phase8Api(db, ADMIN_EMAIL).updateCustomer(detail.customer!.id, { phone: '+910000000000' })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
     });
+
+    it('updateCustomer accepts and normalizes tags the same way as Lead tags', async () => {
+      const result = await ingest('msg-2', '+919876543211');
+      const detail = await new Phase5Api(db, ADMIN_EMAIL).getConversationDetail(result.conversationId!);
+      const updated = await new Phase8Api(db, ADMIN_EMAIL).updateCustomer(detail.customer!.id, { tags: [' Hot ', 'hot', ''] });
+      expect(updated.tags).toEqual(['Hot']);
+    });
   });
 
   describe('Phase9Api — reminders and snooze', () => {

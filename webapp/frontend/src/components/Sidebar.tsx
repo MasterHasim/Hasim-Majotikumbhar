@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import type { WhatsAppNumber, WhoAmI } from '../types';
+import { AvailabilityToggle } from './AvailabilityToggle';
 
-export type Page = 'inbox' | 'leads' | 'reminders' | 'customers' | 'dashboard' | 'admin';
+export type Page = 'inbox' | 'leads' | 'reminders' | 'callHistory' | 'customers' | 'dashboard' | 'admin';
 
 const REPORTS_ROLES = ['ADMIN', 'SUPERVISOR', 'SITE_MANAGER', 'VIEWER'];
 
@@ -54,6 +55,10 @@ export function Sidebar({
             <span className="nav-icon">⏰</span>
             <span className="nav-label">Reminders</span>
           </button>
+          <button className={`nav-item${page === 'callHistory' ? ' active' : ''}`} onClick={() => navigate('callHistory')}>
+            <span className="nav-icon">📞</span>
+            <span className="nav-label">Call History</span>
+          </button>
           <button className={`nav-item${page === 'customers' ? ' active' : ''}`} onClick={() => navigate('customers')}>
             <span className="nav-icon">👥</span>
             <span className="nav-label">Customers</span>
@@ -70,6 +75,9 @@ export function Sidebar({
               <span className="nav-label">Admin</span>
             </button>
           )}
+        </div>
+        <div className="sidebar-availability">
+          <AvailabilityToggle userId={whoAmI.id} />
         </div>
         <div className="sidebar-footer">
           <div className="avatar-circle">{initial}</div>

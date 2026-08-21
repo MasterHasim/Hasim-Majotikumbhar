@@ -70,6 +70,10 @@ export function registerPhase22Routes(router: RouterType) {
     const ctx = await buildContext(request, env);
     return Response.json(await new Phase22Api(ctx.db, ctx.identityEmail).listCallLog(param(request, 'id')));
   });
+  router.get('/api/call-history', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    return Response.json(await new Phase22Api(ctx.db, ctx.identityEmail).listCallHistory());
+  });
 
   router.post('/api/leads/:id/stage', async (request: IRequest, env: Env) => {
     const ctx = await buildContext(request, env);

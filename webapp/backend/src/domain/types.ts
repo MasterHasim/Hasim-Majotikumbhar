@@ -84,6 +84,9 @@ export interface Customer extends Record_ {
   source: string;
   createdAt: string;
   updatedAt: string;
+  /** Same free-form tagging concept as Lead.tags, independent of it — most conversations
+   * aren't tied to a Lead record at all, so tags live on the Customer directly here. */
+  tags?: string[];
 }
 
 export interface Conversation extends Record_ {
@@ -285,6 +288,18 @@ export interface CallLog extends Record_ {
   status: string;
   initiatedAt: string;
   updatedAt: string;
+  /** Only set for a conversation-initiated call (initiateConversationCall) — a lead-initiated
+   * call (initiateCall) has leadId instead and no direct conversation/number of its own. */
+  conversationId?: string;
+  numberId?: string;
+}
+
+/** listCallHistory()'s enrichment — same "denormalize for one read instead of N+1" reasoning
+ * as ReminderWithContext, since a raw CallLog row is just phone numbers and IDs. */
+export interface CallLogWithContext extends CallLog {
+  agentName: string;
+  subjectName: string;
+  subjectLocation?: string;
 }
 
 export interface LeadStageAssignment extends Record_ {
