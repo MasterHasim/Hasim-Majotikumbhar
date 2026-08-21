@@ -1,6 +1,6 @@
 # WhatsApp Multi-Number CRM — Progress Report
 
-**Last updated:** 2026-08-21 (webapp UI expansion — dark theme reskin, Leads Kanban board, Reminders & Customers pages — see below; webapp migration reached full Apps Script feature parity, Phases 1-15, on 2026-08-18; Phase 22 was added to the live `apps-script/` build on 2026-08-17)
+**Last updated:** 2026-08-21 (Leads Upload now surfaces assignment-rule status per location + bulk reassign/set-stage — see below; webapp UI expansion — dark theme reskin, Leads Kanban board, Reminders & Customers pages — also 2026-08-21; webapp migration reached full Apps Script feature parity, Phases 1-15, on 2026-08-18; Phase 22 was added to the live `apps-script/` build on 2026-08-17)
 **Purpose:** single source of truth for "what's done, what's left, and what needs you personally." Updated after every phase/transition. See `docs/ROADMAP.md` for full phase scope, `memory/CHANGELOG.md` for full per-phase detail (this file stays intentionally brief per phase), and `memory/DECISIONS.md` for architectural reasoning.
 
 ## ✅ New: Phase 22 — Location Leads Upload, Assignment Rules & Exotel Click-to-Call (2026-08-17)
@@ -470,6 +470,14 @@ build:
 6. ~~Templates, quick replies, media~~ ✅ done, tested, live (media *file upload* specifically waits on you enabling R2 — see task list)
 7. Admin panel ✅ · notifications/search ✅ · dashboard ✅ · backup ✅ (all done, live — Phases 1-15 parity reached)
 8. Parallel-run validation, then cutover (Apps Script stays live and untouched the entire time) — **next**
+
+## ✅ Leads Upload ↔ Assignment Rules visibility + bulk lead actions (2026-08-21)
+
+**A real gap found while checking this connection, not something you need to act on urgently, but worth knowing:** `Phase22Api.uploadLeads` has always auto-assigned each uploaded lead per that location's assignment rule (`assignLead`) — that part of the wiring was correct and already tested. What was missing was visibility: nothing in the UI showed *whether* a location actually had a rule configured before you uploaded into it. The Upload Leads modal now shows a live status line per location (configured/active, manual, or not configured) with a one-click "Configure" link straight into Assignment Rules. Checking this live surfaced that **none of your 6 locations have an assignment rule configured yet** — every lead uploaded so far has landed `UNASSIGNED`. Worth noting this isn't necessarily an oversight: there's currently only one real user account in the system (yours), so round-robin/single-agent modes don't have much to route between yet — this becomes actionable once more agent accounts exist (Admin → Users).
+
+**Bulk lead actions.** The Leads table (manager-only) now has row checkboxes, select-all, and a bulk action bar — reassign or set-stage across every selected lead in one action instead of one at a time. Verified live: selected 2 real leads, bulk-reassigned both in one action, confirmed both updated correctly.
+
+Frontend-only change (reused existing backend endpoints), typecheck/build clean, no deploy needed beyond the dev server already picking it up.
 
 ## ✅ Webapp UI expansion: dark theme reskin, Leads Kanban board, Reminders & Customers pages (2026-08-21)
 
