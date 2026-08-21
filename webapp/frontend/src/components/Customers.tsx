@@ -65,43 +65,45 @@ export function Customers({ number, onOpenConversation }: {
       {customers === null ? (
         <div className="empty">Loading…</div>
       ) : (
-        <table className="data-table">
-          <thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Company</th><th></th></tr></thead>
-          <tbody>
-            {filtered.map((c) => (
-              <tr key={c.id}>
-                <td>
-                  <input
-                    defaultValue={c.name}
-                    disabled={busyId === c.id}
-                    onBlur={(e) => { if (e.target.value !== c.name) void saveField(c.id, { name: e.target.value }); }}
-                  />
-                </td>
-                <td style={{ fontFamily: 'var(--font-mono)' }}>{c.phone}</td>
-                <td>
-                  <input
-                    defaultValue={c.email}
-                    disabled={busyId === c.id}
-                    onBlur={(e) => { if (e.target.value !== c.email) void saveField(c.id, { email: e.target.value }); }}
-                  />
-                </td>
-                <td>
-                  <input
-                    defaultValue={c.company}
-                    disabled={busyId === c.id}
-                    onBlur={(e) => { if (e.target.value !== c.company) void saveField(c.id, { company: e.target.value }); }}
-                  />
-                </td>
-                <td>
-                  <button className="btn" onClick={() => void viewConversation(c.id)}>View conversation</button>
-                </td>
-              </tr>
-            ))}
-            {filtered.length === 0 && (
-              <tr><td colSpan={5} className="empty">{search ? 'No customers match this search.' : 'No customers on this number yet.'}</td></tr>
-            )}
-          </tbody>
-        </table>
+        <div className="table-scroll">
+          <table className="data-table">
+            <thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Company</th><th></th></tr></thead>
+            <tbody>
+              {filtered.map((c) => (
+                <tr key={c.id}>
+                  <td>
+                    <input
+                      defaultValue={c.name}
+                      disabled={busyId === c.id}
+                      onBlur={(e) => { if (e.target.value !== c.name) void saveField(c.id, { name: e.target.value }); }}
+                    />
+                  </td>
+                  <td style={{ fontFamily: 'var(--font-mono)' }}>{c.phone}</td>
+                  <td>
+                    <input
+                      defaultValue={c.email}
+                      disabled={busyId === c.id}
+                      onBlur={(e) => { if (e.target.value !== c.email) void saveField(c.id, { email: e.target.value }); }}
+                    />
+                  </td>
+                  <td>
+                    <input
+                      defaultValue={c.company}
+                      disabled={busyId === c.id}
+                      onBlur={(e) => { if (e.target.value !== c.company) void saveField(c.id, { company: e.target.value }); }}
+                    />
+                  </td>
+                  <td>
+                    <button className="btn" onClick={() => void viewConversation(c.id)}>View conversation</button>
+                  </td>
+                </tr>
+              ))}
+              {filtered.length === 0 && (
+                <tr><td colSpan={5} className="empty">{search ? 'No customers match this search.' : 'No customers on this number yet.'}</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       )}
     </>
   );

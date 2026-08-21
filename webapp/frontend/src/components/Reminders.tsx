@@ -46,31 +46,33 @@ export function Reminders({ number, onOpenConversation }: {
       {reminders === null ? (
         <div className="empty">Loading…</div>
       ) : (
-        <table className="data-table">
-          <thead><tr><th>Customer</th><th>Phone</th><th>Reminder</th><th>Due</th><th></th></tr></thead>
-          <tbody>
-            {reminders.map((r) => {
-              const overdue = new Date(r.dueAt).getTime() < now;
-              return (
-                <tr key={r.id}>
-                  <td>{r.customerName}</td>
-                  <td style={{ fontFamily: 'var(--font-mono)' }}>{r.customerPhone}</td>
-                  <td>{r.text}</td>
-                  <td style={{ color: overdue ? 'var(--danger)' : undefined, fontWeight: overdue ? 700 : undefined }}>
-                    {overdue ? 'Overdue · ' : ''}{fmtDue(r.dueAt)}
-                  </td>
-                  <td style={{ display: 'flex', gap: 6 }}>
-                    <button className="btn" onClick={() => onOpenConversation(r.conversationId, r.numberId)}>Open chat</button>
-                    <button className="btn primary" disabled={busyId === r.id} onClick={() => void markDone(r.id)}>
-                      {busyId === r.id ? '…' : 'Mark done'}
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-            {reminders.length === 0 && <tr><td colSpan={5} className="empty">No pending reminders on this number — you're all caught up.</td></tr>}
-          </tbody>
-        </table>
+        <div className="table-scroll">
+          <table className="data-table">
+            <thead><tr><th>Customer</th><th>Phone</th><th>Reminder</th><th>Due</th><th></th></tr></thead>
+            <tbody>
+              {reminders.map((r) => {
+                const overdue = new Date(r.dueAt).getTime() < now;
+                return (
+                  <tr key={r.id}>
+                    <td>{r.customerName}</td>
+                    <td style={{ fontFamily: 'var(--font-mono)' }}>{r.customerPhone}</td>
+                    <td>{r.text}</td>
+                    <td style={{ color: overdue ? 'var(--danger)' : undefined, fontWeight: overdue ? 700 : undefined }}>
+                      {overdue ? 'Overdue · ' : ''}{fmtDue(r.dueAt)}
+                    </td>
+                    <td style={{ display: 'flex', gap: 6 }}>
+                      <button className="btn" onClick={() => onOpenConversation(r.conversationId, r.numberId)}>Open chat</button>
+                      <button className="btn primary" disabled={busyId === r.id} onClick={() => void markDone(r.id)}>
+                        {busyId === r.id ? '…' : 'Mark done'}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+              {reminders.length === 0 && <tr><td colSpan={5} className="empty">No pending reminders on this number — you're all caught up.</td></tr>}
+            </tbody>
+          </table>
+        </div>
       )}
     </>
   );

@@ -234,3 +234,70 @@ label.inline { display: flex; align-items: center; gap: 4px; font-size: 13px; co
 /* ---- Full-page loading/error states ---- */
 .centered-message { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-muted); font-size: 13px; }
 .fatal-error { color: var(--danger); padding: 16px; }
+
+/* ---- Responsive: mobile + tablet ----
+ * Below 900px there isn't room for a fixed sidebar plus the Inbox's 3-column split
+ * (320px list + 300px detail leaves the message column no space), so:
+ *  - the sidebar becomes an off-canvas drawer, opened by a hamburger toggle
+ *  - the Inbox split becomes one pane at a time (list <-> chat), with the detail
+ *    panel sliding in as an overlay instead of a third column
+ * All of this is CSS + a couple of booleans already in Inbox.tsx's state (which
+ * conversation is selected) — components render the same markup at every width,
+ * only visibility/position changes below the breakpoint. */
+.sidebar-toggle, .chat-back-btn, .chat-info-btn, .detail-mobile-close, .detail-backdrop { display: none; }
+.table-scroll { overflow-x: auto; }
+
+@media (max-width: 900px) {
+  .sidebar-toggle {
+    display: inline-flex; align-items: center; justify-content: center;
+    position: fixed; top: 12px; left: 12px; z-index: 250;
+    width: 36px; height: 36px; border-radius: 9px;
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text); font-size: 16px;
+  }
+  h1.page-title { padding-left: 46px; }
+
+  #sidebar {
+    position: fixed; inset: 0 auto 0 0; z-index: 260; width: 84vw; max-width: 300px;
+    transform: translateX(-100%); transition: transform .2s ease;
+    box-shadow: 12px 0 32px rgba(0,0,0,.5);
+  }
+  #sidebar.open { transform: translateX(0); }
+  .sidebar-backdrop { display: none; }
+  .sidebar-backdrop.open { display: block; position: fixed; inset: 0; background: rgba(3,6,14,.6); z-index: 255; }
+
+  #pageContent { padding: 14px; padding-top: 58px; }
+
+  /* Inbox: one pane at a time instead of a 3-column grid */
+  .split { grid-template-columns: 1fr !important; border-radius: 10px; }
+  .split #convCol { display: none; }
+  .split.mobile-list #convCol { display: block; }
+  .split.mobile-list #chatCol { display: none; }
+
+  #detailCol {
+    position: fixed; top: 0; right: 0; bottom: 0; width: min(340px, 88vw);
+    z-index: 300; transform: translateX(100%); transition: transform .2s ease;
+    box-shadow: -12px 0 32px rgba(0,0,0,.5); border-left: 1px solid var(--border);
+  }
+  #detailCol.mobile-open { transform: translateX(0); }
+  .detail-backdrop.open { display: block; position: fixed; inset: 0; background: rgba(3,6,14,.6); z-index: 280; }
+  .detail-mobile-close {
+    display: inline-flex; align-items: center; justify-content: center;
+    position: absolute; top: 12px; right: 12px; width: 28px; height: 28px;
+    border-radius: 7px; background: var(--surface2); border: 1px solid var(--border); color: var(--text-secondary);
+  }
+
+  .chat-back-btn, .chat-info-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0;
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text-secondary); font-size: 14px;
+  }
+
+  .kpi-row { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+  .modal-card { padding: 16px; }
+}
+
+@media (max-width: 520px) {
+  #pageContent { padding: 10px; padding-top: 54px; }
+  .kpi-row { grid-template-columns: 1fr 1fr; }
+  .message { max-width: 84%; }
+}

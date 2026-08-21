@@ -31,6 +31,10 @@ export function Inbox({ number, initialConversationId, onInitialConversationCons
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<ListFilters>(DEFAULT_FILTERS);
   const [error, setError] = useState<string | null>(null);
+  /** Only read by CSS below the 900px breakpoint, where the 3-column split becomes one
+   * pane at a time — above it these just don't affect anything the media query touches. */
+  const [mobileShowList, setMobileShowList] = useState(true);
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const selectedIdRef = useRef<string | null>(null);
   selectedIdRef.current = selectedId;
   const stopRealtimeRef = useRef<(() => void) | null>(null);
@@ -69,6 +73,8 @@ export function Inbox({ number, initialConversationId, onInitialConversationCons
     setWorkspace(null);
     setSearch('');
     setFilters(DEFAULT_FILTERS);
+    setMobileShowList(true);
+    setMobileDetailOpen(false);
     stopRealtimeRef.current?.();
     stopRealtimeRef.current = null;
     backendApi.listStages().then(setStages).catch(() => setStages([]));
@@ -103,6 +109,8 @@ export function Inbox({ number, initialConversationId, onInitialConversationCons
     stopRealtimeRef.current?.();
     stopRealtimeRef.current = null;
     setSelectedId(conversationId);
+    setMobileShowList(false);
+    setMobileDetailOpen(false);
     const ws = await loadWorkspace(conversationId, true);
     if (ws?.realtime && selectedIdRef.current === conversationId) {
       stopRealtimeRef.current = connectRealtimeMessages(ws.realtime, conversationId, () => {
@@ -138,12 +146,21 @@ export function Inbox({ number, initialConversationId, onInitialConversationCons
     <>
       <h1 className="page-title" style={{ margin: '0 0 12px' }}>Inbox</h1>
       {error && <div className="compose-error" style={{ padding: '0 0 10px' }}>{error}</div>}
-      <div className={`split${workspace ? '' : ' no-detail'}`}>
+      <div className={`split${workspace ? '' : ' no-detail'}${mobileShowList ? ' mobile-list' : ''}`}>
         <ConversationList conversations={conversations} selectedId={selectedId} search={search} filters={filters} onSearchChange={setSearch} onFiltersChange={setFilters} onSelect={(id) => void selectConversation(id)} />
         {workspace ? (
           <>
-            <ChatPane workspace={workspace} quickReplies={quickReplies} templates={templates} onAfterSend={handleChanged} onResolve={() => void handleResolve()} />
-            <DetailPanel workspace={workspace} stages={stages} onChanged={handleChanged} />
+            <ChatPane
+              workspace={workspace}
+              quickReplies={quickReplies}
+              templates={templates}
+              onAfterSend={handleChanged}
+              onResolve={() => void handleResolve()}
+              onBack={() => setMobileShowList(true)}
+              onToggleDetail={() => setMobileDetailOpen((v) => !v)}
+            />
+            <DetailPanel workspace={workspace} stages={stages} onChanged={handleChanged} mobileOpen={mobileDetailOpen} onCloseMobile={() => setMobileDetailOpen(false)} />
+            {mobileDetailOpen && <div className="detail-backdrop open" onClick={() => setMobileDetailOpen(false)} />}
           </>
         ) : (
           <div className="centered-message">Select a conversation to view it here.</div>

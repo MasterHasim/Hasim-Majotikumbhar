@@ -225,36 +225,38 @@ export function Leads({ whoAmI, onOpenConversation }: { whoAmI: WhoAmI; onOpenCo
               <button className="btn" disabled={bulkBusy} onClick={() => setSelectedIds(new Set())}>Clear selection</button>
             </div>
           )}
-          <table className="data-table">
-            <thead>
-              <tr>
-                {isManager && (
-                  <th style={{ width: 32 }}>
-                    <input type="checkbox" checked={leads.length > 0 && selectedIds.size === leads.length} onChange={() => toggleSelectAll(leads.map((l) => l.id))} />
-                  </th>
-                )}
-                <th>Name</th><th>Phone</th><th>Location</th><th>Status</th><th>Assigned</th><th>Created</th>
-              </tr>
-            </thead>
-            <tbody>
-              {leads.map((lead) => (
-                <tr key={lead.id} className="clickable" onClick={() => setSelectedLead(lead)}>
+          <div className="table-scroll">
+            <table className="data-table">
+              <thead>
+                <tr>
                   {isManager && (
-                    <td onClick={(e) => e.stopPropagation()}>
-                      <input type="checkbox" checked={selectedIds.has(lead.id)} onChange={() => toggleSelect(lead.id)} />
-                    </td>
+                    <th style={{ width: 32 }}>
+                      <input type="checkbox" checked={leads.length > 0 && selectedIds.size === leads.length} onChange={() => toggleSelectAll(leads.map((l) => l.id))} />
+                    </th>
                   )}
-                  <td>{lead.name}</td>
-                  <td>{lead.phone}</td>
-                  <td>{lead.location}</td>
-                  <td><span className={`lead-status-tag ${lead.status}`}>{lead.status}</span></td>
-                  <td>{lead.assignedUserId ? (users.find((u) => u.id === lead.assignedUserId)?.displayName ?? (lead.assignedUserId === whoAmI.id ? whoAmI.displayName : lead.assignedUserId)) : '—'}</td>
-                  <td>{fmt(lead.createdAt)}</td>
+                  <th>Name</th><th>Phone</th><th>Location</th><th>Status</th><th>Assigned</th><th>Created</th>
                 </tr>
-              ))}
-              {leads.length === 0 && <tr><td colSpan={isManager ? 7 : 6} className="empty">No leads {locationFilter || statusFilter ? 'match this filter' : 'yet'}.</td></tr>}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {leads.map((lead) => (
+                  <tr key={lead.id} className="clickable" onClick={() => setSelectedLead(lead)}>
+                    {isManager && (
+                      <td onClick={(e) => e.stopPropagation()}>
+                        <input type="checkbox" checked={selectedIds.has(lead.id)} onChange={() => toggleSelect(lead.id)} />
+                      </td>
+                    )}
+                    <td>{lead.name}</td>
+                    <td>{lead.phone}</td>
+                    <td>{lead.location}</td>
+                    <td><span className={`lead-status-tag ${lead.status}`}>{lead.status}</span></td>
+                    <td>{lead.assignedUserId ? (users.find((u) => u.id === lead.assignedUserId)?.displayName ?? (lead.assignedUserId === whoAmI.id ? whoAmI.displayName : lead.assignedUserId)) : '—'}</td>
+                    <td>{fmt(lead.createdAt)}</td>
+                  </tr>
+                ))}
+                {leads.length === 0 && <tr><td colSpan={isManager ? 7 : 6} className="empty">No leads {locationFilter || statusFilter ? 'match this filter' : 'yet'}.</td></tr>}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
 

@@ -8,7 +8,16 @@ function fmtDue(iso: string): string {
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
 }
 
-export function DetailPanel({ workspace, stages, onChanged }: { workspace: Workspace; stages: Stage[]; onChanged: () => void }) {
+export function DetailPanel({ workspace, stages, onChanged, mobileOpen, onCloseMobile }: {
+  workspace: Workspace;
+  stages: Stage[];
+  onChanged: () => void;
+  /** Below the 900px breakpoint this panel becomes a slide-in overlay instead of a third
+   * column — mobileOpen controls that via CSS, onCloseMobile is the visible close affordance
+   * (a backdrop click in Inbox.tsx does the same thing). Both no-ops above the breakpoint. */
+  mobileOpen?: boolean;
+  onCloseMobile?: () => void;
+}) {
   const [remarkText, setRemarkText] = useState('');
   const [reminderText, setReminderText] = useState('');
   const [reminderDue, setReminderDue] = useState('');
@@ -27,7 +36,8 @@ export function DetailPanel({ workspace, stages, onChanged }: { workspace: Works
   const customer = workspace.customer;
 
   return (
-    <div id="detailCol" className="col">
+    <div id="detailCol" className={`col${mobileOpen ? ' mobile-open' : ''}`}>
+      {onCloseMobile && <button className="detail-mobile-close" aria-label="Close details" onClick={onCloseMobile}>✕</button>}
       <div className="cust-header">
         <div className="cust-avatar">{(customer?.name || customer?.phone || '?').charAt(0).toUpperCase()}</div>
         <div className="cust-name">{customer?.name || 'Unknown'}</div>

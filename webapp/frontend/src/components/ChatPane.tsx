@@ -41,12 +41,16 @@ function MediaAttachment({ media }: { media: NonNullable<Workspace['messages'][n
   );
 }
 
-export function ChatPane({ workspace, quickReplies, templates, onAfterSend, onResolve }: {
+export function ChatPane({ workspace, quickReplies, templates, onAfterSend, onResolve, onBack, onToggleDetail }: {
   workspace: Workspace;
   quickReplies: QuickReply[];
   templates: Template[];
   onAfterSend: () => void;
   onResolve: () => void;
+  /** Mobile-only affordances (buttons stay hidden above the 900px breakpoint via CSS) —
+   * back to the conversation list, and toggle the customer detail panel as an overlay. */
+  onBack?: () => void;
+  onToggleDetail?: () => void;
 }) {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
@@ -107,6 +111,7 @@ export function ChatPane({ workspace, quickReplies, templates, onAfterSend, onRe
     <div id="chatCol" className="col">
       <div className="chat-header">
         <div className="chat-title-row">
+          {onBack && <button className="chat-back-btn" aria-label="Back to conversations" onClick={onBack}>←</button>}
           <h2>{customerName}</h2>
           <span className={`pill status-${workspace.conversation.status}`}>{workspace.conversation.status}</span>
         </div>
@@ -117,6 +122,7 @@ export function ChatPane({ workspace, quickReplies, templates, onAfterSend, onRe
           {workspace.conversation.status === 'OPEN' && (
             <button className="btn" onClick={onResolve}>Resolve</button>
           )}
+          {onToggleDetail && <button className="chat-info-btn" aria-label="Customer details" onClick={onToggleDetail}>ℹ</button>}
         </div>
       </div>
 
