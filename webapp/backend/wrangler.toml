@@ -20,7 +20,7 @@ ALLOWED_ORIGINS = "http://localhost:5173,https://whatsapp-panel-frontend.hasim-c
 # dashboard first, or every send will fail. Until the API key secret is set, createUser simply
 # skips sending (never blocks user creation) and the manual "Send welcome email" button in
 # Admin -> Users shows a clear CONFIGURATION_ERROR instead of silently doing nothing.
-RESEND_FROM_EMAIL = "ECHT Connect <notifications@echt.co.in>"
+RESEND_FROM_EMAIL = "ECHT Connect <onboarding@resend.dev>"
 FRONTEND_URL = "https://whatsapp-panel-frontend.hasim-c9e.workers.dev"
 
 # R2 free tier: 10 GB storage, 1M Class A + 10M Class B operations/month, no
