@@ -308,6 +308,25 @@ export interface NumberAssignmentUser {
   active: boolean;
 }
 
+export interface AssignmentEligibility {
+  id: string;
+  userId: string;
+  numberId: string;
+  teamId: string;
+  eligible: boolean;
+  updatedAt: string;
+}
+
+/** getAssignmentEligibility's live evaluation — combines the eligible grant with
+ * availability, number access, and team enablement so a manager can see not just
+ * "is eligibility granted" but "would this agent actually get the next conversation." */
+export interface AssignmentEligibilityStatus {
+  assignmentEligible: boolean;
+  availability: string | null;
+  assignableNow: boolean;
+  reasons: string[];
+}
+
 export interface SearchFilters {
   numberId?: string;
   query?: string;

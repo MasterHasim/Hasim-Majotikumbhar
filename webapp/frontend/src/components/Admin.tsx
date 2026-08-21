@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState } from 'react';
-import type { AuditEntry, NumberAccess, NumberAssignmentConfig, NumberAssignmentUser, QuickReply, Role, Stage, Team, TeamMember, Template, User, WhatsAppNumber } from '../types';
+import type { AssignmentEligibilityStatus, AuditEntry, NumberAccess, NumberAssignmentConfig, NumberAssignmentUser, QuickReply, Role, Stage, Team, TeamMember, Template, User, WhatsAppNumber } from '../types';
 import { backendApi } from '../lib/backendApi';
 import { ApiClientError } from '../lib/api';
 
@@ -375,10 +375,22 @@ function NumberAccessTab({ users, numbers }: { users: User[]; numbers: WhatsAppN
 
 // ---------------------------------------------------------------------------
 
+/** getAssignmentEligibility's `assignmentEligible` field means "passes every gate" (grant +
+ * availability + number access + team enablement) — not just "the grant exists". The
+ * checkbox needs the raw grant alone, which isn't returned directly; these are the only two
+ * reasons evaluate() can return before it even looks at the grant, so their absence means
+ * a grant record with eligible:true exists, whatever else is still blocking assignment. */
+function hasEligibilityGrant(status: AssignmentEligibilityStatus | undefined): boolean {
+  if (!status) return false;
+  if (status.assignmentEligible) return true;
+  return status.reasons[0] !== 'ELIGIBILITY_NOT_GRANTED' && status.reasons[0] !== 'USER_INACTIVE';
+}
+
 function AssignmentRulesTab({ users, numbers }: { users: User[]; numbers: WhatsAppNumber[] }) {
   const [numberId, setNumberId] = useState(numbers[0]?.id ?? '');
   const [config, setConfig] = useState<NumberAssignmentConfig | null>(null);
   const [participants, setParticipants] = useState<NumberAssignmentUser[] | null>(null);
+  const [eligibility, setEligibility] = useState<Record<string, AssignmentEligibilityStatus>>({});
   const [newUserId, setNewUserId] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -386,7 +398,12 @@ function AssignmentRulesTab({ users, numbers }: { users: User[]; numbers: WhatsA
   function reload() {
     if (!numberId) return;
     backendApi.getNumberAssignmentConfig(numberId).then(setConfig).catch(() => setConfig(null));
-    backendApi.listNumberAssignmentParticipants(numberId).then(setParticipants).catch(() => setParticipants([]));
+    backendApi.listNumberAssignmentParticipants(numberId).then((ps) => {
+      setParticipants(ps);
+      Promise.all(ps.map((p) => backendApi.getAssignmentEligibility(p.userId, numberId).then((status) => [p.userId, status] as const)))
+        .then((pairs) => setEligibility(Object.fromEntries(pairs)))
+        .catch(() => setEligibility({}));
+    }).catch(() => setParticipants([]));
   }
   useEffect(reload, [numberId]);
 
@@ -394,6 +411,14 @@ function AssignmentRulesTab({ users, numbers }: { users: User[]; numbers: WhatsA
     setBusy(true);
     setError(null);
     return fn().then(reload).catch((err) => setError(errMsg(err))).finally(() => setBusy(false));
+  }
+
+  /** teamId is stored on the eligibility record but never read back by the evaluator (see
+   * Phase1Api.evaluate — it keys purely on userId:numberId) and ADMIN's own authorization
+   * path doesn't scope by it either, so any stable value works here; only a SITE_MANAGER/
+   * SUPERVISOR-facing version of this control would need the caller's real team id. */
+  function toggleEligible(userId: string, eligible: boolean) {
+    void guard(() => backendApi.setAssignmentEligibility({ userId, numberId, teamId: 'admin', eligible }));
   }
 
   const userName = (id: string) => users.find((u) => u.id === id)?.displayName ?? id;
@@ -436,17 +461,31 @@ function AssignmentRulesTab({ users, numbers }: { users: User[]; numbers: WhatsA
           {error && <div className="form-error">{error}</div>}
 
           <h2 className="section-title">Participants (rotation order)</h2>
+          <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: -6 }}>
+            "Eligible" is a separate on/off grant from "Active" — round-robin skips a participant entirely until they're explicitly marked eligible here, even if active. "Assignable now" also factors in their current Availability and number access, so it can say No even when Eligible is checked.
+          </p>
           <table className="data-table">
-            <thead><tr><th>Agent</th><th>Active</th></tr></thead>
+            <thead><tr><th>Agent</th><th>Active</th><th>Eligible</th><th>Assignable now</th></tr></thead>
             <tbody>
-              {participants === null && <tr><td colSpan={2} className="empty">Loading…</td></tr>}
-              {participants && [...participants].sort((a, b) => a.sequenceOrder - b.sequenceOrder).map((p) => (
-                <tr key={p.id}>
-                  <td>{userName(p.userId)}</td>
-                  <td><input type="checkbox" checked={p.active} disabled={busy} onChange={(e) => void guard(() => backendApi.updateNumberAssignmentParticipant(p.id, { active: e.target.checked }))} /></td>
-                </tr>
-              ))}
-              {participants?.length === 0 && <tr><td colSpan={2} className="empty">None yet.</td></tr>}
+              {participants === null && <tr><td colSpan={4} className="empty">Loading…</td></tr>}
+              {participants && [...participants].sort((a, b) => a.sequenceOrder - b.sequenceOrder).map((p) => {
+                const status = eligibility[p.userId];
+                return (
+                  <tr key={p.id}>
+                    <td>{userName(p.userId)}</td>
+                    <td><input type="checkbox" checked={p.active} disabled={busy} onChange={(e) => void guard(() => backendApi.updateNumberAssignmentParticipant(p.id, { active: e.target.checked }))} /></td>
+                    <td><input type="checkbox" checked={hasEligibilityGrant(status)} disabled={busy} onChange={(e) => toggleEligible(p.userId, e.target.checked)} /></td>
+                    <td>
+                      {status ? (
+                        <span className={`lead-status-tag ${status.assignableNow ? 'ASSIGNED' : 'UNASSIGNED'}`} title={status.reasons.join(', ')}>
+                          {status.assignableNow ? 'Yes' : status.reasons[0] ?? 'No'}
+                        </span>
+                      ) : '—'}
+                    </td>
+                  </tr>
+                );
+              })}
+              {participants?.length === 0 && <tr><td colSpan={4} className="empty">None yet.</td></tr>}
             </tbody>
           </table>
           <div className="form-row">
