@@ -6,7 +6,7 @@
  */
 import { ApiError } from '../types';
 import { Ids, Permissions, Validation } from '../domain/phase1';
-import type { Conversation, ConversationSnooze, Reminder, ReminderStatus, User } from '../domain/types';
+import type { Conversation, ConversationSnooze, Customer, Reminder, ReminderStatus, ReminderWithContext, User } from '../domain/types';
 import { Repository } from '../lib/repository';
 import { AccessControl, type Phase1Repositories } from '../lib/accessControl';
 import { AuditLogService } from '../lib/auditLog';
@@ -20,6 +20,7 @@ export class Phase9Api {
   private reminders: Repository<Reminder>;
   private snoozes: Repository<ConversationSnooze>;
   private conversations: Repository<Conversation>;
+  private customers: Repository<Customer>;
 
   constructor(db: FirebaseDb, identityEmail: string) {
     this.phase1Repos = buildPhase1Repositories(db);
@@ -28,6 +29,7 @@ export class Phase9Api {
     this.reminders = new Repository<Reminder>(db, 'reminders');
     this.snoozes = new Repository<ConversationSnooze>(db, 'conversationSnoozes');
     this.conversations = new Repository<Conversation>(db, 'webapp_conversations');
+    this.customers = new Repository<Customer>(db, 'customers');
   }
 
   async createReminder(conversationId: string, text: string, dueAt: string): Promise<Reminder> {
@@ -56,19 +58,34 @@ export class Phase9Api {
     return (await this.reminders.list()).filter((r) => r.conversationId === conversationId).sort((a, b) => (a.dueAt || '').localeCompare(b.dueAt || ''));
   }
 
-  /** Pending reminders owned by the signed-in user. numberId is optional — narrows to reminders on conversations for that number. */
-  async listMyReminders(numberId?: string): Promise<Reminder[]> {
+  /**
+   * Pending reminders owned by the signed-in user, enriched with who each one is for and
+   * which conversation/number to jump into — one bulk read of conversations/customers each,
+   * not a per-reminder fetch (the previous version called this.conversations.get() inside a
+   * loop when numberId was set; N+1 network round trips for what should be one read).
+   * numberId is optional — narrows to reminders on conversations for that number.
+   */
+  async listMyReminders(numberId?: string): Promise<ReminderWithContext[]> {
     const actor = await this.access.currentUser();
-    let reminders = (await this.reminders.list()).filter((r) => r.ownerUserId === actor.id && r.status === 'PENDING');
-    if (numberId) {
-      const filtered: Reminder[] = [];
-      for (const reminder of reminders) {
-        const conversation = await this.conversations.get(reminder.conversationId);
-        if (conversation && conversation.numberId === numberId) filtered.push(reminder);
-      }
-      reminders = filtered;
+    const pending = (await this.reminders.list()).filter((r) => r.ownerUserId === actor.id && r.status === 'PENDING');
+    const conversationById = new Map((await this.conversations.list()).map((c) => [c.id, c]));
+    const customerById = new Map((await this.customers.list()).map((c) => [c.id, c]));
+
+    const enriched: ReminderWithContext[] = [];
+    for (const reminder of pending) {
+      const conversation = conversationById.get(reminder.conversationId);
+      if (!conversation) continue; // orphaned reminder (conversation since deleted) — skip rather than error
+      if (numberId && conversation.numberId !== numberId) continue;
+      const customer = customerById.get(conversation.customerId);
+      enriched.push({
+        ...reminder,
+        numberId: conversation.numberId,
+        customerId: conversation.customerId,
+        customerName: customer?.name || customer?.phone || 'Unknown',
+        customerPhone: customer?.phone || '',
+      });
     }
-    return reminders.sort((a, b) => (a.dueAt || '').localeCompare(b.dueAt || ''));
+    return enriched.sort((a, b) => (a.dueAt || '').localeCompare(b.dueAt || ''));
   }
 
   async snoozeConversation(conversationId: string, until: string): Promise<ConversationSnooze> {

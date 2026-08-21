@@ -260,6 +260,12 @@ describe('Phase22Api (ported from Phase22Domain.gs + Phase22Services.gs)', () =>
     it('a manager can touch any lead regardless of assignment', async () => {
       await expect(new Phase22Api(db, ADMIN_EMAIL).setLeadStage(leadId, stageId)).resolves.toMatchObject({ stageId });
     });
+
+    it('denormalizes stageId onto the lead record itself, so listLeads() reflects it without a per-lead fetch (for the Kanban board)', async () => {
+      await new Phase22Api(db, AGENT_EMAIL).setLeadStage(leadId, stageId);
+      const lead = (await new Phase22Api(db, AGENT_EMAIL).listLeads()).find((l) => l.id === leadId);
+      expect(lead?.stageId).toBe(stageId);
+    });
   });
 
   describe('startWhatsAppFromLead / initiateConversationCall', () => {

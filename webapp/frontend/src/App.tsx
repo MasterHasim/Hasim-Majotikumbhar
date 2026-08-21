@@ -8,6 +8,8 @@ import { NumberPicker } from './components/NumberPicker';
 import { Sidebar, type Page } from './components/Sidebar';
 import { Inbox } from './components/Inbox';
 import { Leads } from './components/Leads';
+import { Reminders } from './components/Reminders';
+import { Customers } from './components/Customers';
 import { Admin } from './components/Admin';
 import { Dashboard } from './components/Dashboard';
 
@@ -40,8 +42,10 @@ export default function App() {
   const [needsResponseCounts, setNeedsResponseCounts] = useState<Record<string, number>>({});
   const [error, setError] = useState<string | null>(null);
 
-  /** Leads.tsx's "Send WhatsApp" bridges into the Inbox on whichever number the lead's location resolves to — which may not be the number currently open. */
-  function openConversationFromLead(conversationId: string, numberId: string) {
+  /** Bridges into the Inbox on whichever number a conversation actually belongs to — which may not
+   * be the number currently open. Used by Leads' "Send WhatsApp", Reminders' "Open chat", and
+   * Customers' "View conversation". */
+  function openConversation(conversationId: string, numberId: string) {
     const target = (numbers ?? []).find((n) => n.id === numberId);
     if (target && target.id !== activeNumber?.id) setActiveNumber(target);
     setPendingConversationId(conversationId);
@@ -166,7 +170,9 @@ export default function App() {
           {page === 'inbox' && (
             <Inbox number={activeNumber} initialConversationId={pendingConversationId} onInitialConversationConsumed={() => setPendingConversationId(null)} />
           )}
-          {page === 'leads' && <Leads whoAmI={whoAmI} onOpenConversation={openConversationFromLead} />}
+          {page === 'leads' && <Leads whoAmI={whoAmI} onOpenConversation={openConversation} />}
+          {page === 'reminders' && <Reminders number={activeNumber} onOpenConversation={openConversation} />}
+          {page === 'customers' && <Customers number={activeNumber} onOpenConversation={openConversation} />}
           {page === 'dashboard' && <Dashboard number={activeNumber} />}
           {page === 'admin' && whoAmI.roleKeys.includes('ADMIN') && <Admin />}
         </div>

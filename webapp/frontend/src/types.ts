@@ -112,6 +112,21 @@ export interface SnoozeStatus {
   snoozedUntil?: string;
 }
 
+/** listMyReminders' return shape — a Reminder enriched with who it's for and which
+ * conversation/number to jump into, computed server-side in one bulk read. */
+export interface ReminderWithContext {
+  id: string;
+  conversationId: string;
+  ownerUserId: string;
+  text: string;
+  dueAt: string;
+  status: ReminderStatus;
+  numberId: string;
+  customerId: string;
+  customerName: string;
+  customerPhone: string;
+}
+
 export interface AssignableUser {
   id: string;
   displayName: string;
@@ -161,6 +176,8 @@ export interface Lead {
   assignedUserId: string;
   assignedAt: string;
   createdAt: string;
+  /** Denormalized on the lead record when setLeadStage is called — see backend Lead type. */
+  stageId?: string;
 }
 
 export type LocationAssignmentMode = 'single' | 'round_robin' | 'manual';
@@ -279,6 +296,7 @@ export interface SearchFilters {
   status?: string;
   needsResponse?: boolean;
   unassigned?: boolean;
+  customerId?: string;
 }
 
 export interface SearchResultItem extends ConversationListItem {

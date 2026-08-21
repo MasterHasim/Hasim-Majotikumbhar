@@ -4,6 +4,7 @@ import { backendApi } from '../lib/backendApi';
 import { ApiClientError } from '../lib/api';
 import { LeadDetailModal } from './LeadDetailModal';
 import { AssignmentRulesModal } from './AssignmentRulesModal';
+import { LeadsBoard } from './LeadsBoard';
 
 function fmt(iso: string): string {
   const d = new Date(iso);
@@ -57,14 +58,15 @@ function UploadLeadsForm({ onDone }: { onDone: () => void }) {
 
 export function Leads({ whoAmI, onOpenConversation }: { whoAmI: WhoAmI; onOpenConversation: (conversationId: string, numberId: string) => void }) {
   const isManager = whoAmI.roleKeys.includes('ADMIN') || whoAmI.roleKeys.includes('SITE_MANAGER');
-  const [leads, setLeads] = useState<Lead[]>([]);
-  const [stages, setStages] = useState<Stage[]>([]);
+  const [leads, setLeads] = useState<Lead[] | null>(null);
+  const [stages, setStages] = useState<Stage[] | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [locationFilter, setLocationFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [showUpload, setShowUpload] = useState(false);
   const [rulesLocation, setRulesLocation] = useState<string | null>(null);
+  const [view, setView] = useState<'table' | 'board'>('board');
   const [error, setError] = useState<string | null>(null);
 
   function loadLeads() {
@@ -99,31 +101,45 @@ export function Leads({ whoAmI, onOpenConversation }: { whoAmI: WhoAmI; onOpenCo
         </select>
         {isManager && <button className="btn primary" onClick={() => setShowUpload(true)}>+ Upload leads</button>}
         {isManager && locationFilter && <button className="btn" onClick={() => setRulesLocation(locationFilter)}>Assignment rules for {locationFilter}</button>}
+        <div className="view-toggle">
+          <button className={view === 'board' ? 'active' : ''} onClick={() => setView('board')}>Board</button>
+          <button className={view === 'table' ? 'active' : ''} onClick={() => setView('table')}>Table</button>
+        </div>
       </div>
 
-      <table className="data-table">
-        <thead><tr><th>Name</th><th>Phone</th><th>Location</th><th>Status</th><th>Assigned</th><th>Created</th></tr></thead>
-        <tbody>
-          {leads.map((lead) => (
-            <tr key={lead.id} className="clickable" onClick={() => setSelectedLead(lead)}>
-              <td>{lead.name}</td>
-              <td>{lead.phone}</td>
-              <td>{lead.location}</td>
-              <td><span className={`lead-status-tag ${lead.status}`}>{lead.status}</span></td>
-              <td>{lead.assignedUserId ? (users.find((u) => u.id === lead.assignedUserId)?.displayName ?? (lead.assignedUserId === whoAmI.id ? whoAmI.displayName : lead.assignedUserId)) : '—'}</td>
-              <td>{fmt(lead.createdAt)}</td>
-            </tr>
-          ))}
-          {leads.length === 0 && <tr><td colSpan={6} className="empty">No leads {locationFilter || statusFilter ? 'match this filter' : 'yet'}.</td></tr>}
-        </tbody>
-      </table>
+      {leads === null ? (
+        <div className="empty">Loading…</div>
+      ) : view === 'board' ? (
+        leads.length === 0 ? (
+          <div className="empty">No leads {locationFilter || statusFilter ? 'match this filter' : 'yet'}.</div>
+        ) : (
+          <LeadsBoard leads={leads} stages={stages} users={users} currentUserId={whoAmI.id} onOpenLead={setSelectedLead} onChanged={loadLeads} />
+        )
+      ) : (
+        <table className="data-table">
+          <thead><tr><th>Name</th><th>Phone</th><th>Location</th><th>Status</th><th>Assigned</th><th>Created</th></tr></thead>
+          <tbody>
+            {leads.map((lead) => (
+              <tr key={lead.id} className="clickable" onClick={() => setSelectedLead(lead)}>
+                <td>{lead.name}</td>
+                <td>{lead.phone}</td>
+                <td>{lead.location}</td>
+                <td><span className={`lead-status-tag ${lead.status}`}>{lead.status}</span></td>
+                <td>{lead.assignedUserId ? (users.find((u) => u.id === lead.assignedUserId)?.displayName ?? (lead.assignedUserId === whoAmI.id ? whoAmI.displayName : lead.assignedUserId)) : '—'}</td>
+                <td>{fmt(lead.createdAt)}</td>
+              </tr>
+            ))}
+            {leads.length === 0 && <tr><td colSpan={6} className="empty">No leads {locationFilter || statusFilter ? 'match this filter' : 'yet'}.</td></tr>}
+          </tbody>
+        </table>
+      )}
 
       {showUpload && <UploadLeadsForm onDone={() => { setShowUpload(false); loadLeads(); }} />}
       {rulesLocation && <AssignmentRulesModal location={rulesLocation} users={users} onClose={() => setRulesLocation(null)} />}
       {selectedLead && (
         <LeadDetailModal
           lead={selectedLead}
-          stages={stages}
+          stages={stages ?? []}
           isManager={isManager}
           currentUserId={whoAmI.id}
           managers={users}

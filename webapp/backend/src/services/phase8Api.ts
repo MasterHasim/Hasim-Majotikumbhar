@@ -9,13 +9,12 @@ import { FirebaseDb } from '../lib/firebaseAdmin';
 import { buildPhase1Repositories } from '../lib/phase1Repositories';
 
 const DEFAULT_STAGES = [
-  { key: 'new', name: 'New' },
+  { key: 'new_leads', name: 'New Leads' },
   { key: 'contacted', name: 'Contacted' },
   { key: 'interested', name: 'Interested' },
-  { key: 'quotation_sent', name: 'Quotation Sent' },
-  { key: 'negotiation', name: 'Negotiation' },
-  { key: 'won', name: 'Won' },
-  { key: 'lost', name: 'Lost' },
+  { key: 'not_interested', name: 'Not Interested' },
+  { key: 'lead_won', name: 'Lead Won' },
+  { key: 'lead_lost', name: 'Lead Lost' },
 ];
 
 export class Phase8Api {

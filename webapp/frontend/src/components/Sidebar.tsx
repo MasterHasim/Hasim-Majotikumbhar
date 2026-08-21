@@ -1,6 +1,6 @@
 import type { WhatsAppNumber, WhoAmI } from '../types';
 
-export type Page = 'inbox' | 'leads' | 'dashboard' | 'admin';
+export type Page = 'inbox' | 'leads' | 'reminders' | 'customers' | 'dashboard' | 'admin';
 
 const REPORTS_ROLES = ['ADMIN', 'SUPERVISOR', 'SITE_MANAGER', 'VIEWER'];
 
@@ -36,6 +36,14 @@ export function Sidebar({
         <button className={`nav-item${page === 'leads' ? ' active' : ''}`} onClick={() => onNavigate('leads')}>
           <span className="nav-icon">📍</span>
           <span className="nav-label">Leads</span>
+        </button>
+        <button className={`nav-item${page === 'reminders' ? ' active' : ''}`} onClick={() => onNavigate('reminders')}>
+          <span className="nav-icon">⏰</span>
+          <span className="nav-label">Reminders</span>
+        </button>
+        <button className={`nav-item${page === 'customers' ? ' active' : ''}`} onClick={() => onNavigate('customers')}>
+          <span className="nav-icon">👥</span>
+          <span className="nav-label">Customers</span>
         </button>
         {whoAmI.roleKeys.some((r) => REPORTS_ROLES.includes(r)) && (
           <button className={`nav-item${page === 'dashboard' ? ' active' : ''}`} onClick={() => onNavigate('dashboard')}>

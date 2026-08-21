@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState } from 'react';
-import type { AuditEntry, NumberAccess, NumberAssignmentConfig, NumberAssignmentUser, QuickReply, Role, Team, TeamMember, Template, User, WhatsAppNumber } from '../types';
+import type { AuditEntry, NumberAccess, NumberAssignmentConfig, NumberAssignmentUser, QuickReply, Role, Stage, Team, TeamMember, Template, User, WhatsAppNumber } from '../types';
 import { backendApi } from '../lib/backendApi';
 import { ApiClientError } from '../lib/api';
 
@@ -15,7 +15,9 @@ function fmt(iso: string): string {
 // ---------------------------------------------------------------------------
 
 function UsersTab({ roles }: { roles: Role[] }) {
-  const [users, setUsers] = useState<User[]>([]);
+  /** null = not loaded yet, [] = loaded and genuinely empty — without this distinction the
+   * table shows "No users yet." during the fetch too, which reads as data loss on a slow load. */
+  const [users, setUsers] = useState<User[] | null>(null);
   const [email, setEmail] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [newRoleIds, setNewRoleIds] = useState<string[]>([]);
@@ -45,7 +47,8 @@ function UsersTab({ roles }: { roles: Role[] }) {
         <table className="data-table">
           <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Status</th><th>Roles</th></tr></thead>
           <tbody>
-            {users.map((u) => (
+            {users === null && <tr><td colSpan={5} className="empty">Loading…</td></tr>}
+            {users?.map((u) => (
               <tr key={u.id}>
                 <td>{u.displayName}</td>
                 <td>{u.email}</td>
@@ -73,7 +76,7 @@ function UsersTab({ roles }: { roles: Role[] }) {
                 </td>
               </tr>
             ))}
-            {users.length === 0 && <tr><td colSpan={5} className="empty">No users yet.</td></tr>}
+            {users?.length === 0 && <tr><td colSpan={5} className="empty">No users yet.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -112,7 +115,7 @@ function UsersTab({ roles }: { roles: Role[] }) {
 // ---------------------------------------------------------------------------
 
 function TeamsTab({ users, roles }: { users: User[]; roles: Role[] }) {
-  const [teams, setTeams] = useState<Team[]>([]);
+  const [teams, setTeams] = useState<Team[] | null>(null);
   const [members, setMembers] = useState<Record<string, TeamMember[]>>({});
   const [expanded, setExpanded] = useState<string | null>(null);
   const [name, setName] = useState('');
@@ -148,7 +151,8 @@ function TeamsTab({ users, roles }: { users: User[]; roles: Role[] }) {
       <table className="data-table">
         <thead><tr><th>Name</th><th>Owner</th><th>Status</th><th></th></tr></thead>
         <tbody>
-          {teams.map((t) => (
+          {teams === null && <tr><td colSpan={4} className="empty">Loading…</td></tr>}
+          {teams?.map((t) => (
             <Fragment key={t.id}>
               <tr className="clickable" onClick={() => { setExpanded(expanded === t.id ? null : t.id); if (!members[t.id]) loadMembers(t.id); }}>
                 <td>{t.name}</td>
@@ -207,7 +211,7 @@ function TeamsTab({ users, roles }: { users: User[]; roles: Role[] }) {
               )}
             </Fragment>
           ))}
-          {teams.length === 0 && <tr><td colSpan={4} className="empty">No teams yet.</td></tr>}
+          {teams?.length === 0 && <tr><td colSpan={4} className="empty">No teams yet.</td></tr>}
         </tbody>
       </table>
       {error && <div className="form-error">{error}</div>}
@@ -238,7 +242,7 @@ function TeamsTab({ users, roles }: { users: User[]; roles: Role[] }) {
 // ---------------------------------------------------------------------------
 
 function NumbersTab() {
-  const [numbers, setNumbers] = useState<WhatsAppNumber[]>([]);
+  const [numbers, setNumbers] = useState<WhatsAppNumber[] | null>(null);
   const [displayName, setDisplayName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [busy, setBusy] = useState(false);
@@ -261,7 +265,8 @@ function NumbersTab() {
       <table className="data-table">
         <thead><tr><th>Name</th><th>Phone</th><th>Active</th></tr></thead>
         <tbody>
-          {numbers.map((n) => (
+          {numbers === null && <tr><td colSpan={3} className="empty">Loading…</td></tr>}
+          {numbers?.map((n) => (
             <tr key={n.id}>
               <td>
                 <input defaultValue={n.displayName} onBlur={(e) => { if (e.target.value !== n.displayName) void guard(() => backendApi.updateNumber(n.id, { displayName: e.target.value })); }} />
@@ -270,7 +275,7 @@ function NumbersTab() {
               <td><input type="checkbox" checked={n.active} disabled={busy} onChange={(e) => void guard(() => backendApi.updateNumber(n.id, { active: e.target.checked }))} /></td>
             </tr>
           ))}
-          {numbers.length === 0 && <tr><td colSpan={3} className="empty">None yet.</td></tr>}
+          {numbers?.length === 0 && <tr><td colSpan={3} className="empty">None yet.</td></tr>}
         </tbody>
       </table>
       {error && <div className="form-error">{error}</div>}
@@ -297,7 +302,7 @@ function NumbersTab() {
 // ---------------------------------------------------------------------------
 
 function NumberAccessTab({ users, numbers }: { users: User[]; numbers: WhatsAppNumber[] }) {
-  const [grants, setGrants] = useState<NumberAccess[]>([]);
+  const [grants, setGrants] = useState<NumberAccess[] | null>(null);
   const [userId, setUserId] = useState('');
   const [numberId, setNumberId] = useState('');
   const [busy, setBusy] = useState(false);
@@ -323,7 +328,8 @@ function NumberAccessTab({ users, numbers }: { users: User[]; numbers: WhatsAppN
       <table className="data-table">
         <thead><tr><th>User</th><th>Number</th><th>Status</th><th></th></tr></thead>
         <tbody>
-          {grants.map((g) => (
+          {grants === null && <tr><td colSpan={4} className="empty">Loading…</td></tr>}
+          {grants?.map((g) => (
             <tr key={g.id}>
               <td>{userName(g.userId)}</td>
               <td>{numberName(g.numberId)}</td>
@@ -337,7 +343,7 @@ function NumberAccessTab({ users, numbers }: { users: User[]; numbers: WhatsAppN
               </td>
             </tr>
           ))}
-          {grants.length === 0 && <tr><td colSpan={4} className="empty">None yet.</td></tr>}
+          {grants?.length === 0 && <tr><td colSpan={4} className="empty">None yet.</td></tr>}
         </tbody>
       </table>
       {error && <div className="form-error">{error}</div>}
@@ -372,7 +378,7 @@ function NumberAccessTab({ users, numbers }: { users: User[]; numbers: WhatsAppN
 function AssignmentRulesTab({ users, numbers }: { users: User[]; numbers: WhatsAppNumber[] }) {
   const [numberId, setNumberId] = useState(numbers[0]?.id ?? '');
   const [config, setConfig] = useState<NumberAssignmentConfig | null>(null);
-  const [participants, setParticipants] = useState<NumberAssignmentUser[]>([]);
+  const [participants, setParticipants] = useState<NumberAssignmentUser[] | null>(null);
   const [newUserId, setNewUserId] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -391,7 +397,7 @@ function AssignmentRulesTab({ users, numbers }: { users: User[]; numbers: WhatsA
   }
 
   const userName = (id: string) => users.find((u) => u.id === id)?.displayName ?? id;
-  const available = users.filter((u) => !participants.some((p) => p.userId === u.id));
+  const available = users.filter((u) => !(participants ?? []).some((p) => p.userId === u.id));
 
   return (
     <div className="card" style={{ maxWidth: 'none' }}>
@@ -433,13 +439,14 @@ function AssignmentRulesTab({ users, numbers }: { users: User[]; numbers: WhatsA
           <table className="data-table">
             <thead><tr><th>Agent</th><th>Active</th></tr></thead>
             <tbody>
-              {participants.sort((a, b) => a.sequenceOrder - b.sequenceOrder).map((p) => (
+              {participants === null && <tr><td colSpan={2} className="empty">Loading…</td></tr>}
+              {participants && [...participants].sort((a, b) => a.sequenceOrder - b.sequenceOrder).map((p) => (
                 <tr key={p.id}>
                   <td>{userName(p.userId)}</td>
                   <td><input type="checkbox" checked={p.active} disabled={busy} onChange={(e) => void guard(() => backendApi.updateNumberAssignmentParticipant(p.id, { active: e.target.checked }))} /></td>
                 </tr>
               ))}
-              {participants.length === 0 && <tr><td colSpan={2} className="empty">None yet.</td></tr>}
+              {participants?.length === 0 && <tr><td colSpan={2} className="empty">None yet.</td></tr>}
             </tbody>
           </table>
           <div className="form-row">
@@ -453,7 +460,7 @@ function AssignmentRulesTab({ users, numbers }: { users: User[]; numbers: WhatsA
               onClick={() => {
                 const u = newUserId;
                 setNewUserId('');
-                void guard(() => backendApi.addNumberAssignmentParticipant(numberId, u, participants.length + 1));
+                void guard(() => backendApi.addNumberAssignmentParticipant(numberId, u, (participants ?? []).length + 1));
               }}
             >
               Add
@@ -468,7 +475,7 @@ function AssignmentRulesTab({ users, numbers }: { users: User[]; numbers: WhatsA
 // ---------------------------------------------------------------------------
 
 function AuditLogTab({ users }: { users: User[] }) {
-  const [entries, setEntries] = useState<AuditEntry[]>([]);
+  const [entries, setEntries] = useState<AuditEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -485,7 +492,8 @@ function AuditLogTab({ users }: { users: User[] }) {
         <table className="data-table">
           <thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Target</th></tr></thead>
           <tbody>
-            {entries.slice(0, 300).map((e) => (
+            {entries === null && <tr><td colSpan={4} className="empty">Loading…</td></tr>}
+            {entries?.slice(0, 300).map((e) => (
               <tr key={e.id}>
                 <td>{fmt(e.occurredAt)}</td>
                 <td>{userName(e.actorUserId)}</td>
@@ -493,11 +501,11 @@ function AuditLogTab({ users }: { users: User[] }) {
                 <td>{e.targetType} / {e.targetId}</td>
               </tr>
             ))}
-            {entries.length === 0 && <tr><td colSpan={4} className="empty">No activity yet.</td></tr>}
+            {entries?.length === 0 && <tr><td colSpan={4} className="empty">No activity yet.</td></tr>}
           </tbody>
         </table>
       </div>
-      {entries.length > 300 && <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Showing the 300 most recent of {entries.length} entries.</p>}
+      {entries && entries.length > 300 && <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Showing the 300 most recent of {entries.length} entries.</p>}
     </div>
   );
 }
@@ -552,7 +560,7 @@ function BackupTab() {
 // ---------------------------------------------------------------------------
 
 function QuickRepliesSection() {
-  const [items, setItems] = useState<QuickReply[]>([]);
+  const [items, setItems] = useState<QuickReply[] | null>(null);
   const [shortcut, setShortcut] = useState('');
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -584,7 +592,8 @@ function QuickRepliesSection() {
       <table className="data-table">
         <thead><tr><th>Shortcut</th><th>Text</th><th>Active</th></tr></thead>
         <tbody>
-          {items.map((q) => (
+          {items === null && <tr><td colSpan={3} className="empty">Loading…</td></tr>}
+          {items?.map((q) => (
             <tr key={q.id}>
               <td>{q.shortcut}</td>
               <td>{q.text}</td>
@@ -597,7 +606,7 @@ function QuickRepliesSection() {
               </td>
             </tr>
           ))}
-          {items.length === 0 && <tr><td colSpan={3} className="empty">None yet.</td></tr>}
+          {items?.length === 0 && <tr><td colSpan={3} className="empty">None yet.</td></tr>}
         </tbody>
       </table>
       {error && <div className="form-error">{error}</div>}
@@ -611,7 +620,7 @@ function QuickRepliesSection() {
 }
 
 function TemplatesSection() {
-  const [items, setItems] = useState<Template[]>([]);
+  const [items, setItems] = useState<Template[] | null>(null);
   const [name, setName] = useState('');
   const [language, setLanguage] = useState('en');
   const [category, setCategory] = useState('MARKETING');
@@ -648,7 +657,8 @@ function TemplatesSection() {
       <table className="data-table">
         <thead><tr><th>Name</th><th>Language</th><th>Category</th><th>Status</th><th></th></tr></thead>
         <tbody>
-          {items.map((t) => (
+          {items === null && <tr><td colSpan={5} className="empty">Loading…</td></tr>}
+          {items?.map((t) => (
             <tr key={t.id}>
               <td>{t.name}</td>
               <td>{t.language}</td>
@@ -663,7 +673,7 @@ function TemplatesSection() {
               </td>
             </tr>
           ))}
-          {items.length === 0 && <tr><td colSpan={5} className="empty">None yet.</td></tr>}
+          {items?.length === 0 && <tr><td colSpan={5} className="empty">None yet.</td></tr>}
         </tbody>
       </table>
 
@@ -703,9 +713,106 @@ function TemplatesSection() {
   );
 }
 
+function slugify(name: string): string {
+  return name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'stage';
+}
+
+function LeadStagesTab() {
+  const [stages, setStages] = useState<Stage[] | null>(null);
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function reload() {
+    backendApi.listStages().then((s) => setStages([...s].sort((a, b) => a.sequenceOrder - b.sequenceOrder))).catch((err) => setError(errMsg(err)));
+  }
+  useEffect(reload, []);
+
+  async function guard(fn: () => Promise<unknown>) {
+    setBusy(true);
+    setError(null);
+    try {
+      await fn();
+      reload();
+    } catch (err) {
+      setError(errMsg(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function create() {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setName('');
+    await guard(() => backendApi.createStage({ key: slugify(trimmed), name: trimmed, sequenceOrder: (stages ?? []).length + 1 }));
+  }
+
+  async function move(stage: Stage, direction: -1 | 1) {
+    const idx = (stages ?? []).findIndex((s) => s.id === stage.id);
+    const swapWith = (stages ?? [])[idx + direction];
+    if (!swapWith) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await Promise.all([
+        backendApi.updateStage(stage.id, { sequenceOrder: swapWith.sequenceOrder }),
+        backendApi.updateStage(swapWith.id, { sequenceOrder: stage.sequenceOrder }),
+      ]);
+      reload();
+    } catch (err) {
+      setError(errMsg(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card">
+      <h2 className="section-title" style={{ marginTop: 0 }}>Lead Stages</h2>
+      <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+        This is the pipeline both Leads (the Kanban board) and WhatsApp customers use for their "Stage" field — reorder,
+        rename, or deactivate as your team's process changes. Deactivating a stage keeps any leads already on it, it just
+        stops appearing as a column/option for new ones.
+      </p>
+      <table className="data-table">
+        <thead><tr><th>Order</th><th>Name</th><th>Key</th><th>Active</th><th></th></tr></thead>
+        <tbody>
+          {stages === null && <tr><td colSpan={5} className="empty">Loading…</td></tr>}
+          {stages?.map((s, idx) => (
+            <tr key={s.id}>
+              <td>{s.sequenceOrder}</td>
+              <td>{s.name}</td>
+              <td style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{s.key}</td>
+              <td>
+                <input type="checkbox" checked={s.active} disabled={busy} onChange={(e) => void guard(() => backendApi.updateStage(s.id, { active: e.target.checked }))} />
+              </td>
+              <td style={{ display: 'flex', gap: 4 }}>
+                <button className="btn" disabled={busy || idx === 0} onClick={() => void move(s, -1)}>↑</button>
+                <button className="btn" disabled={busy || idx === (stages?.length ?? 0) - 1} onClick={() => void move(s, 1)}>↓</button>
+              </td>
+            </tr>
+          ))}
+          {stages?.length === 0 && <tr><td colSpan={5} className="empty">No stages yet.</td></tr>}
+        </tbody>
+      </table>
+      {error && <div className="form-error">{error}</div>}
+      <div className="form-row">
+        <input placeholder="New stage name (e.g. Site Visit Booked)" style={{ flex: 1, minWidth: 220 }} value={name} onChange={(e) => setName(e.target.value)} />
+        <button className="btn primary" disabled={busy || !name.trim()} onClick={() => void create()}>Add stage</button>
+        {stages?.length === 0 && (
+          <button className="btn" disabled={busy} onClick={() => void guard(() => backendApi.seedDefaultLeadStages())}>
+            Seed default 6 (New Leads → Contacted → Interested → Not Interested → Lead Won / Lead Lost)
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 
-type AdminTab = 'users' | 'teams' | 'numbers' | 'access' | 'assignment' | 'quickReplies' | 'templates' | 'audit' | 'backup';
+type AdminTab = 'users' | 'teams' | 'numbers' | 'access' | 'assignment' | 'quickReplies' | 'templates' | 'leadStages' | 'audit' | 'backup';
 
 export function Admin() {
   const [tab, setTab] = useState<AdminTab>('users');
@@ -725,7 +832,7 @@ export function Admin() {
       <div className="settings-tabs">
         {([
           ['users', 'Users'], ['teams', 'Teams'], ['numbers', 'Numbers'], ['access', 'Number Access'],
-          ['assignment', 'Assignment Rules'], ['quickReplies', 'Quick Replies'], ['templates', 'Templates'], ['audit', 'Audit Log'], ['backup', 'Backup'],
+          ['assignment', 'Assignment Rules'], ['quickReplies', 'Quick Replies'], ['templates', 'Templates'], ['leadStages', 'Lead Stages'], ['audit', 'Audit Log'], ['backup', 'Backup'],
         ] as [AdminTab, string][]).map(([key, label]) => (
           <button key={key} className={`settings-tab${tab === key ? ' active' : ''}`} onClick={() => setTab(key)}>{label}</button>
         ))}
@@ -738,6 +845,7 @@ export function Admin() {
       {tab === 'assignment' && <AssignmentRulesTab users={users} numbers={numbers} />}
       {tab === 'quickReplies' && <QuickRepliesSection />}
       {tab === 'templates' && <TemplatesSection />}
+      {tab === 'leadStages' && <LeadStagesTab />}
       {tab === 'audit' && <AuditLogTab users={users} />}
       {tab === 'backup' && <BackupTab />}
     </>

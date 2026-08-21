@@ -3,8 +3,8 @@ import { apiFetch } from './api';
 import type {
   AssignableUser, AuditEntry, CallLog, Conversation, ConversationListItem, Customer, CustomerStage, DashboardMetrics, Lead, LeadRemark,
   LeadStageAssignment, LocationAssignmentConfig, LocationAssignmentUser, NumberAccess, NumberAssignmentConfig, NumberAssignmentUser, QuickReply,
-  Remark, Reminder, Role, SearchFilters, SearchResultItem, SnoozeStatus, Stage, Team, TeamMember, Template, UploadLeadsResult, User, WhatsAppNumber,
-  WhoAmI, Workspace,
+  Remark, Reminder, ReminderWithContext, Role, SearchFilters, SearchResultItem, SnoozeStatus, Stage, Team, TeamMember, Template, UploadLeadsResult,
+  User, WhatsAppNumber, WhoAmI, Workspace,
 } from '../types';
 
 export const backendApi = {
@@ -55,6 +55,14 @@ export const backendApi = {
 
   listStages: () => apiFetch<Stage[]>('/api/lead-stages'),
 
+  createStage: (input: { key: string; name: string; sequenceOrder?: number }) =>
+    apiFetch<Stage>('/api/lead-stages', { method: 'POST', body: JSON.stringify(input) }),
+
+  updateStage: (id: string, patch: Record<string, unknown>) =>
+    apiFetch<Stage>(`/api/lead-stages/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+
+  seedDefaultLeadStages: () => apiFetch<Stage[]>('/api/lead-stages/seed-defaults', { method: 'POST' }),
+
   setCustomerStage: (customerId: string, stageId: string) =>
     apiFetch<CustomerStage>(`/api/customers/${encodeURIComponent(customerId)}/stage`, { method: 'POST', body: JSON.stringify({ stageId }) }),
 
@@ -72,6 +80,15 @@ export const backendApi = {
 
   unsnoozeConversation: (conversationId: string) =>
     apiFetch<{ conversationId: string; snoozed: false }>(`/api/conversations/${encodeURIComponent(conversationId)}/unsnooze`, { method: 'POST' }),
+
+  listMyReminders: (numberId?: string) =>
+    apiFetch<ReminderWithContext[]>(`/api/my-reminders${numberId ? `?numberId=${encodeURIComponent(numberId)}` : ''}`),
+
+  listCustomers: (numberId?: string) =>
+    apiFetch<Customer[]>(`/api/customers${numberId ? `?numberId=${encodeURIComponent(numberId)}` : ''}`),
+
+  updateCustomer: (customerId: string, patch: Record<string, unknown>) =>
+    apiFetch<Customer>(`/api/customers/${encodeURIComponent(customerId)}`, { method: 'PATCH', body: JSON.stringify(patch) }),
 
   listUsers: () => apiFetch<User[]>('/api/users'),
 

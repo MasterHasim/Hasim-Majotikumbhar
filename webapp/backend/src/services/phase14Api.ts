@@ -143,7 +143,7 @@ export class Phase14Api {
 
   private async computeLeadConversion(customerIds: Set<string>) {
     const stages = await this.stages.list();
-    const wonStage = stages.find((s) => s.key === 'won');
+    const wonStage = stages.find((s) => s.key === 'won' || s.key === 'lead_won');
     const stageRecords = (await this.customerStages.list()).filter((r) => customerIds.has(r.customerId));
     const wonCount = wonStage ? stageRecords.filter((r) => r.stageId === wonStage.id).length : 0;
     const totalWithStage = stageRecords.length;

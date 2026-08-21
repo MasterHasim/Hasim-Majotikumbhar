@@ -177,6 +177,16 @@ export interface Reminder extends Record_ {
   updatedAt: string;
 }
 
+/** listMyReminders' return shape — a Reminder enriched with just enough conversation/customer
+ * context (in one bulk read, not per-reminder) for a cross-conversation "My Reminders" list to
+ * be useful: who it's for, and which number/conversation to jump into. */
+export interface ReminderWithContext extends Reminder {
+  numberId: string;
+  customerId: string;
+  customerName: string;
+  customerPhone: string;
+}
+
 export interface ConversationSnooze extends Record_ {
   conversationId: string;
   snoozedUntil: string;
@@ -232,6 +242,11 @@ export interface Lead extends Record_ {
   uploadedBy: string;
   createdAt: string;
   updatedAt: string;
+  /** Denormalized copy of the current leadStageAssignments row for this lead — lets
+   * listLeads() return every lead's stage in one read (for the Kanban board) instead
+   * of needing a separate getLeadStage() call per lead. leadStageAssignments stays
+   * the source of truth (setByUserId, audit trail); this is a read-speed mirror. */
+  stageId?: string;
 }
 
 export type LocationAssignmentMode = 'single' | 'round_robin' | 'manual';

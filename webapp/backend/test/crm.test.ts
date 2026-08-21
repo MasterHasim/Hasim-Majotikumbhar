@@ -175,7 +175,7 @@ describe('CRM core (ported from Phase7-9 Domain/Services.gs)', () => {
   describe('Phase8Api — lead stages, customer stage, remarks, customers', () => {
     it('seeds default stages exactly once', async () => {
       const stages = await new Phase8Api(db, ADMIN_EMAIL).seedDefaultLeadStages();
-      expect(stages).toHaveLength(7);
+      expect(stages).toHaveLength(6);
       await expect(new Phase8Api(db, ADMIN_EMAIL).seedDefaultLeadStages()).rejects.toMatchObject({ code: 'CONFLICT' });
     });
 
@@ -256,6 +256,7 @@ describe('CRM core (ported from Phase7-9 Domain/Services.gs)', () => {
 
       const mine = await new Phase9Api(db, AGENT_EMAIL).listMyReminders(numberId);
       expect(mine).toHaveLength(1);
+      expect(mine[0]).toMatchObject({ numberId, customerPhone: '+919876543210' });
       const mineOther = await new Phase9Api(db, AGENT2_EMAIL).listMyReminders();
       expect(mineOther).toHaveLength(0);
 

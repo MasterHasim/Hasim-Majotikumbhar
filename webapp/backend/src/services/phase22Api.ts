@@ -228,6 +228,7 @@ export class Phase22Api {
     const now = Ids.now();
     const record: LeadStageAssignment = { id: leadId, leadId, stageId, setByUserId: actor.id, updatedAt: now };
     await this.leadStages.replace(leadId, record);
+    await this.leads.update(leadId, { stageId });
     await this.audit.write(actor.id, 'lead.stageChanged', 'lead', leadId, { stageId });
     return record;
   }

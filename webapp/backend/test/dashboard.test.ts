@@ -96,7 +96,7 @@ describe('Phase14Api (ported from Phase14Services.gs)', () => {
 
   it('computes stage distribution and lead conversion from CustomerStage records', async () => {
     const stages = await new Phase8Api(db, ADMIN_EMAIL).seedDefaultLeadStages();
-    const wonStage = stages.find((s) => s.key === 'won')!;
+    const wonStage = stages.find((s) => s.key === 'lead_won')!;
     const result = await ingest('msg-1', '+919876543210');
     await new Phase6Api(db, ADMIN_EMAIL, mock.exotelConfig as never).resolveConversation(result.conversationId!);
     await new Phase8Api(db, ADMIN_EMAIL).setCustomerStage(result.customerId!, wonStage.id);
