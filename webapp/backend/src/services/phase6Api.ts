@@ -93,12 +93,24 @@ export function toE164(phoneNumber: string): string {
   return `+${digits}`;
 }
 
+/**
+ * Real bug, confirmed live 2026-08-23: none of the shapes this checked ever matched a real send
+ * response, so providerMessageId was empty on every single outbound message ever sent — which
+ * meant the (now-fixed) dlr status-callback handler could never find the message to update,
+ * silently no-op'ing forever. The real response wraps everything under "response.whatsapp", and
+ * each message entry's id sits under "data.sid", not directly on the entry — same "response"
+ * envelope Phase10Api's syncTemplatesFromProvider already confirmed live for the templates
+ * endpoint. Real payload seen: {"response":{"whatsapp":{"messages":[{"data":{"sid":"..."}}]}}}.
+ */
 function extractOutboundProviderMessageId(response: unknown): string | null {
   if (!response || typeof response !== 'object') return null;
   const r = response as Record<string, unknown>;
   if (typeof r.sid === 'string') return r.sid;
   if (typeof r.message_sid === 'string') return r.message_sid;
   if (typeof r.id === 'string') return r.id;
+  const wrappedMessages = ((r.response as Record<string, unknown> | undefined)?.whatsapp as Record<string, unknown> | undefined)?.messages as Array<Record<string, unknown>> | undefined;
+  const wrappedData = wrappedMessages?.[0]?.data as Record<string, unknown> | undefined;
+  if (wrappedData && typeof wrappedData.sid === 'string') return wrappedData.sid;
   const messages = (r.whatsapp as Record<string, unknown> | undefined)?.messages as Array<Record<string, unknown>> | undefined;
   const first = messages?.[0];
   if (first) return (first.sid as string) || (first.id as string) || (first.message_sid as string) || null;
@@ -281,6 +293,7 @@ export class Phase6Api {
     try {
       const response = await sendFn(new ExotelProvider(this.exotelConfig), number, customer);
       providerMessageId = extractOutboundProviderMessageId(response) || '';
+      if (!providerMessageId) console.log('sendOutbound: could not extract providerMessageId, raw response:', JSON.stringify(response));
     } catch {
       status = 'FAILED';
     }

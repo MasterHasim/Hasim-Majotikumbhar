@@ -116,7 +116,10 @@ export async function setupMockFirebase(projectId = 'test-project'): Promise<Moc
         return new Response(JSON.stringify(respBody), { status });
       }
       exotelSidCounter += 1;
-      return new Response(JSON.stringify({ whatsapp: { messages: [{ sid: `mock-sid-${exotelSidCounter}` }] } }), { status: 200 });
+      // Matches the real confirmed-live send-response envelope (2026-08-23): everything wrapped
+      // under "response.whatsapp", each message entry's id nested under "data.sid" — not the
+      // flatter shape this mock used to return, which no real Exotel response actually has.
+      return new Response(JSON.stringify({ request_id: 'mock-request', method: (init?.method ?? 'GET').toUpperCase(), http_code: 200, metadata: { failed: 0, total: 1, success: 1 }, response: { whatsapp: { messages: [{ code: 202, error_data: null, status: 'success', data: { sid: `mock-sid-${exotelSidCounter}` } }] } } }), { status: 200 });
     }
 
     if (url.startsWith(`https://api.exotel.com/v1/Accounts/${exotelVoiceConfig.EXOTEL_VOICE_ACCOUNT_SID}/`)) {

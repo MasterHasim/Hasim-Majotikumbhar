@@ -268,6 +268,13 @@ describe('Messaging core (ported from Phase 3-6 + WorkspaceServices.gs)', () => 
       expect(normalized.status).toBe('FAILED');
     });
 
+    it('sendReply extracts providerMessageId from the real confirmed send-response envelope — real bug, confirmed live 2026-08-23: every response shape this code checked before missed the real one (everything wrapped under "response.whatsapp", each message\'s id nested under "data.sid"), so providerMessageId was empty on every single message ever sent, and the dlr status-update handler could never find a match', async () => {
+      const inbound = await new Phase4Api(db).ingestInboundMessage({ providerMessageId: 'msg-seed-real-shape', fromPhone: '+919876543210', providerNumberId: '+917948502801', direction: 'INBOUND', messageType: 'text', text: 'Hi', timestamp: new Date().toISOString(), status: null });
+      mock.setNextExotelResponse(200, { request_id: 'req-1', method: 'POST', http_code: 202, metadata: { failed: 0, total: 1, success: 1 }, response: { whatsapp: { messages: [{ code: 202, error_data: null, status: 'success', data: { sid: 'real-shape-sid-123' } }] } } });
+      const sent = await new Phase6Api(db, ADMIN_EMAIL, mock.exotelConfig as never).sendReply(inbound.conversationId!, 'Hello');
+      expect(sent.providerMessageId).toBe('real-shape-sid-123');
+    });
+
     it('a dlr callback applies as a status update via ingestInboundMessage instead of failing with "No registered number matches"', async () => {
       const inbound = await new Phase4Api(db).ingestInboundMessage({ providerMessageId: 'msg-seed', fromPhone: '+919876543210', providerNumberId: '+917948502801', direction: 'INBOUND', messageType: 'text', text: 'Hi', timestamp: new Date().toISOString(), status: null });
       const sent = await new Phase6Api(db, ADMIN_EMAIL, mock.exotelConfig as never).sendReply(inbound.conversationId!, 'Outbound text');

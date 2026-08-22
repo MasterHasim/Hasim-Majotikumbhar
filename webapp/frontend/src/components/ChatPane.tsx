@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { QuickReply, Template, Workspace } from '../types';
+import type { CustomFieldDefinition, QuickReply, Template, Workspace } from '../types';
 import { backendApi } from '../lib/backendApi';
 import { ApiClientError } from '../lib/api';
 
@@ -77,11 +77,19 @@ export function ChatPane({ workspace, quickReplies, templates, onAfterSend, onRe
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [templateId, setTemplateId] = useState('');
   const [templateVars, setTemplateVars] = useState<Record<string, string>>({});
+  const [customFieldDefs, setCustomFieldDefs] = useState<CustomFieldDefinition[]>([]);
   const messagesRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     messagesRef.current?.scrollTo({ top: messagesRef.current.scrollHeight });
   }, [workspace.messages.length]);
+
+  // Definitions are workspace-wide (not per-customer), so fetched once — powers the "Insert…"
+  // picker next to each template variable, letting an agent pull in this customer's own data
+  // instead of retyping it (or guessing a Custom Field's exact wording).
+  useEffect(() => {
+    backendApi.listCustomFieldDefinitions('customer').then((d) => setCustomFieldDefs(d.filter((x) => x.active))).catch(() => setCustomFieldDefs([]));
+  }, []);
 
   function guard(fn: () => Promise<unknown>) {
     setSending(true);
@@ -133,6 +141,20 @@ export function ChatPane({ workspace, quickReplies, templates, onAfterSend, onRe
   const selectedTemplate = approvedTemplates.find((t) => t.id === templateId);
   const customerName = workspace.customer?.name || workspace.customer?.phone || 'Unknown';
   const { inWindow, expiresAt } = windowState(workspace.conversation);
+
+  // Values an agent can insert into a template variable instead of retyping them — this
+  // conversation's own customer data plus whichever Customer custom fields are actually set,
+  // so e.g. "Order ID" only shows up here if this customer really has one.
+  const insertOptions: { label: string; value: string }[] = [];
+  if (workspace.customer?.name) insertOptions.push({ label: 'Customer Name', value: workspace.customer.name });
+  if (workspace.customer?.phone) insertOptions.push({ label: 'Customer Phone', value: workspace.customer.phone });
+  if (workspace.customer?.company) insertOptions.push({ label: 'Customer Company', value: workspace.customer.company });
+  if (workspace.customer?.email) insertOptions.push({ label: 'Customer Email', value: workspace.customer.email });
+  if (workspace.assignedUserName) insertOptions.push({ label: 'Assigned Agent', value: workspace.assignedUserName });
+  for (const def of customFieldDefs) {
+    const val = workspace.customer?.customFields?.[def.key];
+    if (val !== undefined && val !== '') insertOptions.push({ label: def.label, value: String(val) });
+  }
 
   return (
     <div id="chatCol" className="col">
@@ -199,14 +221,26 @@ export function ChatPane({ workspace, quickReplies, templates, onAfterSend, onRe
           {selectedTemplate && templateVariableSlots(selectedTemplate).map((slot) => {
             const label = (selectedTemplate.variables ?? [])[Number(slot) - 1];
             return (
-              <input
-                key={slot}
-                placeholder={label || `{{${slot}}}`}
-                title={label ? `{{${slot}}} — ${label}` : `{{${slot}}} — no label set (Admin → Templates)`}
-                style={{ width: label ? 130 : 90 }}
-                value={templateVars[slot] ?? ''}
-                onChange={(e) => setTemplateVars((prev) => ({ ...prev, [slot]: e.target.value }))}
-              />
+              <span key={slot} style={{ display: 'inline-flex', gap: 2 }}>
+                <input
+                  placeholder={label || `{{${slot}}}`}
+                  title={label ? `{{${slot}}} — ${label}` : `{{${slot}}} — no label set (Admin → Templates)`}
+                  style={{ width: label ? 110 : 80 }}
+                  value={templateVars[slot] ?? ''}
+                  onChange={(e) => setTemplateVars((prev) => ({ ...prev, [slot]: e.target.value }))}
+                />
+                {insertOptions.length > 0 && (
+                  <select
+                    title="Insert this customer's own data instead of typing it"
+                    style={{ width: 30, padding: '0 2px', fontSize: 10 }}
+                    value=""
+                    onChange={(e) => { if (e.target.value) setTemplateVars((prev) => ({ ...prev, [slot]: e.target.value })); }}
+                  >
+                    <option value="">⤵</option>
+                    {insertOptions.map((o) => <option key={o.label} value={o.value}>{o.label}</option>)}
+                  </select>
+                )}
+              </span>
             );
           })}
           {selectedTemplate && (
