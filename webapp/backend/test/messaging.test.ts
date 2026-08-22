@@ -128,6 +128,29 @@ describe('Messaging core (ported from Phase 3-6 + WorkspaceServices.gs)', () => 
       // times currentUser() is called internally within that single request.
       expect(after - before).toBeLessThanOrEqual(3);
     });
+
+    it('listConversations does not re-fetch the full roles list per conversation — real bug, confirmed live 2026-08-23 (reproduced even AFTER the currentUser()-caching fix above): AccessControl.rolesFor() ran a fresh roles.list() Firebase call on every call, and requireConversationOperation(\'view\', ...) calls hasRole() (which calls rolesFor()) up to twice per conversation while filtering visibility, so a number with 40+ conversations still blew through Cloudflare\'s subrequest limit on the roles fetch alone', async () => {
+      for (let i = 0; i < 15; i++) {
+        await new Phase4Api(db).ingestInboundMessage({ providerMessageId: `msg-roles-${i}`, fromPhone: `+9198764${String(i).padStart(5, '0')}`, providerNumberId: '+917948502801', direction: 'INBOUND', messageType: 'text', text: 'Hi', timestamp: new Date().toISOString(), status: null });
+      }
+      let rolesFetchCount = 0;
+      const wrappedFetch = globalThis.fetch;
+      globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+        if (url.includes('/roles.json')) rolesFetchCount += 1;
+        return wrappedFetch(input, init);
+      }) as typeof fetch;
+      try {
+        const conversations = await new Phase5Api(db, ADMIN_EMAIL).listConversations(numberId);
+        expect(conversations.length).toBeGreaterThanOrEqual(15);
+      } finally {
+        globalThis.fetch = wrappedFetch;
+      }
+      // Without the fix this would scale with conversation count (15+ separate roles.list()
+      // calls); with the fix, one AccessControl instance fetches the full roles list at most
+      // once no matter how many times hasRole()/rolesFor() is called internally within it.
+      expect(rolesFetchCount).toBeLessThanOrEqual(2);
+    });
   });
 
   describe('Phase5Api — authorized conversation listing', () => {

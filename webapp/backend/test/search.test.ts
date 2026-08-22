@@ -107,6 +107,29 @@ describe('Phase13Api (ported from Phase13Services.gs)', () => {
       expect(textMatch.map((r) => r.id)).toEqual([byMessage.conversationId]);
     });
 
+    it('does not re-fetch each conversation\'s Customer record, and caches the per-number lookup, instead of doing both once per conversation — real bug, confirmed live 2026-08-23: a query search re-fetched every matching conversation\'s Customer individually (even though listConversationsAllStatuses already resolves customerName/customerPhone onto each result) and re-fetched the same Number record once per conversation, so searching a number with 40+ conversations blew through Cloudflare\'s subrequest limit', async () => {
+      for (let i = 0; i < 15; i++) {
+        await ingest(`msg-bulk-${i}`, `+9198764${String(i).padStart(5, '0')}`, `Customer ${i}`, 'Hello there');
+      }
+      let customerGetCount = 0;
+      let numberGetCount = 0;
+      const wrappedFetch = globalThis.fetch;
+      globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+        if (/\/customers\/[^/]+\.json/.test(url)) customerGetCount += 1;
+        if (/\/numbers\/[^/]+\.json/.test(url)) numberGetCount += 1;
+        return wrappedFetch(input, init);
+      }) as typeof fetch;
+      try {
+        const results = await new Phase13Api(db, ADMIN_EMAIL).searchConversations({ query: 'hello' });
+        expect(results.length).toBeGreaterThanOrEqual(15);
+      } finally {
+        globalThis.fetch = wrappedFetch;
+      }
+      expect(customerGetCount).toBe(0);
+      expect(numberGetCount).toBeLessThanOrEqual(1);
+    });
+
     it('an agent only sees conversations they are authorized to view (delegates to Phase5Api)', async () => {
       const result = await ingest('msg-1', '+919876543210', 'Priya', 'Hello');
       const denied = await new Phase13Api(db, AGENT_EMAIL).searchConversations();

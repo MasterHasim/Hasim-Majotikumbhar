@@ -8,6 +8,15 @@ function timeLabel(iso: string): string {
   return Number.isNaN(d.getTime()) ? '' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
+/** Renders plain message text with any http(s) URL turned into a clickable link — split on a
+ * capturing regex so the matched URLs land in the result array alongside the surrounding text,
+ * rendered as real React nodes (never dangerouslySetInnerHTML) since this is untrusted customer input. */
+function linkify(text: string): (string | JSX.Element)[] {
+  return text.split(/(https?:\/\/\S+)/g).map((part, i) =>
+    /^https?:\/\//.test(part) ? <a key={i} href={part} target="_blank" rel="noreferrer">{part}</a> : part
+  );
+}
+
 const CUSTOMER_SERVICE_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 /** Mirrors Phase6Api.isWithinCustomerServiceWindow (same no-fallback reasoning — see its comment)
@@ -240,7 +249,7 @@ export function ChatPane({ workspace, quickReplies, templates, onAfterSend, onRe
               {linkPrefix && <LinkPrefixBadge url={linkPrefix.url} />}
               {message.senderName && message.direction === 'OUTBOUND' && <div className="sender">{message.senderName}</div>}
               {message.media && <MediaAttachment media={message.media} />}
-              {displayText && <div className="text">{displayText}</div>}
+              {displayText && <div className="text">{linkify(displayText)}</div>}
               <div className="time">{timeLabel(message.timestamp)}{message.status === 'FAILED' ? ' · Failed to send' : ''}</div>
             </div>
           </div>

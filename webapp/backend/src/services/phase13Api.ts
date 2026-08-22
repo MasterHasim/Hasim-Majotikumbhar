@@ -12,7 +12,7 @@
  * that already-authorized set (defaulting to OPEN-only unless a specific status is
  * requested, so a resolved conversation is still findable on request).
  */
-import type { Customer, CustomerStage, WhatsAppNumber, Message } from '../domain/types';
+import type { CustomerStage, WhatsAppNumber, Message } from '../domain/types';
 import { Repository } from '../lib/repository';
 import { FirebaseDb } from '../lib/firebaseAdmin';
 import { Phase5Api, type ConversationListItem } from './phase5Api';
@@ -36,14 +36,12 @@ export interface SearchResultItem extends ConversationListItem {
 
 export class Phase13Api {
   private phase5: Phase5Api;
-  private customers: Repository<Customer>;
   private messages: Repository<Message>;
   private numbers: Repository<WhatsAppNumber>;
   private customerStages: Repository<CustomerStage>;
 
   constructor(db: FirebaseDb, identityEmail: string) {
     this.phase5 = new Phase5Api(db, identityEmail);
-    this.customers = new Repository<Customer>(db, 'customers');
     this.messages = new Repository<Message>(db, 'webapp_messages');
     this.numbers = new Repository<WhatsAppNumber>(db, 'numbers');
     this.customerStages = new Repository<CustomerStage>(db, 'customerStages');
@@ -77,21 +75,31 @@ export class Phase13Api {
       results = filtered;
     }
     if (filters.query) {
+      // Real bug, confirmed live 2026-08-23: this used to re-fetch each conversation's Customer
+      // record individually (one Firebase subrequest per conversation) even though
+      // listConversationsAllStatuses already resolved customerName/customerPhone onto every
+      // ConversationListItem — a search across 40+ conversations on one number blew through
+      // Cloudflare's per-invocation subrequest limit on this alone. Matching against the
+      // already-loaded fields instead needs zero extra subrequests.
       const query = filters.query.toLowerCase();
       const allMessages = await this.messages.list();
       const filtered: ConversationListItem[] = [];
       for (const c of results) {
-        const customer = await this.customers.get(c.customerId);
-        const customerMatches = customer && (customer.name?.toLowerCase().includes(query) || customer.phone?.toLowerCase().includes(query));
+        const customerMatches = c.customerName?.toLowerCase().includes(query) || c.customerPhone?.toLowerCase().includes(query);
         const messageMatches = allMessages.some((m) => m.conversationId === c.id && (m.messageText || '').toLowerCase().includes(query));
         if (customerMatches || messageMatches) filtered.push(c);
       }
       results = filtered;
     }
 
+    // Same reasoning as above — cache each distinct number lookup instead of refetching it once
+    // per conversation (searching within a single number previously re-fetched the SAME number
+    // record once per matching conversation).
+    const numberCache = new Map<string, WhatsAppNumber | null>();
     const output: SearchResultItem[] = [];
     for (const c of results) {
-      const number = await this.numbers.get(c.numberId);
+      if (!numberCache.has(c.numberId)) numberCache.set(c.numberId, await this.numbers.get(c.numberId));
+      const number = numberCache.get(c.numberId) ?? null;
       output.push({ ...c, numberDisplayName: number ? number.displayName : '' });
     }
     return output;

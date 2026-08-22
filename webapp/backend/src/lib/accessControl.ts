@@ -38,6 +38,16 @@ export class AccessControl {
    * acceptance audit entry only once — is scoped correctly and loses no real audit coverage:
    * the identity was authenticated once for this request either way. */
   private cachedUser: User | undefined;
+  /** Real bug, confirmed live 2026-08-23: rolesFor() re-fetched the ENTIRE roles list from
+   * Firebase (a fresh subrequest) on every single call, and hasRole() calls rolesFor() every
+   * time it's invoked. requireConversationOperation('view', ...) calls hasRole() up to twice
+   * per conversation while filtering visibility (once for the numberId gate, once for the
+   * action check), so a number with 40+ conversations blew through Cloudflare's per-invocation
+   * subrequest limit on this alone — reproduced live even AFTER the currentUser() caching fix
+   * above, because that fix only covered the audit-log write, not this separate roles.list()
+   * call. Same "one AccessControl instance per request" scoping applies, so caching the full
+   * roles list here is safe for the same reason cachedUser is. */
+  private cachedRoles: Role[] | undefined;
 
   constructor(private repos: Phase1Repositories, private auditLog: AuditLogService, private identityEmail: string) {}
 
@@ -55,8 +65,8 @@ export class AccessControl {
 
   async rolesFor(user: User): Promise<Role[]> {
     const ids = user.roleIds || [];
-    const roles = await this.repos.roles.list();
-    return roles.filter((role) => role.status === Status.ACTIVE && ids.includes(role.id));
+    if (!this.cachedRoles) this.cachedRoles = await this.repos.roles.list();
+    return this.cachedRoles.filter((role) => role.status === Status.ACTIVE && ids.includes(role.id));
   }
 
   async hasRole(user: User, roleKey: RoleKey): Promise<boolean> {
