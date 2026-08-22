@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { LEAD_LOCATIONS, type Lead, type LocationAssignmentConfig, type Stage, type User, type WhoAmI } from '../types';
+import { LEAD_LOCATIONS, type CustomFieldDefinition, type Lead, type LocationAssignmentConfig, type Stage, type User, type WhoAmI } from '../types';
 import { backendApi } from '../lib/backendApi';
 import { ApiClientError } from '../lib/api';
+import { buildCsv, downloadCsv, todayStamp } from '../lib/csv';
 import { LeadDetailModal } from './LeadDetailModal';
 import { AssignmentRulesModal } from './AssignmentRulesModal';
 import { LeadsBoard } from './LeadsBoard';
@@ -107,6 +108,7 @@ export function Leads({ whoAmI, onOpenConversation }: { whoAmI: WhoAmI; onOpenCo
   const [leads, setLeads] = useState<Lead[] | null>(null);
   const [stages, setStages] = useState<Stage[] | null>(null);
   const [users, setUsers] = useState<User[]>([]);
+  const [customFieldDefs, setCustomFieldDefs] = useState<CustomFieldDefinition[]>([]);
   const [locationFilter, setLocationFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
@@ -130,6 +132,7 @@ export function Leads({ whoAmI, onOpenConversation }: { whoAmI: WhoAmI; onOpenCo
   useEffect(() => setSelectedIds(new Set()), [locationFilter, statusFilter, view]);
   useEffect(() => {
     backendApi.listStages().then(setStages).catch(() => setStages([]));
+    backendApi.listCustomFieldDefinitions('lead').then(setCustomFieldDefs).catch(() => setCustomFieldDefs([]));
     if (isManager) backendApi.listUsers().then(setUsers).catch(() => setUsers([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isManager]);
@@ -202,6 +205,24 @@ export function Leads({ whoAmI, onOpenConversation }: { whoAmI: WhoAmI; onOpenCo
     if (failed > 0) setError(`${label}: ${ids.length - failed} of ${ids.length} succeeded, ${failed} failed.`);
   }
 
+  function exportCsv() {
+    if (!leads) return;
+    const activeFields = customFieldDefs.filter((f) => f.active);
+    const columns = [
+      { header: 'Name', value: (l: Lead) => l.name },
+      { header: 'Phone', value: (l: Lead) => l.phone },
+      { header: 'Location', value: (l: Lead) => l.location },
+      { header: 'Status', value: (l: Lead) => l.status },
+      { header: 'Stage', value: (l: Lead) => (stages ?? []).find((s) => s.id === l.stageId)?.name ?? '' },
+      { header: 'Assigned To', value: (l: Lead) => users.find((u) => u.id === l.assignedUserId)?.displayName ?? '' },
+      { header: 'Tags', value: (l: Lead) => (l.tags ?? []).join('; ') },
+      ...activeFields.map((f) => ({ header: f.label, value: (l: Lead) => l.customFields?.[f.key] ?? '' })),
+      { header: 'Assigned At', value: (l: Lead) => l.assignedAt },
+      { header: 'Created At', value: (l: Lead) => l.createdAt },
+    ];
+    downloadCsv(`leads-${todayStamp()}.csv`, buildCsv(leads, columns));
+  }
+
   return (
     <>
       <h1 className="page-title">Leads</h1>
@@ -221,6 +242,7 @@ export function Leads({ whoAmI, onOpenConversation }: { whoAmI: WhoAmI; onOpenCo
         </select>
         {isManager && <button className="btn primary" onClick={() => setShowUpload(true)}>+ Upload leads</button>}
         {isManager && locationFilter && <button className="btn" onClick={() => setRulesLocation(locationFilter)}>Assignment rules for {locationFilter}</button>}
+        <button className="btn" disabled={!leads || leads.length === 0} onClick={exportCsv}>⬇ Export CSV</button>
         <div className="view-toggle">
           <button className={view === 'board' ? 'active' : ''} onClick={() => setView('board')}>Board</button>
           <button className={view === 'table' ? 'active' : ''} onClick={() => setView('table')}>Table</button>

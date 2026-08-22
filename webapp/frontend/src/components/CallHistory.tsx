@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { LEAD_LOCATIONS, type CallLogWithContext, type User } from '../types';
 import { backendApi } from '../lib/backendApi';
 import { ApiClientError } from '../lib/api';
+import { buildCsv, downloadCsv, todayStamp } from '../lib/csv';
 
 function fmt(iso: string): string {
   const d = new Date(iso);
@@ -58,6 +59,19 @@ export function CallHistory({ isManager, onOpenConversation }: {
 
   const hasFilter = locationFilter || agentFilter || dateFrom || dateTo;
 
+  function exportCsv() {
+    const columns = [
+      { header: 'When', value: (c: CallLogWithContext) => fmt(c.initiatedAt) },
+      { header: 'Agent', value: (c: CallLogWithContext) => c.agentName },
+      { header: 'To', value: (c: CallLogWithContext) => c.subjectName },
+      { header: 'Location', value: (c: CallLogWithContext) => c.subjectLocation ?? '' },
+      { header: 'Phone', value: (c: CallLogWithContext) => c.leadPhone },
+      { header: 'Via', value: (c: CallLogWithContext) => (c.leadId ? 'Lead' : 'Chat') },
+      { header: 'Status', value: (c: CallLogWithContext) => c.status },
+    ];
+    downloadCsv(`call-history-${todayStamp()}.csv`, buildCsv(filtered, columns));
+  }
+
   return (
     <>
       <h1 className="page-title">Call History</h1>
@@ -83,6 +97,7 @@ export function CallHistory({ isManager, onOpenConversation }: {
           To <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
         </label>
         {hasFilter && <button className="btn" onClick={() => { setLocationFilter(''); setAgentFilter(''); setDateFrom(''); setDateTo(''); }}>Clear filters</button>}
+        <button className="btn" disabled={filtered.length === 0} onClick={exportCsv}>⬇ Export CSV</button>
       </div>
 
       {error && <div className="compose-error" style={{ padding: '0 0 10px' }}>{error}</div>}

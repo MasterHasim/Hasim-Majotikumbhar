@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import type { Customer, WhatsAppNumber } from '../types';
+import type { Customer, CustomFieldDefinition, WhatsAppNumber } from '../types';
 import { backendApi } from '../lib/backendApi';
 import { ApiClientError } from '../lib/api';
+import { buildCsv, downloadCsv, todayStamp } from '../lib/csv';
 
 function errMsg(err: unknown): string {
   return err instanceof ApiClientError ? `${err.code}: ${err.message}` : String(err);
@@ -15,11 +16,13 @@ export function Customers({ number, onOpenConversation }: {
   const [search, setSearch] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [customFieldDefs, setCustomFieldDefs] = useState<CustomFieldDefinition[]>([]);
 
   function reload() {
     backendApi.listCustomers(number.id).then(setCustomers).catch((err) => setError(errMsg(err)));
   }
   useEffect(reload, [number.id]);
+  useEffect(() => { backendApi.listCustomFieldDefinitions('customer').then(setCustomFieldDefs).catch(() => setCustomFieldDefs([])); }, []);
 
   async function saveField(id: string, patch: Record<string, string>) {
     setBusyId(id);
@@ -54,11 +57,25 @@ export function Customers({ number, onOpenConversation }: {
     return c.name.toLowerCase().includes(q) || c.phone.toLowerCase().includes(q) || c.company.toLowerCase().includes(q);
   });
 
+  function exportCsv() {
+    const activeFields = customFieldDefs.filter((f) => f.active);
+    const columns = [
+      { header: 'Name', value: (c: Customer) => c.name },
+      { header: 'Phone', value: (c: Customer) => c.phone },
+      { header: 'Email', value: (c: Customer) => c.email },
+      { header: 'Company', value: (c: Customer) => c.company },
+      { header: 'Tags', value: (c: Customer) => (c.tags ?? []).join('; ') },
+      ...activeFields.map((f) => ({ header: f.label, value: (c: Customer) => c.customFields?.[f.key] ?? '' })),
+    ];
+    downloadCsv(`customers-${number.displayName.replace(/[^a-z0-9]+/gi, '-')}-${todayStamp()}.csv`, buildCsv(filtered, columns));
+  }
+
   return (
     <>
       <h1 className="page-title">Customers</h1>
       <div className="leads-toolbar">
         <input placeholder="⌕  Search name, phone, or company…" style={{ flex: 1, minWidth: 240 }} value={search} onChange={(e) => setSearch(e.target.value)} />
+        <button className="btn" disabled={filtered.length === 0} onClick={exportCsv}>⬇ Export CSV</button>
       </div>
       {error && <div className="compose-error" style={{ padding: '0 0 10px' }}>{error}</div>}
 
