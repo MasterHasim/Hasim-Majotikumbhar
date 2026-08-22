@@ -13,6 +13,7 @@ import { CallHistory } from './components/CallHistory';
 import { Customers } from './components/Customers';
 import { Admin } from './components/Admin';
 import { Dashboard } from './components/Dashboard';
+import { PublicQuotationView } from './components/PublicQuotationView';
 
 async function signIn() {
   try {
@@ -109,6 +110,9 @@ export default function App() {
       setBootstrapping(false);
     }
   }
+
+  const publicQuoteMatch = window.location.pathname.match(/^\/quote\/([^/]+)/);
+  if (publicQuoteMatch) return <PublicQuotationView quotationId={publicQuoteMatch[1]!} />;
 
   if (authLoading) return <div className="centered-message">Loading…</div>;
 

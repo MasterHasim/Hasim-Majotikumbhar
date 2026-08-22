@@ -208,6 +208,50 @@ export interface CustomFieldDefinition {
   sequenceOrder: number;
 }
 
+export interface Product {
+  id: string;
+  numberId: string;
+  name: string;
+  sku: string;
+  unitPrice: number;
+  description: string;
+  active: boolean;
+  sequenceOrder: number;
+}
+
+export interface QuotationLineItem {
+  productId: string;
+  productName: string;
+  unitPrice: number;
+  quantity: number;
+  discountPercent: number;
+}
+
+export type QuotationStatus = 'DRAFT' | 'SENT';
+
+export interface Quotation {
+  id: string;
+  leadId: string;
+  numberId: string;
+  lineItems: QuotationLineItem[];
+  overallDiscountPercent: number;
+  notes: string;
+  status: QuotationStatus;
+  createdAt: string;
+  sentAt?: string;
+}
+
+export interface PublicQuotationView {
+  id: string;
+  leadName: string;
+  numberDisplayName: string;
+  lineItems: QuotationLineItem[];
+  overallDiscountPercent: number;
+  notes: string;
+  createdAt: string;
+  totals: { subtotal: number; overallDiscountAmount: number; total: number };
+}
+
 export type LocationAssignmentMode = 'single' | 'round_robin' | 'manual';
 
 export interface LocationAssignmentConfig {

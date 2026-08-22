@@ -18,7 +18,7 @@ import { Ids, Permissions, Roles, Status, Validation } from '../domain/phase1';
 import { Phase22AssignmentModes, Phase22LeadStatus, Phase22Locations, Phase22Validation, type Phase22Location } from '../domain/phase22';
 import type {
   CallLog, CallLogWithContext, Conversation, Customer, CustomFieldDefinition, Lead, LeadRemark, LeadStageAssignment,
-  LocationAssignmentConfig, LocationAssignmentUser, Stage, User, WhatsAppNumber,
+  LocationAssignmentConfig, LocationAssignmentUser, Product, Quotation, QuotationLineItem, Stage, User, WhatsAppNumber,
 } from '../domain/types';
 import { Repository } from '../lib/repository';
 import { AccessControl, type Phase1Repositories } from '../lib/accessControl';
@@ -33,6 +33,52 @@ export interface UploadLeadsResult {
   created: number;
   skipped: number;
   errors: { index: number; row: unknown; message: string }[];
+}
+
+/** Pure line-item math, reused by the authenticated builder and the public (unauthenticated)
+ * quotation view alike — each line's own discountPercent applies first, then
+ * overallDiscountPercent applies once more on the summed subtotal. */
+export function computeQuotationTotals(quotation: Pick<Quotation, 'lineItems' | 'overallDiscountPercent'>): { subtotal: number; overallDiscountAmount: number; total: number } {
+  const subtotal = quotation.lineItems.reduce((sum, item) => sum + item.unitPrice * item.quantity * (1 - item.discountPercent / 100), 0);
+  const overallDiscountAmount = subtotal * (quotation.overallDiscountPercent / 100);
+  return { subtotal, overallDiscountAmount, total: subtotal - overallDiscountAmount };
+}
+
+export interface PublicQuotationView {
+  id: string;
+  leadName: string;
+  numberDisplayName: string;
+  lineItems: QuotationLineItem[];
+  overallDiscountPercent: number;
+  notes: string;
+  createdAt: string;
+  totals: { subtotal: number; overallDiscountAmount: number; total: number };
+}
+
+/**
+ * Deliberately outside Phase22Api/AccessControl — this is the one intentionally unauthenticated
+ * read in the whole backend, same "unguessable ID is the access control" model routes/media.ts's
+ * public file serving already uses (the id is a real UUID-bearing string, never enumerable).
+ * Used by the customer-facing quotation link shared over WhatsApp, which by definition can't
+ * carry a Firebase sign-in.
+ */
+export async function getPublicQuotationView(db: FirebaseDb, quotationId: string): Promise<PublicQuotationView> {
+  const quotations = new Repository<Quotation>(db, 'quotations');
+  const leads = new Repository<Lead>(db, 'leads');
+  const numbers = new Repository<WhatsAppNumber>(db, 'numbers');
+  const quotation = await quotations.get(quotationId);
+  if (!quotation) throw new ApiError(404, 'NOT_FOUND', 'Quotation was not found.');
+  const [lead, number] = await Promise.all([leads.get(quotation.leadId), numbers.get(quotation.numberId)]);
+  return {
+    id: quotation.id,
+    leadName: lead?.name || 'Customer',
+    numberDisplayName: number?.displayName || '',
+    lineItems: quotation.lineItems,
+    overallDiscountPercent: quotation.overallDiscountPercent,
+    notes: quotation.notes,
+    createdAt: quotation.createdAt,
+    totals: computeQuotationTotals(quotation),
+  };
 }
 
 export class Phase22Api {
@@ -50,6 +96,8 @@ export class Phase22Api {
   private conversations: Repository<Conversation>;
   private numbers: Repository<WhatsAppNumber>;
   private customFieldDefs: Repository<CustomFieldDefinition>;
+  private products: Repository<Product>;
+  private quotations: Repository<Quotation>;
   private exotelVoiceConfig?: ExotelVoiceConfig;
 
   constructor(private db: FirebaseDb, identityEmail: string, env?: { EXOTEL_VOICE_ACCOUNT_SID?: string; EXOTEL_VOICE_API_KEY?: string; EXOTEL_VOICE_API_TOKEN?: string; EXOTEL_VOICE_CALLER_ID?: string }) {
@@ -67,6 +115,8 @@ export class Phase22Api {
     this.conversations = new Repository<Conversation>(db, 'webapp_conversations');
     this.numbers = new Repository<WhatsAppNumber>(db, 'numbers');
     this.customFieldDefs = new Repository<CustomFieldDefinition>(db, 'customFieldDefinitions');
+    this.products = new Repository<Product>(db, 'products');
+    this.quotations = new Repository<Quotation>(db, 'quotations');
     if (env) this.exotelVoiceConfig = requireExotelVoiceConfig(env);
   }
 
@@ -369,6 +419,103 @@ export class Phase22Api {
     const record = await this.leads.update(leadId, { customFields: merged });
     await this.audit.write(actor.id, 'lead.customFieldsUpdated', 'lead', leadId, { patch: validated });
     return record;
+  }
+
+  /** Validates and normalizes raw line-item input against the lead's own resolved number's live
+   * Product Master — snapshots name/price at add time (see QuotationLineItem's own comment) so a
+   * later catalog change doesn't retroactively alter an already-built quote. */
+  private async buildLineItems(numberId: string, rawItems: unknown): Promise<QuotationLineItem[]> {
+    if (!Array.isArray(rawItems)) throw new ApiError(400, 'VALIDATION_ERROR', 'lineItems must be an array.');
+    if (rawItems.length === 0) throw new ApiError(400, 'VALIDATION_ERROR', 'A quotation needs at least one line item.');
+    const catalog = new Map((await this.products.list()).filter((p) => p.numberId === numberId).map((p) => [p.id, p]));
+    return rawItems.map((raw, index) => {
+      const row = raw as { productId?: unknown; quantity?: unknown; discountPercent?: unknown };
+      const product = catalog.get(String(row.productId));
+      if (!product || !product.active) throw new ApiError(400, 'VALIDATION_ERROR', `Line item ${index + 1}: unknown or inactive product.`);
+      const quantity = Number(row.quantity);
+      if (!Number.isFinite(quantity) || quantity < 1) throw new ApiError(400, 'VALIDATION_ERROR', `Line item ${index + 1}: quantity must be at least 1.`);
+      const discountPercent = row.discountPercent === undefined ? 0 : Number(row.discountPercent);
+      if (!Number.isFinite(discountPercent) || discountPercent < 0 || discountPercent > 100) throw new ApiError(400, 'VALIDATION_ERROR', `Line item ${index + 1}: discountPercent must be between 0 and 100.`);
+      return { productId: product.id, productName: product.name, unitPrice: product.unitPrice, quantity, discountPercent };
+    });
+  }
+
+  /** Active catalog for the lead's own resolved WhatsApp number — what the Quotation builder's
+   * product dropdown offers. Same canTouchLead gate as everything else lead-scoped; the frontend
+   * has no other way to learn a lead's numberId without this (Lead itself only carries location). */
+  async listProductsForLead(leadId: string): Promise<Product[]> {
+    const lead = await this.leads.get(leadId);
+    if (!lead) throw new ApiError(404, 'NOT_FOUND', 'Lead was not found.');
+    const actor = await this.access.currentUser();
+    if (!(await this.canTouchLead(actor, lead))) await this.denied(actor, leadId);
+    const number = await this.findNumberForLocation(lead.location);
+    if (!number) return [];
+    return (await this.products.list()).filter((p) => p.numberId === number.id && p.active).sort((a, b) => a.sequenceOrder - b.sequenceOrder);
+  }
+
+  async createQuotation(leadId: string, input: { lineItems: unknown; overallDiscountPercent?: unknown; notes?: string }): Promise<Quotation> {
+    const lead = await this.leads.get(leadId);
+    if (!lead) throw new ApiError(404, 'NOT_FOUND', 'Lead was not found.');
+    const actor = await this.access.currentUser();
+    if (!(await this.canTouchLead(actor, lead))) await this.denied(actor, leadId);
+    await this.access.require(Permissions.REMARKS_MANAGE);
+    const number = await this.findNumberForLocation(lead.location);
+    if (!number) throw new ApiError(500, 'CONFIGURATION_ERROR', `No WhatsApp number is configured for location "${lead.location}".`);
+    const lineItems = await this.buildLineItems(number.id, input.lineItems);
+    const overallDiscountPercent = input.overallDiscountPercent === undefined ? 0 : Number(input.overallDiscountPercent);
+    if (!Number.isFinite(overallDiscountPercent) || overallDiscountPercent < 0 || overallDiscountPercent > 100) throw new ApiError(400, 'VALIDATION_ERROR', 'overallDiscountPercent must be between 0 and 100.');
+    const now = Ids.now();
+    const record: Quotation = {
+      id: Ids.create('quotation'), leadId, numberId: number.id, lineItems, overallDiscountPercent,
+      notes: (input.notes || '').trim(), status: 'DRAFT', createdByUserId: actor.id, createdAt: now, updatedAt: now,
+    };
+    await this.quotations.create(record);
+    await this.audit.write(actor.id, 'quotation.created', 'quotation', record.id, { leadId });
+    return record;
+  }
+
+  async updateQuotation(id: string, patch: { lineItems?: unknown; overallDiscountPercent?: unknown; notes?: string; status?: string }): Promise<Quotation> {
+    const existing = await this.quotations.get(id);
+    if (!existing) throw new ApiError(404, 'NOT_FOUND', 'Quotation was not found.');
+    const lead = await this.leads.get(existing.leadId);
+    if (!lead) throw new ApiError(404, 'NOT_FOUND', 'Lead was not found.');
+    const actor = await this.access.currentUser();
+    if (!(await this.canTouchLead(actor, lead))) await this.denied(actor, existing.leadId);
+    await this.access.require(Permissions.REMARKS_MANAGE);
+    const safePatch: Partial<Quotation> = {};
+    if (patch.lineItems !== undefined) safePatch.lineItems = await this.buildLineItems(existing.numberId, patch.lineItems);
+    if (patch.overallDiscountPercent !== undefined) {
+      const overallDiscountPercent = Number(patch.overallDiscountPercent);
+      if (!Number.isFinite(overallDiscountPercent) || overallDiscountPercent < 0 || overallDiscountPercent > 100) throw new ApiError(400, 'VALIDATION_ERROR', 'overallDiscountPercent must be between 0 and 100.');
+      safePatch.overallDiscountPercent = overallDiscountPercent;
+    }
+    if (patch.notes !== undefined) safePatch.notes = patch.notes.trim();
+    if (patch.status !== undefined) {
+      if (patch.status !== 'DRAFT' && patch.status !== 'SENT') throw new ApiError(400, 'VALIDATION_ERROR', 'status must be DRAFT or SENT.');
+      safePatch.status = patch.status;
+      if (patch.status === 'SENT' && existing.status !== 'SENT') safePatch.sentAt = Ids.now();
+    }
+    const record = await this.quotations.update(id, safePatch);
+    await this.audit.write(actor.id, 'quotation.updated', 'quotation', id, { leadId: existing.leadId });
+    return record;
+  }
+
+  async listQuotations(leadId: string): Promise<Quotation[]> {
+    const lead = await this.leads.get(leadId);
+    if (!lead) throw new ApiError(404, 'NOT_FOUND', 'Lead was not found.');
+    const actor = await this.access.currentUser();
+    if (!(await this.canTouchLead(actor, lead))) await this.denied(actor, leadId);
+    return (await this.quotations.list()).filter((q) => q.leadId === leadId).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  }
+
+  async getQuotation(id: string): Promise<Quotation> {
+    const quotation = await this.quotations.get(id);
+    if (!quotation) throw new ApiError(404, 'NOT_FOUND', 'Quotation was not found.');
+    const lead = await this.leads.get(quotation.leadId);
+    if (!lead) throw new ApiError(404, 'NOT_FOUND', 'Lead was not found.');
+    const actor = await this.access.currentUser();
+    if (!(await this.canTouchLead(actor, lead))) await this.denied(actor, quotation.leadId);
+    return quotation;
   }
 
   async listLeadRemarks(leadId: string): Promise<LeadRemark[]> {

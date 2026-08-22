@@ -4,7 +4,8 @@ import type {
   AssignableUser, AssignmentEligibility, AssignmentEligibilityStatus, AuditEntry, AuditEntryWithActor, Availability, AvailabilityStatus, CallLog,
   CallLogWithContext, Conversation, ConversationListItem, Customer, CustomerStage, CustomFieldDefinition, CustomFieldEntityType, CustomFieldType,
   DashboardMetrics, Lead, LeadRemark, LeadStageAssignment,
-  LocationAssignmentConfig, LocationAssignmentUser, NumberAccess, NumberAssignmentConfig, NumberAssignmentUser, QuickReply, Remark, Reminder,
+  LocationAssignmentConfig, LocationAssignmentUser, NumberAccess, NumberAssignmentConfig, NumberAssignmentUser, Product, PublicQuotationView,
+  QuickReply, Quotation, Remark, Reminder,
   ReminderWithContext, Role, SearchFilters, SearchResultItem, SnoozeStatus, Stage, Team, TeamMember, Template, UploadLeadsResult, User,
   WhatsAppNumber, WhoAmI, Workspace,
 } from '../types';
@@ -235,6 +236,32 @@ export const backendApi = {
 
   updateCustomFieldDefinition: (id: string, patch: Record<string, unknown>) =>
     apiFetch<CustomFieldDefinition>(`/api/custom-fields/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+
+  // --- Product Master + Quotations ---
+
+  listProducts: (numberId: string) => apiFetch<Product[]>(`/api/products?numberId=${encodeURIComponent(numberId)}`),
+
+  createProduct: (input: { numberId: string; name: string; sku?: string; unitPrice: number; description?: string }) =>
+    apiFetch<Product>('/api/products', { method: 'POST', body: JSON.stringify(input) }),
+
+  updateProduct: (id: string, patch: Record<string, unknown>) =>
+    apiFetch<Product>(`/api/products/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+
+  listProductsForLead: (leadId: string) => apiFetch<Product[]>(`/api/leads/${encodeURIComponent(leadId)}/products`),
+
+  listQuotations: (leadId: string) => apiFetch<Quotation[]>(`/api/leads/${encodeURIComponent(leadId)}/quotations`),
+
+  createQuotation: (leadId: string, input: { lineItems: { productId: string; quantity: number; discountPercent?: number }[]; overallDiscountPercent?: number; notes?: string }) =>
+    apiFetch<Quotation>(`/api/leads/${encodeURIComponent(leadId)}/quotations`, { method: 'POST', body: JSON.stringify(input) }),
+
+  updateQuotation: (id: string, patch: Record<string, unknown>) =>
+    apiFetch<Quotation>(`/api/quotations/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+
+  getQuotation: (id: string) => apiFetch<Quotation>(`/api/quotations/${encodeURIComponent(id)}`),
+
+  /** No auth token is sent (apiFetch omits it when nobody's signed in) — this is the one
+   * deliberately public read, for the link shared with the customer over WhatsApp. */
+  getPublicQuotation: (id: string) => apiFetch<PublicQuotationView>(`/api/public/quotations/${encodeURIComponent(id)}`),
 
   // --- Phase 10/11: templates, quick replies ---
 

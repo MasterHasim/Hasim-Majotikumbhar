@@ -29,6 +29,10 @@ export const Permissions = {
    * update authorization (canTouchLead / canSeeCustomer). Granted to SUPERVISOR and above per
    * an explicit product decision — every other admin-config permission here is ADMIN-only. */
   CUSTOM_FIELDS_MANAGE: 'customFields.manage',
+  /** Managing the Product Master (name/price per WhatsApp number) — distinct from building a
+   * Quotation on a Lead, which reuses canTouchLead like every other lead-editing action. Granted
+   * to SUPERVISOR and above, same "not ADMIN-only" reasoning as CUSTOM_FIELDS_MANAGE. */
+  PRODUCTS_MANAGE: 'products.manage',
 } as const;
 export type Permission = (typeof Permissions)[keyof typeof Permissions];
 
@@ -43,8 +47,8 @@ export const ALL_PERMISSIONS = Object.values(Permissions);
 
 export const RoleDefinitions: Record<RoleKey, { name: string; permissions: Permission[] }> = {
   ADMIN: { name: 'Administrator', permissions: [...ALL_PERMISSIONS] },
-  SUPERVISOR: { name: 'Supervisor', permissions: [Permissions.TEAMS_OPERATE_ASSIGNED, Permissions.REPORTS_VIEW, Permissions.REMINDERS_MANAGE, Permissions.REMARKS_VIEW, Permissions.CONVERSATIONS_VIEW_TEAM, Permissions.CONVERSATIONS_REASSIGN_TEAM, Permissions.CUSTOM_FIELDS_MANAGE] },
-  SITE_MANAGER: { name: 'Site manager', permissions: [Permissions.TEAMS_CONTROL_OWN, Permissions.REPORTS_VIEW, Permissions.REMINDERS_MANAGE, Permissions.REMARKS_MANAGE, Permissions.CONVERSATIONS_VIEW_TEAM, Permissions.CONVERSATIONS_REASSIGN_TEAM, Permissions.ELIGIBILITY_MANAGE_TEAM, Permissions.LEADS_MANAGE, Permissions.CUSTOM_FIELDS_MANAGE] },
+  SUPERVISOR: { name: 'Supervisor', permissions: [Permissions.TEAMS_OPERATE_ASSIGNED, Permissions.REPORTS_VIEW, Permissions.REMINDERS_MANAGE, Permissions.REMARKS_VIEW, Permissions.CONVERSATIONS_VIEW_TEAM, Permissions.CONVERSATIONS_REASSIGN_TEAM, Permissions.CUSTOM_FIELDS_MANAGE, Permissions.PRODUCTS_MANAGE] },
+  SITE_MANAGER: { name: 'Site manager', permissions: [Permissions.TEAMS_CONTROL_OWN, Permissions.REPORTS_VIEW, Permissions.REMINDERS_MANAGE, Permissions.REMARKS_MANAGE, Permissions.CONVERSATIONS_VIEW_TEAM, Permissions.CONVERSATIONS_REASSIGN_TEAM, Permissions.ELIGIBILITY_MANAGE_TEAM, Permissions.LEADS_MANAGE, Permissions.CUSTOM_FIELDS_MANAGE, Permissions.PRODUCTS_MANAGE] },
   AGENT: { name: 'Agent', permissions: [Permissions.AVAILABILITY_MANAGE_SELF, Permissions.TEMPLATES_USE, Permissions.REMARKS_MANAGE, Permissions.REMINDERS_MANAGE, Permissions.LEAD_STAGES_MANAGE, Permissions.CONVERSATIONS_VIEW_ASSIGNED, Permissions.CONVERSATIONS_REPLY_ASSIGNED, Permissions.LEADS_VIEW_ASSIGNED, Permissions.LEADS_CALL] },
   VIEWER: { name: 'Viewer', permissions: [Permissions.CUSTOMERS_VIEW, Permissions.REPORTS_VIEW, Permissions.CONVERSATIONS_VIEW_AUTHORIZED] },
 };

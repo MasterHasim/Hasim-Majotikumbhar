@@ -349,3 +349,45 @@ export interface LeadRemark extends Record_ {
   text: string;
   createdAt: string;
 }
+
+// --- Product Master + Quotations ---
+
+/** Catalog entry an agent picks from when building a Quotation — scoped to one WhatsApp number
+ * (per the location-isolation model: each site/location has its own number and its own pricing). */
+export interface Product extends Record_ {
+  numberId: string;
+  name: string;
+  sku: string;
+  unitPrice: number;
+  description: string;
+  active: boolean;
+  sequenceOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A snapshot of the product's name/price at the moment it was added to the quote — so a later
+ * price change or rename on the Product Master doesn't silently alter a quotation already sent
+ * to a customer. discountPercent is per-line; overallDiscountPercent on Quotation applies on top. */
+export interface QuotationLineItem {
+  productId: string;
+  productName: string;
+  unitPrice: number;
+  quantity: number;
+  discountPercent: number;
+}
+
+export type QuotationStatus = 'DRAFT' | 'SENT';
+
+export interface Quotation extends Record_ {
+  leadId: string;
+  numberId: string;
+  lineItems: QuotationLineItem[];
+  overallDiscountPercent: number;
+  notes: string;
+  status: QuotationStatus;
+  createdByUserId: string;
+  createdAt: string;
+  updatedAt: string;
+  sentAt?: string;
+}

@@ -1,9 +1,11 @@
 import type { IRequest, RouterType } from 'itty-router';
 import type { Env } from '../types';
-import { ApiError } from '../types';
+import { ApiError, parseServiceAccount } from '../types';
 import { buildContext } from '../lib/requestContext';
-import { Phase22Api } from '../services/phase22Api';
+import { FirebaseDb } from '../lib/firebaseAdmin';
+import { Phase22Api, getPublicQuotationView } from '../services/phase22Api';
 import { CustomFieldsApi } from '../services/customFieldsApi';
+import { ProductsApi } from '../services/productsApi';
 
 async function json(request: IRequest): Promise<Record<string, unknown>> {
   return (await request.json().catch(() => ({}))) as Record<string, unknown>;
@@ -133,5 +135,49 @@ export function registerPhase22Routes(router: RouterType) {
   router.patch('/api/custom-fields/:id', async (request: IRequest, env: Env) => {
     const ctx = await buildContext(request, env);
     return Response.json(await new CustomFieldsApi(ctx.db, ctx.identityEmail).updateDefinition(param(request, 'id'), await json(request)));
+  });
+
+  // --- Product Master ---
+  router.get('/api/products', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    return Response.json(await new ProductsApi(ctx.db, ctx.identityEmail).listProducts(query(request, 'numberId') ?? ''));
+  });
+  router.post('/api/products', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    return Response.json(await new ProductsApi(ctx.db, ctx.identityEmail).createProduct(await json(request) as never));
+  });
+  router.patch('/api/products/:id', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    return Response.json(await new ProductsApi(ctx.db, ctx.identityEmail).updateProduct(param(request, 'id'), await json(request)));
+  });
+
+  // --- Quotations ---
+  router.get('/api/leads/:id/products', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    return Response.json(await new Phase22Api(ctx.db, ctx.identityEmail).listProductsForLead(param(request, 'id')));
+  });
+  router.get('/api/leads/:id/quotations', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    return Response.json(await new Phase22Api(ctx.db, ctx.identityEmail).listQuotations(param(request, 'id')));
+  });
+  router.post('/api/leads/:id/quotations', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    return Response.json(await new Phase22Api(ctx.db, ctx.identityEmail).createQuotation(param(request, 'id'), await json(request) as never));
+  });
+  router.get('/api/quotations/:id', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    return Response.json(await new Phase22Api(ctx.db, ctx.identityEmail).getQuotation(param(request, 'id')));
+  });
+  router.patch('/api/quotations/:id', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    return Response.json(await new Phase22Api(ctx.db, ctx.identityEmail).updateQuotation(param(request, 'id'), await json(request) as never));
+  });
+
+  // --- Public (no Firebase auth) — the customer-facing quotation link, same "unguessable ID"
+  // model routes/messaging.ts's public media serving already uses. ---
+  router.get('/api/public/quotations/:id', async (request: IRequest, env: Env) => {
+    const serviceAccount = parseServiceAccount(env);
+    const db = new FirebaseDb(serviceAccount, env.FIREBASE_DATABASE_URL);
+    return Response.json(await getPublicQuotationView(db, param(request, 'id')));
   });
 }

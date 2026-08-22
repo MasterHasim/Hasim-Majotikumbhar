@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState } from 'react';
-import type { AssignmentEligibilityStatus, AuditEntry, CustomFieldDefinition, CustomFieldEntityType, CustomFieldType, NumberAccess, NumberAssignmentConfig, NumberAssignmentUser, QuickReply, Role, Stage, Team, TeamMember, Template, User, WhatsAppNumber, WhoAmI } from '../types';
+import type { AssignmentEligibilityStatus, AuditEntry, CustomFieldDefinition, CustomFieldEntityType, CustomFieldType, NumberAccess, NumberAssignmentConfig, NumberAssignmentUser, Product, QuickReply, Role, Stage, Team, TeamMember, Template, User, WhatsAppNumber, WhoAmI } from '../types';
 import { backendApi } from '../lib/backendApi';
 import { ApiClientError } from '../lib/api';
 
@@ -975,7 +975,100 @@ function CustomFieldsTab() {
 
 // ---------------------------------------------------------------------------
 
-type AdminTab = 'users' | 'teams' | 'numbers' | 'access' | 'assignment' | 'quickReplies' | 'templates' | 'leadStages' | 'customFields' | 'audit' | 'backup';
+function ProductsTab() {
+  const [numbers, setNumbers] = useState<WhatsAppNumber[] | null>(null);
+  const [numberId, setNumberId] = useState('');
+  const [products, setProducts] = useState<Product[] | null>(null);
+  const [name, setName] = useState('');
+  const [sku, setSku] = useState('');
+  const [unitPrice, setUnitPrice] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    backendApi.listMyNumbers().then((list) => { setNumbers(list); if (list.length > 0) setNumberId((cur) => cur || list[0]!.id); }).catch((err) => setError(errMsg(err)));
+  }, []);
+
+  function reload() {
+    if (!numberId) return;
+    backendApi.listProducts(numberId).then((p) => setProducts([...p].sort((a, b) => a.sequenceOrder - b.sequenceOrder))).catch((err) => setError(errMsg(err)));
+  }
+  useEffect(() => { setProducts(null); reload(); }, [numberId]);
+
+  async function guard(fn: () => Promise<unknown>) {
+    setBusy(true);
+    setError(null);
+    try {
+      await fn();
+      reload();
+    } catch (err) {
+      setError(errMsg(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function create() {
+    const trimmed = name.trim();
+    const price = Number(unitPrice);
+    if (!trimmed || !Number.isFinite(price) || price < 0) return;
+    setName('');
+    setSku('');
+    setUnitPrice('');
+    await guard(() => backendApi.createProduct({ numberId, name: trimmed, sku: sku.trim(), unitPrice: price }));
+  }
+
+  return (
+    <div className="card">
+      <h2 className="section-title" style={{ marginTop: 0 }}>Product Master</h2>
+      <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+        Prices are per WhatsApp number — each site/location has its own catalog. Agents pick from
+        this list when building a Quotation on a Lead; deactivating a product keeps it on any
+        quotation already built, it just stops appearing as an option for new ones.
+      </p>
+      <div className="form-row">
+        <select value={numberId} onChange={(e) => setNumberId(e.target.value)}>
+          {numbers === null && <option>Loading…</option>}
+          {numbers?.length === 0 && <option>No numbers available</option>}
+          {numbers?.map((n) => <option key={n.id} value={n.id}>{n.displayName}</option>)}
+        </select>
+      </div>
+      <table className="data-table">
+        <thead><tr><th>Order</th><th>Name</th><th>SKU</th><th>Price</th><th>Active</th><th></th></tr></thead>
+        <tbody>
+          {products === null && <tr><td colSpan={6} className="empty">Loading…</td></tr>}
+          {products?.map((p, idx) => (
+            <tr key={p.id}>
+              <td>{p.sequenceOrder}</td>
+              <td>{p.name}</td>
+              <td style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{p.sku || '—'}</td>
+              <td>{p.unitPrice.toLocaleString(undefined, { style: 'currency', currency: 'INR', maximumFractionDigits: 0 })}</td>
+              <td>
+                <input type="checkbox" checked={p.active} disabled={busy} onChange={(e) => void guard(() => backendApi.updateProduct(p.id, { active: e.target.checked }))} />
+              </td>
+              <td style={{ display: 'flex', gap: 4 }}>
+                <button className="btn" disabled={busy || idx === 0} onClick={() => void guard(async () => { const prev = products[idx - 1]!; await Promise.all([backendApi.updateProduct(p.id, { sequenceOrder: prev.sequenceOrder }), backendApi.updateProduct(prev.id, { sequenceOrder: p.sequenceOrder })]); })}>↑</button>
+                <button className="btn" disabled={busy || idx === (products?.length ?? 0) - 1} onClick={() => void guard(async () => { const next = products[idx + 1]!; await Promise.all([backendApi.updateProduct(p.id, { sequenceOrder: next.sequenceOrder }), backendApi.updateProduct(next.id, { sequenceOrder: p.sequenceOrder })]); })}>↓</button>
+              </td>
+            </tr>
+          ))}
+          {products?.length === 0 && <tr><td colSpan={6} className="empty">No products yet for this number.</td></tr>}
+        </tbody>
+      </table>
+      {error && <div className="form-error">{error}</div>}
+      <div className="form-row">
+        <input placeholder="Product name" style={{ flex: 1, minWidth: 160 }} value={name} onChange={(e) => setName(e.target.value)} />
+        <input placeholder="SKU (optional)" style={{ width: 120 }} value={sku} onChange={(e) => setSku(e.target.value)} />
+        <input placeholder="Price" type="number" min="0" style={{ width: 100 }} value={unitPrice} onChange={(e) => setUnitPrice(e.target.value)} />
+        <button className="btn primary" disabled={busy || !name.trim() || !unitPrice} onClick={() => void create()}>Add product</button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+type AdminTab = 'users' | 'teams' | 'numbers' | 'access' | 'assignment' | 'quickReplies' | 'templates' | 'leadStages' | 'customFields' | 'products' | 'audit' | 'backup';
 
 export function Admin({ whoAmI }: { whoAmI: WhoAmI }) {
   const isFullAdmin = whoAmI.roleKeys.includes('ADMIN');
@@ -995,9 +1088,9 @@ export function Admin({ whoAmI }: { whoAmI: WhoAmI }) {
     ? [
         ['users', 'Users'], ['teams', 'Teams'], ['numbers', 'Numbers'], ['access', 'Number Access'],
         ['assignment', 'Assignment Rules'], ['quickReplies', 'Quick Replies'], ['templates', 'Templates'],
-        ['leadStages', 'Lead Stages'], ['customFields', 'Custom Fields'], ['audit', 'Audit Log'], ['backup', 'Backup'],
+        ['leadStages', 'Lead Stages'], ['customFields', 'Custom Fields'], ['products', 'Products'], ['audit', 'Audit Log'], ['backup', 'Backup'],
       ]
-    : [['customFields', 'Custom Fields']];
+    : [['customFields', 'Custom Fields'], ['products', 'Products']];
 
   return (
     <>
@@ -1017,6 +1110,7 @@ export function Admin({ whoAmI }: { whoAmI: WhoAmI }) {
       {tab === 'templates' && <TemplatesSection />}
       {tab === 'leadStages' && <LeadStagesTab />}
       {tab === 'customFields' && <CustomFieldsTab />}
+      {tab === 'products' && <ProductsTab />}
       {tab === 'audit' && <AuditLogTab users={users} />}
       {tab === 'backup' && <BackupTab />}
     </>

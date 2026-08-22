@@ -4,8 +4,9 @@ import { FirebaseDb } from '../src/lib/firebaseAdmin';
 import { Phase1Api } from '../src/services/phase1Api';
 import { Phase3Api } from '../src/services/phase3Api';
 import { Phase8Api } from '../src/services/phase8Api';
-import { Phase22Api } from '../src/services/phase22Api';
+import { Phase22Api, computeQuotationTotals, getPublicQuotationView } from '../src/services/phase22Api';
 import { CustomFieldsApi } from '../src/services/customFieldsApi';
+import { ProductsApi } from '../src/services/productsApi';
 import { Roles } from '../src/domain/phase1';
 
 const ADMIN_EMAIL = 'admin@example.com';
@@ -533,6 +534,120 @@ describe('Phase22Api (ported from Phase22Domain.gs + Phase22Services.gs)', () =>
 
       await expect(new Phase22Api(db, MANAGER_A_EMAIL).getLocationConfig('Raipur')).resolves.toBeNull(); // no config set yet, but the call itself is not denied
       await expect(new Phase22Api(db, MANAGER_A_EMAIL).addLocationParticipant('Raipur', managerAId)).resolves.toMatchObject({ location: 'Raipur', userId: managerAId });
+    });
+  });
+
+  describe('Product Master + Quotations', () => {
+    let numberId: string;
+    let leadId: string;
+    let widgetId: string;
+    let gadgetId: string;
+
+    beforeEach(async () => {
+      const number = await new Phase3Api(db, ADMIN_EMAIL).createNumber({ displayName: 'Entartica - Raipur', phoneNumber: '079-485-02804', provider: 'exotel' });
+      numberId = number.id;
+      await new Phase1Api(db, ADMIN_EMAIL).grantNumberAccess({ userId: agentId, numberId });
+      await new Phase22Api(db, ADMIN_EMAIL).uploadLeads([{ name: 'Priya', phone: '+919876543210', location: 'Raipur' }]);
+      leadId = (await new Phase22Api(db, ADMIN_EMAIL).listLeads())[0]!.id;
+      await new Phase22Api(db, ADMIN_EMAIL).reassignLead(leadId, agentId);
+
+      const widget = await new ProductsApi(db, ADMIN_EMAIL).createProduct({ numberId, name: 'Widget', unitPrice: 500 });
+      widgetId = widget.id;
+      const gadget = await new ProductsApi(db, ADMIN_EMAIL).createProduct({ numberId, name: 'Gadget', unitPrice: 200 });
+      gadgetId = gadget.id;
+    });
+
+    describe('ProductsApi', () => {
+      it('lets an agent with number access read the catalog, but denies creating/updating without PRODUCTS_MANAGE', async () => {
+        const list = await new ProductsApi(db, AGENT_EMAIL).listProducts(numberId);
+        expect(list.map((p) => p.name)).toEqual(['Widget', 'Gadget']);
+        await expect(new ProductsApi(db, AGENT_EMAIL).createProduct({ numberId, name: 'X', unitPrice: 1 })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      });
+
+      it('denies an agent with no access to the number from even reading the catalog', async () => {
+        await expect(new ProductsApi(db, AGENT2_EMAIL).listProducts(numberId)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      });
+
+      it('rejects a negative unitPrice on create and update', async () => {
+        await expect(new ProductsApi(db, ADMIN_EMAIL).createProduct({ numberId, name: 'Bad', unitPrice: -5 })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+        await expect(new ProductsApi(db, ADMIN_EMAIL).updateProduct(widgetId, { unitPrice: -1 })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+      });
+
+      it('deactivating a product keeps it in the catalog but excludes it from new quotation line items', async () => {
+        await new ProductsApi(db, ADMIN_EMAIL).updateProduct(widgetId, { active: false });
+        const list = await new ProductsApi(db, ADMIN_EMAIL).listProducts(numberId);
+        expect(list.find((p) => p.id === widgetId)?.active).toBe(false);
+        await expect(new Phase22Api(db, AGENT_EMAIL).createQuotation(leadId, { lineItems: [{ productId: widgetId, quantity: 1 }] })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+      });
+    });
+
+    describe('Quotations', () => {
+      it('listProductsForLead resolves the catalog via the lead\'s own location, excludes inactive products, and is denied for an unrelated agent', async () => {
+        await new ProductsApi(db, ADMIN_EMAIL).updateProduct(gadgetId, { active: false });
+        const list = await new Phase22Api(db, AGENT_EMAIL).listProductsForLead(leadId);
+        expect(list.map((p) => p.name)).toEqual(['Widget']);
+        await expect(new Phase22Api(db, AGENT2_EMAIL).listProductsForLead(leadId)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      });
+
+      it('creates a quotation snapshotting product name/price, computes totals correctly, and is unaffected by a later catalog price change', async () => {
+        const quotation = await new Phase22Api(db, AGENT_EMAIL).createQuotation(leadId, {
+          lineItems: [{ productId: widgetId, quantity: 2, discountPercent: 10 }, { productId: gadgetId, quantity: 1 }],
+          overallDiscountPercent: 5,
+        });
+        expect(quotation.status).toBe('DRAFT');
+        expect(quotation.lineItems).toEqual([
+          { productId: widgetId, productName: 'Widget', unitPrice: 500, quantity: 2, discountPercent: 10 },
+          { productId: gadgetId, productName: 'Gadget', unitPrice: 200, quantity: 1, discountPercent: 0 },
+        ]);
+        // subtotal = (500*2*0.9) + (200*1*1.0) = 900 + 200 = 1100; overall 5% off -> 1045
+        const totals = computeQuotationTotals(quotation);
+        expect(totals.subtotal).toBe(1100);
+        expect(totals.total).toBeCloseTo(1045, 5);
+
+        await new ProductsApi(db, ADMIN_EMAIL).updateProduct(widgetId, { unitPrice: 999 });
+        const reread = await new Phase22Api(db, AGENT_EMAIL).getQuotation(quotation.id);
+        expect(reread.lineItems[0]!.unitPrice).toBe(500); // snapshot, not live-priced
+      });
+
+      it('rejects an unknown productId, a quantity below 1, and an out-of-range discountPercent', async () => {
+        await expect(new Phase22Api(db, AGENT_EMAIL).createQuotation(leadId, { lineItems: [{ productId: 'nope', quantity: 1 }] })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+        await expect(new Phase22Api(db, AGENT_EMAIL).createQuotation(leadId, { lineItems: [{ productId: widgetId, quantity: 0 }] })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+        await expect(new Phase22Api(db, AGENT_EMAIL).createQuotation(leadId, { lineItems: [{ productId: widgetId, quantity: 1, discountPercent: 150 }] })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+        await expect(new Phase22Api(db, AGENT_EMAIL).createQuotation(leadId, { lineItems: [] })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+      });
+
+      it('an unrelated agent cannot create, read, or list quotations for a lead not assigned to them; a manager always can', async () => {
+        await expect(new Phase22Api(db, AGENT2_EMAIL).createQuotation(leadId, { lineItems: [{ productId: widgetId, quantity: 1 }] })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+        const quotation = await new Phase22Api(db, AGENT_EMAIL).createQuotation(leadId, { lineItems: [{ productId: widgetId, quantity: 1 }] });
+        await expect(new Phase22Api(db, AGENT2_EMAIL).getQuotation(quotation.id)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+        await expect(new Phase22Api(db, AGENT2_EMAIL).listQuotations(leadId)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+        await expect(new Phase22Api(db, ADMIN_EMAIL).getQuotation(quotation.id)).resolves.toMatchObject({ id: quotation.id });
+      });
+
+      it('updateQuotation replaces line items, can change status to SENT (stamping sentAt), and rejects an unknown patch field', async () => {
+        const quotation = await new Phase22Api(db, AGENT_EMAIL).createQuotation(leadId, { lineItems: [{ productId: widgetId, quantity: 1 }] });
+        const updated = await new Phase22Api(db, AGENT_EMAIL).updateQuotation(quotation.id, { lineItems: [{ productId: gadgetId, quantity: 3 }], status: 'SENT' });
+        expect(updated.lineItems).toEqual([{ productId: gadgetId, productName: 'Gadget', unitPrice: 200, quantity: 3, discountPercent: 0 }]);
+        expect(updated.status).toBe('SENT');
+        expect(updated.sentAt).toBeTruthy();
+      });
+
+      it('listQuotations returns both, newest first (or tied if created in the same instant)', async () => {
+        const first = await new Phase22Api(db, AGENT_EMAIL).createQuotation(leadId, { lineItems: [{ productId: widgetId, quantity: 1 }] });
+        const second = await new Phase22Api(db, AGENT_EMAIL).createQuotation(leadId, { lineItems: [{ productId: gadgetId, quantity: 1 }] });
+        const list = await new Phase22Api(db, AGENT_EMAIL).listQuotations(leadId);
+        expect(list.map((q) => q.id).sort()).toEqual([first.id, second.id].sort());
+        expect(new Date(list[0]!.createdAt).getTime()).toBeGreaterThanOrEqual(new Date(list.at(-1)!.createdAt).getTime());
+      });
+
+      it('getPublicQuotationView requires no authentication and returns the lead name, number name, and computed totals', async () => {
+        const quotation = await new Phase22Api(db, AGENT_EMAIL).createQuotation(leadId, { lineItems: [{ productId: widgetId, quantity: 2 }], overallDiscountPercent: 10 });
+        const view = await getPublicQuotationView(db, quotation.id);
+        expect(view.leadName).toBe('Priya');
+        expect(view.numberDisplayName).toBe('Entartica - Raipur');
+        expect(view.totals.total).toBeCloseTo(900, 5); // 500*2 = 1000, 10% off -> 900
+        await expect(getPublicQuotationView(db, 'nope')).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      });
     });
   });
 });

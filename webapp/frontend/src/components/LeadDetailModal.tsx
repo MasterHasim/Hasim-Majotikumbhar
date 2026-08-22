@@ -4,6 +4,7 @@ import { backendApi } from '../lib/backendApi';
 import { ApiClientError } from '../lib/api';
 import { ActivityFeed } from './ActivityFeed';
 import { CustomFieldsSection } from './CustomFieldsSection';
+import { QuotationBuilder } from './QuotationBuilder';
 
 function fmt(iso: string): string {
   const d = new Date(iso);
@@ -186,6 +187,13 @@ export function LeadDetailModal({
               </button>
               <button className="btn" onClick={onClose}>Close</button>
             </div>
+
+            <details className="detail-section">
+              <summary>Quotations</summary>
+              <div className="detail-section-body">
+                <QuotationBuilder lead={lead} onOpenConversation={onOpenConversation} />
+              </div>
+            </details>
 
             <details className="detail-section">
               <summary>Activity ({activity?.length ?? 0})</summary>
