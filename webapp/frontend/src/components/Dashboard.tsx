@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { DashboardMetrics, WhatsAppNumber } from '../types';
+import { LEAD_LOCATIONS, type DashboardMetrics, type LeadFunnel, type WhatsAppNumber } from '../types';
 import { backendApi } from '../lib/backendApi';
 import { ApiClientError } from '../lib/api';
 
@@ -31,9 +31,36 @@ function BarList({ rows }: { rows: { label: string; count: number }[] }) {
   );
 }
 
+/** A classic sales-funnel bar: each stage's width is relative to how many leads reached the
+ * *first* stage (not the grand total) — the usual funnel reading of "what fraction of the top of
+ * the funnel made it this far," rather than "what fraction of everything is at this stage." */
+function FunnelChart({ funnel }: { funnel: LeadFunnel }) {
+  if (funnel.stages.length === 0) return <div className="empty">No lead stages configured yet.</div>;
+  return (
+    <div className="bar-list">
+      {funnel.stages.map((s) => (
+        <div key={s.stageId} className="bar-row">
+          <span>{s.name}</span>
+          <div className="bar-track"><div className="bar-fill" style={{ width: `${s.pctOfFirstStage ?? 0}%` }} /></div>
+          <span className="bar-count">{s.count}{s.pctOfTotal !== null ? ` (${s.pctOfTotal}%)` : ''}</span>
+        </div>
+      ))}
+      {funnel.noStage > 0 && (
+        <div className="bar-row">
+          <span>No stage set</span>
+          <div className="bar-track"><div className="bar-fill" style={{ width: 0, background: 'var(--text-muted)' }} /></div>
+          <span className="bar-count">{funnel.noStage}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Dashboard({ number }: { number: WhatsAppNumber | null }) {
   const [scope, setScope] = useState<'current' | 'all'>('current');
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
+  const [funnel, setFunnel] = useState<LeadFunnel | null>(null);
+  const [funnelLocation, setFunnelLocation] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -41,6 +68,12 @@ export function Dashboard({ number }: { number: WhatsAppNumber | null }) {
       .then(setMetrics)
       .catch((err) => setError(err instanceof ApiClientError ? `${err.code}: ${err.message}` : String(err)));
   }, [scope, number]);
+
+  useEffect(() => {
+    backendApi.getLeadFunnel(funnelLocation || undefined)
+      .then(setFunnel)
+      .catch((err) => setError(err instanceof ApiClientError ? `${err.code}: ${err.message}` : String(err)));
+  }, [funnelLocation]);
 
   return (
     <>
@@ -96,7 +129,21 @@ export function Dashboard({ number }: { number: WhatsAppNumber | null }) {
           </div>
 
           <div className="card" style={{ maxWidth: 'none' }}>
-            <h2 className="section-title" style={{ marginTop: 0 }}>Lead stage distribution</h2>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+              <h2 className="section-title" style={{ marginTop: 0, marginBottom: 0 }}>Lead funnel</h2>
+              <select value={funnelLocation} onChange={(e) => setFunnelLocation(e.target.value)}>
+                <option value="">All locations</option>
+                {LEAD_LOCATIONS.map((l) => <option key={l} value={l}>{l}</option>)}
+              </select>
+            </div>
+            <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+              The Leads Kanban board's own stage progression — each bar shows what share of leads that reached the first stage also reached this one.
+            </p>
+            {!funnel ? <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>Loading…</p> : <FunnelChart funnel={funnel} />}
+          </div>
+
+          <div className="card" style={{ maxWidth: 'none' }}>
+            <h2 className="section-title" style={{ marginTop: 0 }}>Customer stage distribution</h2>
             <BarList rows={metrics.stageDistribution.map((s) => ({ label: s.name, count: s.count }))} />
           </div>
 

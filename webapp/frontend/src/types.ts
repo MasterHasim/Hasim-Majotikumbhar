@@ -438,3 +438,9 @@ export interface DashboardMetrics {
   templateUsage: { name: string; count: number }[];
   leadConversion: { totalCustomersWithStage: number; wonCount: number; conversionRate: number | null };
 }
+
+export interface LeadFunnel {
+  stages: { stageId: string; name: string; sequenceOrder: number; count: number; pctOfTotal: number | null; pctOfFirstStage: number | null }[];
+  noStage: number;
+  total: number;
+}

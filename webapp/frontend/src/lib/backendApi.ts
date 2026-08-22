@@ -3,7 +3,7 @@ import { apiFetch } from './api';
 import type {
   AssignableUser, AssignmentEligibility, AssignmentEligibilityStatus, AuditEntry, AuditEntryWithActor, Availability, AvailabilityStatus, CallLog,
   CallLogWithContext, Conversation, ConversationListItem, Customer, CustomerStage, CustomFieldDefinition, CustomFieldEntityType, CustomFieldType,
-  DashboardMetrics, Lead, LeadRemark, LeadStageAssignment,
+  DashboardMetrics, Lead, LeadFunnel, LeadRemark, LeadStageAssignment,
   LocationAssignmentConfig, LocationAssignmentUser, NumberAccess, NumberAssignmentConfig, NumberAssignmentUser, Product, PublicQuotationView,
   QuickReply, Quotation, Remark, Reminder,
   ReminderWithContext, Role, SearchFilters, SearchResultItem, SnoozeStatus, Stage, Team, TeamMember, Template, UploadLeadsResult, User,
@@ -166,6 +166,8 @@ export const backendApi = {
 
   reassignLead: (leadId: string, userId: string) =>
     apiFetch<Lead>(`/api/leads/${encodeURIComponent(leadId)}/reassign`, { method: 'POST', body: JSON.stringify({ userId }) }),
+
+  getLeadFunnel: (location?: string) => apiFetch<LeadFunnel>(`/api/leads/funnel${location ? `?location=${encodeURIComponent(location)}` : ''}`),
 
   getLocationAssignmentConfig: (location: string) => apiFetch<LocationAssignmentConfig | null>(`/api/locations/${encodeURIComponent(location)}/assignment-config`),
 

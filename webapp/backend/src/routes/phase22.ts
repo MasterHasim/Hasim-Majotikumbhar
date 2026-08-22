@@ -36,6 +36,10 @@ export function registerPhase22Routes(router: RouterType) {
     const filters = { location: query(request, 'location'), status: query(request, 'status'), assignedUserId: query(request, 'assignedUserId') };
     return Response.json(await new Phase22Api(ctx.db, ctx.identityEmail).listLeads(filters));
   });
+  router.get('/api/leads/funnel', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    return Response.json(await new Phase22Api(ctx.db, ctx.identityEmail).getLeadFunnel(query(request, 'location')));
+  });
 
   router.post('/api/leads/:id/reassign', async (request: IRequest, env: Env) => {
     const ctx = await buildContext(request, env);

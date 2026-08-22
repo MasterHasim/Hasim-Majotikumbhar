@@ -156,6 +156,47 @@ describe('Phase22Api (ported from Phase22Domain.gs + Phase22Services.gs)', () =>
     });
   });
 
+  describe('getLeadFunnel', () => {
+    it('counts leads per stage (ordered by sequenceOrder), tracks leads with no stage separately, and computes percentages — scoped through the exact same authorization as listLeads', async () => {
+      const stages = await new Phase8Api(db, ADMIN_EMAIL).seedDefaultLeadStages();
+      await new Phase22Api(db, ADMIN_EMAIL).uploadLeads([
+        { name: 'Lead A', phone: '+919876543210', location: 'Raipur' },
+        { name: 'Lead B', phone: '+919876543211', location: 'Raipur' },
+        { name: 'Lead C', phone: '+919876543212', location: 'Raipur' },
+      ]);
+      const leads = await new Phase22Api(db, ADMIN_EMAIL).listLeads();
+      await new Phase22Api(db, ADMIN_EMAIL).reassignLead(leads[0]!.id, agentId);
+      await new Phase22Api(db, ADMIN_EMAIL).reassignLead(leads[1]!.id, agentId);
+      await new Phase22Api(db, ADMIN_EMAIL).reassignLead(leads[2]!.id, agentId);
+      await new Phase22Api(db, AGENT_EMAIL).setLeadStage(leads[0]!.id, stages[0]!.id); // New Leads
+      await new Phase22Api(db, AGENT_EMAIL).setLeadStage(leads[1]!.id, stages[1]!.id); // Contacted
+      // leads[2] left with no stage
+
+      const funnel = await new Phase22Api(db, ADMIN_EMAIL).getLeadFunnel();
+      expect(funnel.total).toBe(3);
+      expect(funnel.noStage).toBe(1);
+      for (let i = 1; i < funnel.stages.length; i++) expect(funnel.stages[i]!.sequenceOrder).toBeGreaterThan(funnel.stages[i - 1]!.sequenceOrder);
+      const newLeadsRow = funnel.stages.find((s) => s.stageId === stages[0]!.id)!;
+      const contactedRow = funnel.stages.find((s) => s.stageId === stages[1]!.id)!;
+      const wonRow = funnel.stages.find((s) => s.stageId === stages[4]!.id)!;
+      expect(newLeadsRow.count).toBe(1);
+      expect(contactedRow.count).toBe(1);
+      expect(wonRow.count).toBe(0);
+      expect(newLeadsRow.pctOfTotal).toBeCloseTo(33.3, 1);
+      expect(newLeadsRow.pctOfFirstStage).toBe(100);
+      expect(contactedRow.pctOfFirstStage).toBe(100); // 1 of 1 that reached the first stage also reached this one
+
+      // an agent only sees leads assigned to them — here that's all 3, so the funnel is identical;
+      // an unrelated agent (no leads assigned) gets an all-zero funnel, not a FORBIDDEN.
+      const otherAgent = await new Phase1Api(db, ADMIN_EMAIL).createUser({ email: 'agent3@example.com', displayName: 'Agent 3', roleIds: [] });
+      const roles = await new Phase1Api(db, ADMIN_EMAIL).listRoles();
+      await new Phase1Api(db, ADMIN_EMAIL).updateUser(otherAgent.id, { roleIds: [roles.find((r) => r.key === Roles.AGENT)!.id] });
+      const emptyFunnel = await new Phase22Api(db, 'agent3@example.com').getLeadFunnel();
+      expect(emptyFunnel.total).toBe(0);
+      expect(emptyFunnel.stages.every((s) => s.count === 0)).toBe(true);
+    });
+  });
+
   describe('location assignment config/participants', () => {
     it('denies a non-manager from reading or writing config', async () => {
       await expect(new Phase22Api(db, AGENT_EMAIL).getLocationConfig('Raipur')).rejects.toMatchObject({ code: 'FORBIDDEN' });

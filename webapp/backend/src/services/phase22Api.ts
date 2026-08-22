@@ -191,6 +191,39 @@ export class Phase22Api {
       .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
   }
 
+  /**
+   * The Leads Kanban board's own stage progression (New Leads → Contacted → ... → Lead Won/Lost),
+   * distinct from Phase8Api's Customer-stage dashboard metric — Leads and Customers share the
+   * same Stage definitions but track their own independent stageId. Reuses listLeads() entirely
+   * for both authorization and location-isolation scoping, so this can never show a stage
+   * breakdown of leads the caller couldn't otherwise see.
+   */
+  async getLeadFunnel(location?: string): Promise<{
+    stages: { stageId: string; name: string; sequenceOrder: number; count: number; pctOfTotal: number | null; pctOfFirstStage: number | null }[];
+    noStage: number;
+    total: number;
+  }> {
+    const leads = await this.listLeads(location ? { location } : {});
+    const stages = (await this.stages.list()).filter((s) => s.active).sort((a, b) => a.sequenceOrder - b.sequenceOrder);
+    const countsByStage = new Map<string, number>();
+    let noStage = 0;
+    for (const lead of leads) {
+      if (!lead.stageId) { noStage++; continue; }
+      countsByStage.set(lead.stageId, (countsByStage.get(lead.stageId) ?? 0) + 1);
+    }
+    const total = leads.length;
+    const firstStageCount = stages.length > 0 ? (countsByStage.get(stages[0]!.id) ?? 0) : 0;
+    const stageRows = stages.map((stage) => {
+      const count = countsByStage.get(stage.id) ?? 0;
+      return {
+        stageId: stage.id, name: stage.name, sequenceOrder: stage.sequenceOrder, count,
+        pctOfTotal: total > 0 ? Math.round((count / total) * 1000) / 10 : null,
+        pctOfFirstStage: firstStageCount > 0 ? Math.round((count / firstStageCount) * 1000) / 10 : null,
+      };
+    });
+    return { stages: stageRows, noStage, total };
+  }
+
   async getLocationConfig(location: string): Promise<LocationAssignmentConfig | null> {
     const actor = await this.access.require(Permissions.LEADS_MANAGE);
     Phase22Validation.location(location);
