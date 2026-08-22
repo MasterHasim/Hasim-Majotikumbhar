@@ -100,6 +100,12 @@ export interface Conversation extends Record_ {
   status: 'OPEN' | 'CLOSED';
   needsResponse: boolean;
   lastMessageAt: string;
+  /** Timestamp of the customer's own last INBOUND message — unlike lastMessageAt, never
+   * touched by an outbound send. Anchors WhatsApp's 24-hour customer service window: free-form
+   * (text/media) replies are only allowed within 24h of this timestamp; outside it, only an
+   * approved template can be sent. Absent on conversations created before this field existed —
+   * see Phase6Api.isWithinCustomerServiceWindow for the fallback. */
+  lastCustomerMessageAt?: string;
   createdAt: string;
   updatedAt: string;
 }

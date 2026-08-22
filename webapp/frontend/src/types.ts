@@ -25,6 +25,8 @@ export interface Conversation {
   status: 'OPEN' | 'CLOSED';
   needsResponse: boolean;
   lastMessageAt: string;
+  /** Anchor for WhatsApp's 24-hour customer service window — see backend Conversation type. */
+  lastCustomerMessageAt?: string;
   createdAt: string;
 }
 

@@ -62,6 +62,16 @@ describe('Messaging core (ported from Phase 3-6 + WorkspaceServices.gs)', () => 
       expect(detail.conversation.needsResponse).toBe(true);
     });
 
+    it('sets lastCustomerMessageAt (the 24h-window anchor) on both new and reused conversations, distinct from lastMessageAt', async () => {
+      const inbound = await new Phase4Api(db).ingestInboundMessage({ providerMessageId: 'msg-1', fromPhone: '+919876543210', providerNumberId: '+917948502801', direction: 'INBOUND', messageType: 'text', text: 'Hi', timestamp: '2026-01-01T00:00:00.000Z', status: null });
+      let record = (await db.get(`webapp_conversations/${inbound.conversationId}`)) as { lastCustomerMessageAt?: string };
+      expect(record.lastCustomerMessageAt).toBe('2026-01-01T00:00:00.000Z');
+
+      await new Phase4Api(db).ingestInboundMessage({ providerMessageId: 'msg-2', fromPhone: '+919876543210', providerNumberId: '+917948502801', direction: 'INBOUND', messageType: 'text', text: 'Again', timestamp: '2026-01-02T00:00:00.000Z', status: null });
+      record = (await db.get(`webapp_conversations/${inbound.conversationId}`)) as { lastCustomerMessageAt?: string };
+      expect(record.lastCustomerMessageAt).toBe('2026-01-02T00:00:00.000Z');
+    });
+
     it('reuses the same OPEN conversation for a second message from the same customer', async () => {
       const first = await new Phase4Api(db).ingestInboundMessage({ providerMessageId: 'msg-1', fromPhone: '+919876543210', providerNumberId: '+917948502801', direction: 'INBOUND', messageType: 'text', text: 'Hi', timestamp: new Date().toISOString(), status: null });
       const second = await new Phase4Api(db).ingestInboundMessage({ providerMessageId: 'msg-2', fromPhone: '+919876543210', providerNumberId: '+917948502801', direction: 'INBOUND', messageType: 'text', text: 'Again', timestamp: new Date().toISOString(), status: null });

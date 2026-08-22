@@ -85,6 +85,10 @@ export function registerMessagingRoutes(router: RouterType) {
     const url = `${new URL(request.url).origin}/media/${encodeURIComponent(key)}`;
     return Response.json({ url, key });
   });
+  router.post('/api/admin/backfill-customer-service-window', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    return Response.json(await new Phase6Api(ctx.db, ctx.identityEmail, env).backfillCustomerServiceWindow());
+  });
 
   // --- Public media serving (no Firebase auth — the uploaded file must be fetchable by
   // Exotel's servers, not a signed-in browser, same "Anyone with the link" model the

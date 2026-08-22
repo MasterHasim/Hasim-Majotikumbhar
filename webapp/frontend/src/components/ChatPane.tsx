@@ -8,6 +8,18 @@ function timeLabel(iso: string): string {
   return Number.isNaN(d.getTime()) ? '' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
+const CUSTOMER_SERVICE_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/** Mirrors Phase6Api.isWithinCustomerServiceWindow (same no-fallback reasoning — see its comment)
+ * — client-side only for UI (disabling free-form compose, showing the banner); the backend is
+ * still the source of truth and rejects the send either way if this and the server disagree. */
+function windowState(conversation: Workspace['conversation']): { inWindow: boolean; expiresAt: Date | null } {
+  const anchorMs = conversation.lastCustomerMessageAt ? new Date(conversation.lastCustomerMessageAt).getTime() : NaN;
+  if (Number.isNaN(anchorMs)) return { inWindow: false, expiresAt: null };
+  const expiresAt = new Date(anchorMs + CUSTOMER_SERVICE_WINDOW_MS);
+  return { inWindow: Date.now() < expiresAt.getTime(), expiresAt };
+}
+
 /** {{1}}, {{2}}, ... placeholders in a template's BODY component, in the same positional convention Phase6Api's substituteTemplateVariables expects. */
 function templateVariableSlots(template: Template): string[] {
   const body = template.components.find((c) => c.type === 'BODY');
@@ -120,6 +132,7 @@ export function ChatPane({ workspace, quickReplies, templates, onAfterSend, onRe
   const approvedTemplates = templates.filter((t) => t.status === 'APPROVED');
   const selectedTemplate = approvedTemplates.find((t) => t.id === templateId);
   const customerName = workspace.customer?.name || workspace.customer?.phone || 'Unknown';
+  const { inWindow, expiresAt } = windowState(workspace.conversation);
 
   return (
     <div id="chatCol" className="col">
@@ -161,6 +174,11 @@ export function ChatPane({ workspace, quickReplies, templates, onAfterSend, onRe
       </div>
 
       {error && <div className="compose-error">{error}</div>}
+      {!inWindow && (
+        <div className="compose-window-banner">
+          It's been more than 24 hours since {customerName}'s last message{expiresAt ? ` (window closed ${expiresAt.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })})` : ''} — WhatsApp only allows an approved template to reopen the conversation. Free-text and media replies are disabled until they message again.
+        </div>
+      )}
       <div className="compose-body">
         <div className="compose-toolbar">
           <select
@@ -202,10 +220,10 @@ export function ChatPane({ workspace, quickReplies, templates, onAfterSend, onRe
             </button>
           )}
 
-          <button onClick={() => setShowMedia((v) => !v)}>📎 Media</button>
+          <button disabled={!inWindow} title={inWindow ? undefined : "Outside the 24-hour window — send a template instead"} onClick={() => setShowMedia((v) => !v)}>📎 Media</button>
         </div>
 
-        {showMedia && (
+        {showMedia && inWindow && (
           <div className="compose-toolbar">
             <select value={mediaType} onChange={(e) => setMediaType(e.target.value)}>
               <option value="image">Image</option>
@@ -249,12 +267,13 @@ export function ChatPane({ workspace, quickReplies, templates, onAfterSend, onRe
         <div className="compose-row">
           <textarea
             rows={2}
-            placeholder="Type a reply…"
+            placeholder={inWindow ? 'Type a reply…' : 'Send a template to reopen this conversation'}
+            disabled={!inWindow}
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); } }}
           />
-          <button className="send" disabled={sending || !text.trim()} onClick={() => void send()}>{sending ? 'Sending…' : 'Send'}</button>
+          <button className="send" disabled={!inWindow || sending || !text.trim()} onClick={() => void send()}>{sending ? 'Sending…' : 'Send'}</button>
         </div>
       </div>
     </div>

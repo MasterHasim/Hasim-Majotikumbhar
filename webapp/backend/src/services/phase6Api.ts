@@ -13,7 +13,7 @@
  * hiccup on the secondary write is exactly as possible here, and the fix costs nothing.
  */
 import { ApiError } from '../types';
-import { Ids, Validation } from '../domain/phase1';
+import { Ids, Permissions, Validation } from '../domain/phase1';
 import type { Conversation, Customer, Message, MessageMedia, Template, WhatsAppNumber } from '../domain/types';
 import { Repository } from '../lib/repository';
 import { AccessControl } from '../lib/accessControl';
@@ -33,6 +33,26 @@ function substituteTemplateVariables(components: unknown[], variables: Record<st
     });
     return { ...c, text };
   });
+}
+
+const CUSTOMER_SERVICE_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * WhatsApp's 24-hour customer service window: free-form (text/media) messages are only
+ * deliverable within 24h of the customer's own last inbound message — outside it, Meta rejects
+ * anything but an approved template. Deliberately does NOT fall back to lastMessageAt: that field
+ * is also stamped at conversation *creation* (e.g. startWhatsAppFromLead, or any future ad-hoc
+ * "new chat" flow), so a brand-new conversation with zero real customer messages would otherwise
+ * look "fresh" and wrongly allow a free-text first message — exactly the send WhatsApp actually
+ * rejects. A conversation with no lastCustomerMessageAt has, as far as this app knows, never had
+ * an inbound message; see backfillCustomerServiceWindow for the one-time migration that populates
+ * it on conversations that predate this field but do have real inbound history.
+ */
+export function isWithinCustomerServiceWindow(conversation: Conversation): boolean {
+  if (!conversation.lastCustomerMessageAt) return false;
+  const anchorMs = new Date(conversation.lastCustomerMessageAt).getTime();
+  if (Number.isNaN(anchorMs)) return false;
+  return Date.now() - anchorMs < CUSTOMER_SERVICE_WINDOW_MS;
 }
 
 /** Same E.164 normalization as apps-script/src/Phase6Services.gs's toE164_. */
@@ -85,7 +105,7 @@ export class Phase6Api {
 
   async sendReply(conversationId: string, text: string): Promise<Message> {
     const validText = Validation.requiredString(text, 'text');
-    return this.sendOutbound(conversationId, 'text', validText, (provider, number, customer) => provider.sendText(toE164(number.phoneNumber), toE164(customer.phone), validText));
+    return this.sendOutbound(conversationId, 'text', validText, true, (provider, number, customer) => provider.sendText(toE164(number.phoneNumber), toE164(customer.phone), validText));
   }
 
   /** Send an approved template with variables substituted into its components. UNVERIFIED — sendTemplate has never been called live, same as sendText. */
@@ -95,7 +115,7 @@ export class Phase6Api {
     if (template.status !== 'APPROVED') throw new ApiError(400, 'VALIDATION_ERROR', 'Only an APPROVED template can be sent.');
     const components = substituteTemplateVariables(template.components, variables || {});
     const displayText = `[Template: ${template.name}]`;
-    return this.sendOutbound(conversationId, 'template', displayText, (provider, number, customer) => provider.sendTemplate(toE164(number.phoneNumber), toE164(customer.phone), template.name, template.language, components));
+    return this.sendOutbound(conversationId, 'template', displayText, false, (provider, number, customer) => provider.sendTemplate(toE164(number.phoneNumber), toE164(customer.phone), template.name, template.language, components));
   }
 
   /** Send a media message (image/document/etc). UNVERIFIED — sendMedia has never been called live, same as sendText/sendTemplate. Expects an already-hosted mediaUrl (see routes/media.ts for the R2-backed upload that produces one). */
@@ -103,7 +123,7 @@ export class Phase6Api {
     const validMediaType = Validation.requiredString(mediaType, 'mediaType');
     const validMediaUrl = Validation.requiredString(mediaUrl, 'mediaUrl');
     const displayText = caption || `[Media: ${validMediaType}]`;
-    const message = await this.sendOutbound(conversationId, 'media', displayText, (provider, number, customer) => provider.sendMedia(toE164(number.phoneNumber), toE164(customer.phone), validMediaType, validMediaUrl, caption || ''));
+    const message = await this.sendOutbound(conversationId, 'media', displayText, true, (provider, number, customer) => provider.sendMedia(toE164(number.phoneNumber), toE164(customer.phone), validMediaType, validMediaUrl, caption || ''));
     await this.messageMedia.create({ id: Ids.create('media'), messageId: message.id, mediaType: validMediaType, mediaUrl: validMediaUrl, caption: caption || '' });
     return message;
   }
@@ -143,16 +163,53 @@ export class Phase6Api {
     return record;
   }
 
+  /**
+   * One-time migration for conversations that predate lastCustomerMessageAt (see that field's
+   * comment in domain/types.ts) — backfills it from the real inbound message history so a
+   * genuinely-active old conversation doesn't suddenly look "outside the window" the moment this
+   * feature ships. Safe to re-run: only touches conversations that don't already have the field
+   * set, and does nothing to a conversation with no inbound message at all (correctly leaves it
+   * requiring a template).
+   */
+  async backfillCustomerServiceWindow(): Promise<{ scanned: number; updated: number }> {
+    await this.access.require(Permissions.SETTINGS_MANAGE);
+    const [conversations, messages] = await Promise.all([this.conversations.list(), this.messages.list()]);
+    const lastInboundByConversation = new Map<string, string>();
+    for (const message of messages) {
+      if (message.direction !== 'INBOUND') continue;
+      const current = lastInboundByConversation.get(message.conversationId);
+      if (!current || message.timestamp > current) lastInboundByConversation.set(message.conversationId, message.timestamp);
+    }
+    let updated = 0;
+    for (const conversation of conversations) {
+      if (conversation.lastCustomerMessageAt) continue;
+      const lastInbound = lastInboundByConversation.get(conversation.id);
+      if (!lastInbound) continue;
+      // replace(), not update() — the record is already in hand from the list() above, so this
+      // is one PUT instead of update()'s GET-then-PUT. With potentially dozens of conversations
+      // to backfill in one invocation, halving the per-row cost keeps this comfortably under
+      // Cloudflare's free-tier per-invocation subrequest cap (hit this exact wall once already
+      // this session — see PROGRESS.md's subrequest-limit note).
+      await this.conversations.replace(conversation.id, { ...conversation, lastCustomerMessageAt: lastInbound, updatedAt: Ids.now() });
+      updated++;
+    }
+    return { scanned: conversations.length, updated };
+  }
+
   private async sendOutbound(
     conversationId: string,
     messageType: string,
     displayText: string,
+    requiresWindow: boolean,
     sendFn: (provider: ExotelProvider, number: WhatsAppNumber, customer: Customer) => Promise<unknown>
   ): Promise<Message> {
     const conversation = await this.conversations.get(conversationId);
     if (!conversation) throw new ApiError(404, 'NOT_FOUND', 'Conversation was not found.');
     const teamId = await this.access.resolveTeamIdForNumber(conversation.numberId);
     const actor = await this.access.requireConversationOperation('reply', { numberId: conversation.numberId, teamId, assignedUserId: conversation.assignedUserId });
+    if (requiresWindow && !isWithinCustomerServiceWindow(conversation)) {
+      throw new ApiError(400, 'OUTSIDE_MESSAGE_WINDOW', "It's been more than 24 hours since the customer's last message — send an approved template to reopen the conversation.");
+    }
 
     const number = await this.numbers.get(conversation.numberId);
     const customer = await this.customers.get(conversation.customerId);

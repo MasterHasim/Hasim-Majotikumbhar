@@ -141,6 +141,62 @@ describe('Phase10Api / Phase11Api / Phase6Api template+media additions', () => {
     });
   });
 
+  describe('24-hour customer service window', () => {
+    let conversationId: string;
+    beforeEach(async () => {
+      const result = await new Phase4Api(db).ingestInboundMessage({ providerMessageId: 'msg-1', fromPhone: '+919876543210', providerNumberId: '+917948502801', direction: 'INBOUND', messageType: 'text', text: 'Hi', timestamp: new Date().toISOString(), status: null });
+      conversationId = result.conversationId!;
+      await db.put(`webapp_conversations/${conversationId}`, { ...(await db.get(`webapp_conversations/${conversationId}`) as object), assignedUserId: agentId });
+    });
+
+    async function backdateLastCustomerMessage(hoursAgo: number) {
+      const stale = new Date(Date.now() - hoursAgo * 60 * 60 * 1000).toISOString();
+      await db.put(`webapp_conversations/${conversationId}`, { ...(await db.get(`webapp_conversations/${conversationId}`) as object), lastCustomerMessageAt: stale, lastMessageAt: stale });
+    }
+
+    it('sendReply/sendMediaReply succeed within 24h of the customer\'s last message', async () => {
+      await backdateLastCustomerMessage(1);
+      await expect(new Phase6Api(db, AGENT_EMAIL, mock.exotelConfig as never).sendReply(conversationId, 'Still here')).resolves.toMatchObject({ status: 'SENT' });
+      await expect(new Phase6Api(db, AGENT_EMAIL, mock.exotelConfig as never).sendMediaReply(conversationId, 'image', 'https://example.com/x.jpg', '')).resolves.toMatchObject({ status: 'SENT' });
+    });
+
+    it('sendReply/sendMediaReply are rejected more than 24h after the customer\'s last message, but sendTemplateReply still works', async () => {
+      await backdateLastCustomerMessage(25);
+      await expect(new Phase6Api(db, AGENT_EMAIL, mock.exotelConfig as never).sendReply(conversationId, 'Still here?')).rejects.toMatchObject({ code: 'OUTSIDE_MESSAGE_WINDOW' });
+      await expect(new Phase6Api(db, AGENT_EMAIL, mock.exotelConfig as never).sendMediaReply(conversationId, 'image', 'https://example.com/x.jpg', '')).rejects.toMatchObject({ code: 'OUTSIDE_MESSAGE_WINDOW' });
+
+      mock.setNextExotelResponse(200, { response: { whatsapp: { templates: [{ data: { id: 'ptpl-1', name: 'reopen', language: 'en', category: 'UTILITY', status: 'APPROVED', components: [] } }] } } });
+      const [synced] = await new Phase10Api(db, ADMIN_EMAIL, mock.exotelConfig as never).syncTemplatesFromProvider('waba-1');
+      await expect(new Phase6Api(db, AGENT_EMAIL, mock.exotelConfig as never).sendTemplateReply(conversationId, synced!.id, {})).resolves.toMatchObject({ status: 'SENT' });
+    });
+
+    it('a brand-new conversation with no inbound message at all is treated as outside the window, even though lastMessageAt is stamped at creation', async () => {
+      // Mirrors what startWhatsAppFromLead does: creates a conversation with lastMessageAt set
+      // to "now" but no lastCustomerMessageAt, since no customer message has actually arrived.
+      const now = new Date().toISOString();
+      const freshId = 'conversation_fresh_no_inbound';
+      await db.put(`webapp_conversations/${freshId}`, { id: freshId, customerId: 'cust-x', numberId, assignedUserId: agentId, status: 'OPEN', needsResponse: false, lastMessageAt: now, createdAt: now, updatedAt: now });
+      await db.put(`customers/cust-x`, { id: 'cust-x', phone: '+919876500099', name: 'Fresh', email: '', company: '', source: 'location_lead', createdAt: now, updatedAt: now });
+      await expect(new Phase6Api(db, AGENT_EMAIL, mock.exotelConfig as never).sendReply(freshId, 'Hi')).rejects.toMatchObject({ code: 'OUTSIDE_MESSAGE_WINDOW' });
+    });
+
+    it('backfillCustomerServiceWindow migrates a legacy conversation from its real inbound message history, is ADMIN-only, and is safe to re-run', async () => {
+      const record = (await db.get(`webapp_conversations/${conversationId}`)) as Record<string, unknown>;
+      delete record.lastCustomerMessageAt;
+      await db.put(`webapp_conversations/${conversationId}`, record);
+      await expect(new Phase6Api(db, AGENT_EMAIL, mock.exotelConfig as never).sendReply(conversationId, 'Hi')).rejects.toMatchObject({ code: 'OUTSIDE_MESSAGE_WINDOW' });
+
+      await expect(new Phase6Api(db, AGENT_EMAIL, mock.exotelConfig as never).backfillCustomerServiceWindow()).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+      const result = await new Phase6Api(db, ADMIN_EMAIL, mock.exotelConfig as never).backfillCustomerServiceWindow();
+      expect(result.updated).toBe(1);
+      await expect(new Phase6Api(db, AGENT_EMAIL, mock.exotelConfig as never).sendReply(conversationId, 'Hi')).resolves.toMatchObject({ status: 'SENT' });
+
+      const again = await new Phase6Api(db, ADMIN_EMAIL, mock.exotelConfig as never).backfillCustomerServiceWindow();
+      expect(again.updated).toBe(0); // already set — re-running touches nothing
+    });
+  });
+
   describe('Phase4Api — inbound media persistence', () => {
     it('creates a MessageMedia record when the webhook payload includes a mediaUrl', async () => {
       const normalized = await new Phase4Api(db).ingestInboundMessage({

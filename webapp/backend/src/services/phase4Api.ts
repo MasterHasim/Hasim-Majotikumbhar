@@ -71,7 +71,7 @@ export class Phase4Api {
     let conversation = await this.conversations.findOne((c) => c.customerId === customer!.id && c.numberId === number.id && c.status === 'OPEN');
     let isNewConversation = false;
     if (!conversation) {
-      conversation = { id: Ids.create('conversation'), customerId: customer.id, numberId: number.id, assignedUserId: '', status: 'OPEN', needsResponse: true, lastMessageAt: normalized.timestamp || now, createdAt: now, updatedAt: now };
+      conversation = { id: Ids.create('conversation'), customerId: customer.id, numberId: number.id, assignedUserId: '', status: 'OPEN', needsResponse: true, lastMessageAt: normalized.timestamp || now, lastCustomerMessageAt: normalized.timestamp || now, createdAt: now, updatedAt: now };
       await this.conversations.create(conversation);
       isNewConversation = true;
     }
@@ -85,7 +85,7 @@ export class Phase4Api {
     if (normalized.mediaUrl) {
       await this.messageMedia.create({ id: Ids.create('media'), messageId: message.id, mediaType: normalized.messageType || 'image', mediaUrl: normalized.mediaUrl, caption: normalized.text || '' });
     }
-    await this.conversations.update(conversation.id, { needsResponse: true, lastMessageAt: message.timestamp });
+    await this.conversations.update(conversation.id, { needsResponse: true, lastMessageAt: message.timestamp, lastCustomerMessageAt: message.timestamp });
     await this.audit.write(null, 'message.ingested', 'message', message.id, { conversationId: conversation.id, customerId: customer.id, numberId: number.id });
 
     if (isNewConversation) {
