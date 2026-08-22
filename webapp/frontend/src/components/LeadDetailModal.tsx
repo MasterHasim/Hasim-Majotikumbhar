@@ -3,6 +3,7 @@ import type { AuditEntryWithActor, Lead, Stage, User } from '../types';
 import { backendApi } from '../lib/backendApi';
 import { ApiClientError } from '../lib/api';
 import { ActivityFeed } from './ActivityFeed';
+import { CustomFieldsSection } from './CustomFieldsSection';
 
 function fmt(iso: string): string {
   const d = new Date(iso);
@@ -140,6 +141,15 @@ export function LeadDetailModal({
             </select>
           </div>
         )}
+
+        <CustomFieldsSection
+          entityType="lead"
+          entityId={lead.id}
+          values={lead.customFields}
+          editable={canTouch}
+          busy={busy}
+          onSave={(key, value) => void guard(async () => { await backendApi.updateLeadCustomFields(lead.id, { [key]: value }); onChanged(); })}
+        />
 
         {canTouch && (
           <div className="form-row">

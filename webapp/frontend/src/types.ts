@@ -14,6 +14,7 @@ export interface Customer {
   email: string;
   company: string;
   tags?: string[];
+  customFields?: Record<string, string | number>;
 }
 
 export interface Conversation {
@@ -188,6 +189,21 @@ export interface Lead {
   /** Denormalized on the lead record when setLeadStage is called — see backend Lead type. */
   stageId?: string;
   tags?: string[];
+  customFields?: Record<string, string | number>;
+}
+
+export type CustomFieldType = 'text' | 'number' | 'select' | 'date';
+export type CustomFieldEntityType = 'lead' | 'customer';
+
+export interface CustomFieldDefinition {
+  id: string;
+  entityType: CustomFieldEntityType;
+  key: string;
+  label: string;
+  type: CustomFieldType;
+  options: string[];
+  active: boolean;
+  sequenceOrder: number;
 }
 
 export type LocationAssignmentMode = 'single' | 'round_robin' | 'manual';

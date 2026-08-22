@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState } from 'react';
-import type { AssignmentEligibilityStatus, AuditEntry, NumberAccess, NumberAssignmentConfig, NumberAssignmentUser, QuickReply, Role, Stage, Team, TeamMember, Template, User, WhatsAppNumber } from '../types';
+import type { AssignmentEligibilityStatus, AuditEntry, CustomFieldDefinition, CustomFieldEntityType, CustomFieldType, NumberAccess, NumberAssignmentConfig, NumberAssignmentUser, QuickReply, Role, Stage, Team, TeamMember, Template, User, WhatsAppNumber, WhoAmI } from '../types';
 import { backendApi } from '../lib/backendApi';
 import { ApiClientError } from '../lib/api';
 
@@ -865,28 +865,145 @@ function LeadStagesTab() {
 
 // ---------------------------------------------------------------------------
 
-type AdminTab = 'users' | 'teams' | 'numbers' | 'access' | 'assignment' | 'quickReplies' | 'templates' | 'leadStages' | 'audit' | 'backup';
+const FIELD_TYPE_LABELS: Record<CustomFieldType, string> = { text: 'Text', number: 'Number', select: 'Dropdown', date: 'Date' };
 
-export function Admin() {
-  const [tab, setTab] = useState<AdminTab>('users');
+function CustomFieldsTab() {
+  const [entityType, setEntityType] = useState<CustomFieldEntityType>('lead');
+  const [defs, setDefs] = useState<CustomFieldDefinition[] | null>(null);
+  const [label, setLabel] = useState('');
+  const [type, setType] = useState<CustomFieldType>('text');
+  const [options, setOptions] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function reload() {
+    backendApi.listCustomFieldDefinitions(entityType).then((d) => setDefs([...d].sort((a, b) => a.sequenceOrder - b.sequenceOrder))).catch((err) => setError(errMsg(err)));
+  }
+  useEffect(() => { setDefs(null); reload(); }, [entityType]);
+
+  async function guard(fn: () => Promise<unknown>) {
+    setBusy(true);
+    setError(null);
+    try {
+      await fn();
+      reload();
+    } catch (err) {
+      setError(errMsg(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function create() {
+    const trimmed = label.trim();
+    if (!trimmed) return;
+    const opts = type === 'select' ? options.split(',').map((o) => o.trim()).filter(Boolean) : undefined;
+    if (type === 'select' && (!opts || opts.length === 0)) { setError('A dropdown field needs at least one option.'); return; }
+    setLabel('');
+    setOptions('');
+    setType('text');
+    await guard(() => backendApi.createCustomFieldDefinition({ entityType, label: trimmed, type, options: opts }));
+  }
+
+  async function move(def: CustomFieldDefinition, direction: -1 | 1) {
+    const idx = (defs ?? []).findIndex((d) => d.id === def.id);
+    const swapWith = (defs ?? [])[idx + direction];
+    if (!swapWith) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await Promise.all([
+        backendApi.updateCustomFieldDefinition(def.id, { sequenceOrder: swapWith.sequenceOrder }),
+        backendApi.updateCustomFieldDefinition(swapWith.id, { sequenceOrder: def.sequenceOrder }),
+      ]);
+      reload();
+    } catch (err) {
+      setError(errMsg(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card">
+      <h2 className="section-title" style={{ marginTop: 0 }}>Custom Fields</h2>
+      <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+        Extra fields shown on every Lead and Customer record (e.g. Campaign Name, Lead Source, Product Interest,
+        Expected Revenue) — useful for reporting to management. Deactivating a field keeps any values already stored,
+        it just stops appearing as an editable field for new entries.
+      </p>
+      <div className="settings-tabs" style={{ marginBottom: 12 }}>
+        <button className={`settings-tab${entityType === 'lead' ? ' active' : ''}`} onClick={() => setEntityType('lead')}>Lead fields</button>
+        <button className={`settings-tab${entityType === 'customer' ? ' active' : ''}`} onClick={() => setEntityType('customer')}>Customer fields</button>
+      </div>
+      <table className="data-table">
+        <thead><tr><th>Order</th><th>Label</th><th>Type</th><th>Options</th><th>Active</th><th></th></tr></thead>
+        <tbody>
+          {defs === null && <tr><td colSpan={6} className="empty">Loading…</td></tr>}
+          {defs?.map((d, idx) => (
+            <tr key={d.id}>
+              <td>{d.sequenceOrder}</td>
+              <td>{d.label}</td>
+              <td>{FIELD_TYPE_LABELS[d.type]}</td>
+              <td style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{d.type === 'select' ? d.options.join(', ') : '—'}</td>
+              <td>
+                <input type="checkbox" checked={d.active} disabled={busy} onChange={(e) => void guard(() => backendApi.updateCustomFieldDefinition(d.id, { active: e.target.checked }))} />
+              </td>
+              <td style={{ display: 'flex', gap: 4 }}>
+                <button className="btn" disabled={busy || idx === 0} onClick={() => void move(d, -1)}>↑</button>
+                <button className="btn" disabled={busy || idx === (defs?.length ?? 0) - 1} onClick={() => void move(d, 1)}>↓</button>
+              </td>
+            </tr>
+          ))}
+          {defs?.length === 0 && <tr><td colSpan={6} className="empty">No {entityType} fields yet.</td></tr>}
+        </tbody>
+      </table>
+      {error && <div className="form-error">{error}</div>}
+      <div className="form-row">
+        <input placeholder="Field label (e.g. Expected Revenue)" style={{ flex: 1, minWidth: 200 }} value={label} onChange={(e) => setLabel(e.target.value)} />
+        <select value={type} onChange={(e) => setType(e.target.value as CustomFieldType)}>
+          {(Object.keys(FIELD_TYPE_LABELS) as CustomFieldType[]).map((t) => <option key={t} value={t}>{FIELD_TYPE_LABELS[t]}</option>)}
+        </select>
+        {type === 'select' && (
+          <input placeholder="Options, comma separated" style={{ flex: 1, minWidth: 200 }} value={options} onChange={(e) => setOptions(e.target.value)} />
+        )}
+        <button className="btn primary" disabled={busy || !label.trim()} onClick={() => void create()}>Add field</button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+type AdminTab = 'users' | 'teams' | 'numbers' | 'access' | 'assignment' | 'quickReplies' | 'templates' | 'leadStages' | 'customFields' | 'audit' | 'backup';
+
+export function Admin({ whoAmI }: { whoAmI: WhoAmI }) {
+  const isFullAdmin = whoAmI.roleKeys.includes('ADMIN');
+  const [tab, setTab] = useState<AdminTab>(isFullAdmin ? 'users' : 'customFields');
   const [users, setUsers] = useState<User[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [numbers, setNumbers] = useState<WhatsAppNumber[]>([]);
 
   useEffect(() => {
+    if (!isFullAdmin) return;
     backendApi.listUsers().then(setUsers).catch(() => setUsers([]));
     backendApi.listRoles().then(setRoles).catch(() => setRoles([]));
     backendApi.listNumbers().then(setNumbers).catch(() => setNumbers([]));
-  }, [tab]);
+  }, [tab, isFullAdmin]);
+
+  const tabs: [AdminTab, string][] = isFullAdmin
+    ? [
+        ['users', 'Users'], ['teams', 'Teams'], ['numbers', 'Numbers'], ['access', 'Number Access'],
+        ['assignment', 'Assignment Rules'], ['quickReplies', 'Quick Replies'], ['templates', 'Templates'],
+        ['leadStages', 'Lead Stages'], ['customFields', 'Custom Fields'], ['audit', 'Audit Log'], ['backup', 'Backup'],
+      ]
+    : [['customFields', 'Custom Fields']];
 
   return (
     <>
       <h1 className="page-title">Admin</h1>
       <div className="settings-tabs">
-        {([
-          ['users', 'Users'], ['teams', 'Teams'], ['numbers', 'Numbers'], ['access', 'Number Access'],
-          ['assignment', 'Assignment Rules'], ['quickReplies', 'Quick Replies'], ['templates', 'Templates'], ['leadStages', 'Lead Stages'], ['audit', 'Audit Log'], ['backup', 'Backup'],
-        ] as [AdminTab, string][]).map(([key, label]) => (
+        {tabs.map(([key, label]) => (
           <button key={key} className={`settings-tab${tab === key ? ' active' : ''}`} onClick={() => setTab(key)}>{label}</button>
         ))}
       </div>
@@ -899,6 +1016,7 @@ export function Admin() {
       {tab === 'quickReplies' && <QuickRepliesSection />}
       {tab === 'templates' && <TemplatesSection />}
       {tab === 'leadStages' && <LeadStagesTab />}
+      {tab === 'customFields' && <CustomFieldsTab />}
       {tab === 'audit' && <AuditLogTab users={users} />}
       {tab === 'backup' && <BackupTab />}
     </>

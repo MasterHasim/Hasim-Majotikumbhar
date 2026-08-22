@@ -78,6 +78,16 @@ describe('Phase1Api (ported from apps-script/src/Phase1Services.gs)', () => {
     it('rejects an unknown identity entirely', async () => {
       await expect(apiAs('ghost@example.com').whoAmI()).rejects.toMatchObject({ code: 'UNAUTHENTICATED' });
     });
+
+    it('updateRole lets an admin grant a role a permission it did not already have, and validates against the real permission list', async () => {
+      const roles = await apiAs(ADMIN_EMAIL).listRoles();
+      const supervisorRole = roles.find((r) => r.key === Roles.SUPERVISOR)!;
+      expect(supervisorRole.permissions).not.toContain('leads.manage');
+      const updated = await apiAs(ADMIN_EMAIL).updateRole(supervisorRole.id, { permissions: [...supervisorRole.permissions, 'leads.manage'] });
+      expect(updated.permissions).toContain('leads.manage');
+      await expect(apiAs(ADMIN_EMAIL).updateRole(supervisorRole.id, { permissions: ['not.a.real.permission'] })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+      await expect(apiAs(AGENT_EMAIL).updateRole(supervisorRole.id, { permissions: [] })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    });
   });
 
   describe('welcome email', () => {

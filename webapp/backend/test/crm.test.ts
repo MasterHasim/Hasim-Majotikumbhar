@@ -8,6 +8,7 @@ import { Phase5Api } from '../src/services/phase5Api';
 import { Phase7Api, NumberAssignmentConfigApi } from '../src/services/phase7Api';
 import { Phase8Api } from '../src/services/phase8Api';
 import { Phase9Api } from '../src/services/phase9Api';
+import { CustomFieldsApi } from '../src/services/customFieldsApi';
 import { Roles } from '../src/domain/phase1';
 
 const ADMIN_EMAIL = 'admin@example.com';
@@ -266,6 +267,25 @@ describe('CRM core (ported from Phase7-9 Domain/Services.gs)', () => {
       const detail = await new Phase5Api(db, ADMIN_EMAIL).getConversationDetail(result.conversationId!);
       const updated = await new Phase8Api(db, ADMIN_EMAIL).updateCustomer(detail.customer!.id, { tags: [' Hot ', 'hot', ''] });
       expect(updated.tags).toEqual(['Hot']);
+    });
+
+    it('updateCustomer validates customFields against live definitions, merges rather than replaces, and clears blanked keys', async () => {
+      await new CustomFieldsApi(db, ADMIN_EMAIL).createDefinition({ entityType: 'customer', label: 'Product Interest', type: 'text' });
+      await new CustomFieldsApi(db, ADMIN_EMAIL).createDefinition({ entityType: 'customer', label: 'Expected Revenue', type: 'number' });
+      const result = await ingest('msg-4', '+919876543213');
+      const detail = await new Phase5Api(db, ADMIN_EMAIL).getConversationDetail(result.conversationId!);
+      const customerId = detail.customer!.id;
+
+      const first = await new Phase8Api(db, ADMIN_EMAIL).updateCustomer(customerId, { customFields: { product_interest: 'CRM' } });
+      expect(first.customFields).toEqual({ product_interest: 'CRM' });
+
+      const second = await new Phase8Api(db, ADMIN_EMAIL).updateCustomer(customerId, { customFields: { expected_revenue: '75000' } });
+      expect(second.customFields).toEqual({ product_interest: 'CRM', expected_revenue: 75000 });
+
+      const third = await new Phase8Api(db, ADMIN_EMAIL).updateCustomer(customerId, { customFields: { product_interest: '' } });
+      expect(third.customFields).toEqual({ expected_revenue: 75000 });
+
+      await expect(new Phase8Api(db, ADMIN_EMAIL).updateCustomer(customerId, { customFields: { unknown_key: 'x' } })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
     });
 
     it('listConversationActivity shows remarks, reassignment, and customer edits with resolved actor names, excluding denials', async () => {

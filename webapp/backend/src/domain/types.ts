@@ -87,6 +87,10 @@ export interface Customer extends Record_ {
   /** Same free-form tagging concept as Lead.tags, independent of it — most conversations
    * aren't tied to a Lead record at all, so tags live on the Customer directly here. */
   tags?: string[];
+  /** Admin/Supervisor-defined field values — see CustomFieldDefinition. Keyed by the
+   * definition's `key`, denormalized directly on the record rather than a separate
+   * per-value table, same tradeoff as tags. */
+  customFields?: Record<string, string | number>;
 }
 
 export interface Conversation extends Record_ {
@@ -254,6 +258,30 @@ export interface Lead extends Record_ {
    * manager attaches to help others reading the lead understand context at a glance —
    * unlike stage there's no fixed vocabulary or admin CRUD, just per-lead tags. */
   tags?: string[];
+  /** Admin/Supervisor-defined field values — see CustomFieldDefinition. */
+  customFields?: Record<string, string | number>;
+}
+
+export type CustomFieldType = 'text' | 'number' | 'select' | 'date';
+export type CustomFieldEntityType = 'lead' | 'customer';
+
+/** Admin (or Supervisor+, per an explicit product decision) defines these once; every Lead/
+ * Customer of that entityType can then have a value for it, stored in their own customFields
+ * map keyed by `key`. Shared across both entity types by table, not by definition — a "Lead
+ * Source" field on Leads and one on Customers are two separate definitions/rows. */
+export interface CustomFieldDefinition extends Record_ {
+  entityType: CustomFieldEntityType;
+  /** Slug derived from label at creation time (e.g. "Lead Source" -> "lead_source") — stable
+   * identity for stored values even if the label is later edited. Immutable after creation. */
+  key: string;
+  label: string;
+  type: CustomFieldType;
+  /** Only meaningful when type === 'select' — the fixed list of values a select field accepts. */
+  options: string[];
+  active: boolean;
+  sequenceOrder: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export type LocationAssignmentMode = 'single' | 'round_robin' | 'manual';

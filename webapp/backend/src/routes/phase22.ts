@@ -3,6 +3,7 @@ import type { Env } from '../types';
 import { ApiError } from '../types';
 import { buildContext } from '../lib/requestContext';
 import { Phase22Api } from '../services/phase22Api';
+import { CustomFieldsApi } from '../services/customFieldsApi';
 
 async function json(request: IRequest): Promise<Record<string, unknown>> {
   return (await request.json().catch(() => ({}))) as Record<string, unknown>;
@@ -93,6 +94,11 @@ export function registerPhase22Routes(router: RouterType) {
     const body = (await json(request)) as { tags: unknown };
     return Response.json(await new Phase22Api(ctx.db, ctx.identityEmail).updateLeadTags(param(request, 'id'), body.tags));
   });
+  router.post('/api/leads/:id/custom-fields', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    const body = (await json(request)) as Record<string, unknown>;
+    return Response.json(await new Phase22Api(ctx.db, ctx.identityEmail).updateLeadCustomFields(param(request, 'id'), body));
+  });
   router.post('/api/leads/:id/remarks', async (request: IRequest, env: Env) => {
     const ctx = await buildContext(request, env);
     const body = (await json(request)) as { text: string };
@@ -114,5 +120,18 @@ export function registerPhase22Routes(router: RouterType) {
   router.post('/api/conversations/:id/call', async (request: IRequest, env: Env) => {
     const ctx = await buildContext(request, env);
     return Response.json(await new Phase22Api(ctx.db, ctx.identityEmail, env).initiateConversationCall(param(request, 'id')));
+  });
+
+  router.get('/api/custom-fields', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    return Response.json(await new CustomFieldsApi(ctx.db, ctx.identityEmail).listDefinitions(query(request, 'entityType')));
+  });
+  router.post('/api/custom-fields', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    return Response.json(await new CustomFieldsApi(ctx.db, ctx.identityEmail).createDefinition(await json(request) as never));
+  });
+  router.patch('/api/custom-fields/:id', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    return Response.json(await new CustomFieldsApi(ctx.db, ctx.identityEmail).updateDefinition(param(request, 'id'), await json(request)));
   });
 }

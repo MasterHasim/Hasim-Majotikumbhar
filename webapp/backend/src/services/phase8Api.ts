@@ -2,12 +2,13 @@
 import { ApiError } from '../types';
 import { Ids, Permissions, Roles, Validation } from '../domain/phase1';
 import { Phase22Validation } from '../domain/phase22';
-import type { Conversation, Customer, CustomerStage, Remark, Stage, User } from '../domain/types';
+import type { Conversation, Customer, CustomerStage, CustomFieldDefinition, Remark, Stage, User } from '../domain/types';
 import { Repository } from '../lib/repository';
 import { AccessControl, type Phase1Repositories } from '../lib/accessControl';
 import { AuditLogService, type AuditEntryWithActor } from '../lib/auditLog';
 import { FirebaseDb } from '../lib/firebaseAdmin';
 import { buildPhase1Repositories } from '../lib/phase1Repositories';
+import { validateCustomFieldValues } from './customFieldsApi';
 
 const DEFAULT_STAGES = [
   { key: 'new_leads', name: 'New Leads' },
@@ -27,6 +28,7 @@ export class Phase8Api {
   private customers: Repository<Customer>;
   private conversations: Repository<Conversation>;
   private remarks: Repository<Remark>;
+  private customFieldDefs: Repository<CustomFieldDefinition>;
 
   constructor(db: FirebaseDb, identityEmail: string) {
     this.phase1Repos = buildPhase1Repositories(db);
@@ -37,6 +39,7 @@ export class Phase8Api {
     this.customers = new Repository<Customer>(db, 'customers');
     this.conversations = new Repository<Conversation>(db, 'webapp_conversations');
     this.remarks = new Repository<Remark>(db, 'remarks');
+    this.customFieldDefs = new Repository<CustomFieldDefinition>(db, 'customFieldDefinitions');
   }
 
   async seedDefaultLeadStages(): Promise<Stage[]> {
@@ -153,11 +156,24 @@ export class Phase8Api {
     if (!(await this.access.hasRole(actor, Roles.ADMIN)) && !(await this.canSeeCustomer(actor, customerId))) {
       throw new ApiError(403, 'FORBIDDEN', 'Access is denied.');
     }
-    const allowed = ['name', 'email', 'company', 'tags'];
+    const allowed = ['name', 'email', 'company', 'tags', 'customFields'];
     const safePatch: Record<string, unknown> = {};
     for (const key of Object.keys(patch || {})) {
       if (!allowed.includes(key)) throw new ApiError(400, 'VALIDATION_ERROR', `Field cannot be updated: ${key}`);
-      safePatch[key] = key === 'tags' ? Phase22Validation.tags(patch[key]) : patch[key];
+      if (key === 'tags') safePatch[key] = Phase22Validation.tags(patch[key]);
+      else if (key === 'customFields') {
+        const existing = await this.customers.get(customerId);
+        const definitions = await this.customFieldDefs.list();
+        const submitted = (patch[key] || {}) as Record<string, unknown>;
+        const validated = validateCustomFieldValues(definitions, 'customer', submitted);
+        const merged: Record<string, string | number> = { ...(existing?.customFields || {}) };
+        for (const fieldKey of Object.keys(submitted)) {
+          const raw = submitted[fieldKey];
+          if (raw === '' || raw === null || raw === undefined) delete merged[fieldKey];
+          else merged[fieldKey] = validated[fieldKey]!;
+        }
+        safePatch[key] = merged;
+      } else safePatch[key] = patch[key];
     }
     const record = await this.customers.update(customerId, safePatch as Partial<Customer>);
     await this.audit.write(actor.id, 'customer.updated', 'customer', customerId, { patch: safePatch });

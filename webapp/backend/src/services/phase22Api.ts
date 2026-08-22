@@ -17,8 +17,8 @@ import { ApiError } from '../types';
 import { Ids, Permissions, Roles, Status, Validation } from '../domain/phase1';
 import { Phase22AssignmentModes, Phase22LeadStatus, Phase22Locations, Phase22Validation, type Phase22Location } from '../domain/phase22';
 import type {
-  CallLog, CallLogWithContext, Conversation, Customer, Lead, LeadRemark, LeadStageAssignment, LocationAssignmentConfig,
-  LocationAssignmentUser, Stage, User, WhatsAppNumber,
+  CallLog, CallLogWithContext, Conversation, Customer, CustomFieldDefinition, Lead, LeadRemark, LeadStageAssignment,
+  LocationAssignmentConfig, LocationAssignmentUser, Stage, User, WhatsAppNumber,
 } from '../domain/types';
 import { Repository } from '../lib/repository';
 import { AccessControl, type Phase1Repositories } from '../lib/accessControl';
@@ -26,6 +26,7 @@ import { AuditLogService, type AuditEntryWithActor } from '../lib/auditLog';
 import { FirebaseDb } from '../lib/firebaseAdmin';
 import { buildPhase1Repositories } from '../lib/phase1Repositories';
 import { ExotelVoiceProvider, requireExotelVoiceConfig, type ExotelVoiceConfig } from './exotelVoiceProvider';
+import { validateCustomFieldValues } from './customFieldsApi';
 
 export interface UploadLeadsResult {
   batchId: string;
@@ -48,6 +49,7 @@ export class Phase22Api {
   private customers: Repository<Customer>;
   private conversations: Repository<Conversation>;
   private numbers: Repository<WhatsAppNumber>;
+  private customFieldDefs: Repository<CustomFieldDefinition>;
   private exotelVoiceConfig?: ExotelVoiceConfig;
 
   constructor(private db: FirebaseDb, identityEmail: string, env?: { EXOTEL_VOICE_ACCOUNT_SID?: string; EXOTEL_VOICE_API_KEY?: string; EXOTEL_VOICE_API_TOKEN?: string; EXOTEL_VOICE_CALLER_ID?: string }) {
@@ -64,6 +66,7 @@ export class Phase22Api {
     this.customers = new Repository<Customer>(db, 'customers');
     this.conversations = new Repository<Conversation>(db, 'webapp_conversations');
     this.numbers = new Repository<WhatsAppNumber>(db, 'numbers');
+    this.customFieldDefs = new Repository<CustomFieldDefinition>(db, 'customFieldDefinitions');
     if (env) this.exotelVoiceConfig = requireExotelVoiceConfig(env);
   }
 
@@ -324,6 +327,28 @@ export class Phase22Api {
     const validTags = Phase22Validation.tags(tags);
     const record = await this.leads.update(leadId, { tags: validTags });
     await this.audit.write(actor.id, 'lead.tagsUpdated', 'lead', leadId, { tags: validTags });
+    return record;
+  }
+
+  /** Same authorization shape as updateLeadTags. Values are validated against the live
+   * CustomFieldDefinition rows for entityType 'lead'; a blank/null value clears that key
+   * rather than being stored, matching validateCustomFieldValues' own convention. */
+  async updateLeadCustomFields(leadId: string, values: Record<string, unknown>): Promise<Lead> {
+    const lead = await this.leads.get(leadId);
+    if (!lead) throw new ApiError(404, 'NOT_FOUND', 'Lead was not found.');
+    const actor = await this.access.currentUser();
+    if (!(await this.canTouchLead(actor, lead))) await this.denied(actor, leadId);
+    await this.access.require(Permissions.REMARKS_MANAGE);
+    const definitions = await this.customFieldDefs.list();
+    const validated = validateCustomFieldValues(definitions, 'lead', values || {});
+    const merged: Record<string, string | number> = { ...(lead.customFields || {}) };
+    for (const key of Object.keys(values || {})) {
+      const raw = values[key];
+      if (raw === '' || raw === null || raw === undefined) delete merged[key];
+      else merged[key] = validated[key]!;
+    }
+    const record = await this.leads.update(leadId, { customFields: merged });
+    await this.audit.write(actor.id, 'lead.customFieldsUpdated', 'lead', leadId, { patch: validated });
     return record;
   }
 

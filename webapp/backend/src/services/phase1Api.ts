@@ -159,6 +159,15 @@ export class Phase1Api {
     return this.repos.roles.list();
   }
 
+  /** Editing an existing role's permission set — was already fully wired via updateEntity's
+   * generic 'roles' support, just never had a route. Needed once a new Permission gets added
+   * after bootstrap: a role's permissions array is a one-time snapshot taken at bootstrap()
+   * time, not re-derived from RoleDefinitions on every check, so a code change alone doesn't
+   * reach an already-created role — this is how you actually grant it. */
+  async updateRole(id: string, patch: Record<string, unknown>): Promise<Role> {
+    return this.updateEntity('roles', this.repos.roles, id, patch, Permissions.USERS_MANAGE, 'role.updated');
+  }
+
   async createTeam(input: { ownerUserId: string; name: string; status?: string }): Promise<Team> {
     const actor = await this.access.require(Permissions.TEAMS_MANAGE_ALL);
     const now = Ids.now();

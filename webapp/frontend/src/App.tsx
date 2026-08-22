@@ -176,7 +176,7 @@ export default function App() {
           {page === 'callHistory' && <CallHistory isManager={whoAmI.roleKeys.includes('ADMIN') || whoAmI.roleKeys.includes('SITE_MANAGER')} onOpenConversation={openConversation} />}
           {page === 'customers' && <Customers number={activeNumber} onOpenConversation={openConversation} />}
           {page === 'dashboard' && <Dashboard number={activeNumber} />}
-          {page === 'admin' && whoAmI.roleKeys.includes('ADMIN') && <Admin />}
+          {page === 'admin' && (whoAmI.roleKeys.includes('ADMIN') || whoAmI.roleKeys.includes('SUPERVISOR') || whoAmI.roleKeys.includes('SITE_MANAGER')) && <Admin whoAmI={whoAmI} />}
         </div>
       </div>
     </div>

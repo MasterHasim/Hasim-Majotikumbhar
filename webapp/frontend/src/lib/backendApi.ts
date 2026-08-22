@@ -2,7 +2,8 @@
 import { apiFetch } from './api';
 import type {
   AssignableUser, AssignmentEligibility, AssignmentEligibilityStatus, AuditEntry, AuditEntryWithActor, Availability, AvailabilityStatus, CallLog,
-  CallLogWithContext, Conversation, ConversationListItem, Customer, CustomerStage, DashboardMetrics, Lead, LeadRemark, LeadStageAssignment,
+  CallLogWithContext, Conversation, ConversationListItem, Customer, CustomerStage, CustomFieldDefinition, CustomFieldEntityType, CustomFieldType,
+  DashboardMetrics, Lead, LeadRemark, LeadStageAssignment,
   LocationAssignmentConfig, LocationAssignmentUser, NumberAccess, NumberAssignmentConfig, NumberAssignmentUser, QuickReply, Remark, Reminder,
   ReminderWithContext, Role, SearchFilters, SearchResultItem, SnoozeStatus, Stage, Team, TeamMember, Template, UploadLeadsResult, User,
   WhatsAppNumber, WhoAmI, Workspace,
@@ -217,6 +218,20 @@ export const backendApi = {
 
   startWhatsAppFromLead: (leadId: string) =>
     apiFetch<{ customerId: string; conversationId: string; numberId: string }>(`/api/leads/${encodeURIComponent(leadId)}/start-whatsapp`, { method: 'POST' }),
+
+  updateLeadCustomFields: (leadId: string, values: Record<string, unknown>) =>
+    apiFetch<Lead>(`/api/leads/${encodeURIComponent(leadId)}/custom-fields`, { method: 'POST', body: JSON.stringify(values) }),
+
+  // --- Custom field definitions (Admin/Supervisor-managed, shared by Leads and Customers) ---
+
+  listCustomFieldDefinitions: (entityType?: CustomFieldEntityType) =>
+    apiFetch<CustomFieldDefinition[]>(`/api/custom-fields${entityType ? `?entityType=${encodeURIComponent(entityType)}` : ''}`),
+
+  createCustomFieldDefinition: (input: { entityType: CustomFieldEntityType; label: string; type: CustomFieldType; options?: string[] }) =>
+    apiFetch<CustomFieldDefinition>('/api/custom-fields', { method: 'POST', body: JSON.stringify(input) }),
+
+  updateCustomFieldDefinition: (id: string, patch: Record<string, unknown>) =>
+    apiFetch<CustomFieldDefinition>(`/api/custom-fields/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) }),
 
   // --- Phase 10/11: templates, quick replies ---
 

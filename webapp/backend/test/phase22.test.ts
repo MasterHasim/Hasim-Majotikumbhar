@@ -5,6 +5,7 @@ import { Phase1Api } from '../src/services/phase1Api';
 import { Phase3Api } from '../src/services/phase3Api';
 import { Phase8Api } from '../src/services/phase8Api';
 import { Phase22Api } from '../src/services/phase22Api';
+import { CustomFieldsApi } from '../src/services/customFieldsApi';
 import { Roles } from '../src/domain/phase1';
 
 const ADMIN_EMAIL = 'admin@example.com';
@@ -282,6 +283,24 @@ describe('Phase22Api (ported from Phase22Domain.gs + Phase22Services.gs)', () =>
       await expect(new Phase22Api(db, ADMIN_EMAIL).setLeadStage(leadId, stageId)).resolves.toMatchObject({ stageId });
     });
 
+    it('updateLeadCustomFields validates against live definitions, merges rather than replaces, and clears blanked keys', async () => {
+      const cf = new CustomFieldsApi(db, ADMIN_EMAIL);
+      await cf.createDefinition({ entityType: 'lead', label: 'Lead Source', type: 'select', options: ['Website', 'Referral'] });
+      await cf.createDefinition({ entityType: 'lead', label: 'Expected Revenue', type: 'number' });
+
+      const lead1 = await new Phase22Api(db, AGENT_EMAIL).updateLeadCustomFields(leadId, { lead_source: 'Website' });
+      expect(lead1.customFields).toEqual({ lead_source: 'Website' });
+
+      const lead2 = await new Phase22Api(db, AGENT_EMAIL).updateLeadCustomFields(leadId, { expected_revenue: '50000' });
+      expect(lead2.customFields).toEqual({ lead_source: 'Website', expected_revenue: 50000 });
+
+      const lead3 = await new Phase22Api(db, AGENT_EMAIL).updateLeadCustomFields(leadId, { lead_source: '' });
+      expect(lead3.customFields).toEqual({ expected_revenue: 50000 });
+
+      await expect(new Phase22Api(db, AGENT_EMAIL).updateLeadCustomFields(leadId, { lead_source: 'Not An Option' })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+      await expect(new Phase22Api(db, AGENT2_EMAIL).updateLeadCustomFields(leadId, { lead_source: 'Website' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    });
+
     it('listLeadActivity shows reassignment, stage, tag, and remark events with resolved actor names, newest first, excluding denials', async () => {
       await new Phase22Api(db, AGENT_EMAIL).setLeadStage(leadId, stageId);
       await new Phase22Api(db, AGENT_EMAIL).updateLeadTags(leadId, ['Hot']);
@@ -405,6 +424,48 @@ describe('Phase22Api (ported from Phase22Domain.gs + Phase22Services.gs)', () =>
       await expect(new Phase22Api(db, AGENT2_EMAIL, mock.exotelVoiceConfig as never).refreshCallStatus(callId)).rejects.toMatchObject({ code: 'FORBIDDEN' });
       mock.setNextExotelVoiceResponse(200, { Call: { Status: 'no-answer' } });
       await expect(new Phase22Api(db, ADMIN_EMAIL, mock.exotelVoiceConfig as never).refreshCallStatus(callId)).resolves.toMatchObject({ status: 'no-answer' });
+    });
+  });
+
+  describe('CustomFieldsApi', () => {
+    it('lets SUPERVISOR (not just ADMIN) create and update field definitions; slugifies the label into an immutable key', async () => {
+      const roles = await new Phase1Api(db, ADMIN_EMAIL).listRoles();
+      const supervisorRoleId = roles.find((r) => r.key === Roles.SUPERVISOR)!.id;
+      const supervisorEmail = 'supervisor@example.com';
+      await new Phase1Api(db, ADMIN_EMAIL).createUser({ email: supervisorEmail, displayName: 'Supervisor', roleIds: [supervisorRoleId] });
+
+      const def = await new CustomFieldsApi(db, supervisorEmail).createDefinition({ entityType: 'lead', label: 'Lead Source', type: 'select', options: ['Website', 'Referral', ' Cold Call '] });
+      expect(def.key).toBe('lead_source');
+      expect(def.options).toEqual(['Website', 'Referral', 'Cold Call']);
+      expect(def.active).toBe(true);
+
+      const updated = await new CustomFieldsApi(db, supervisorEmail).updateDefinition(def.id, { active: false, options: ['Website'] });
+      expect(updated.active).toBe(false);
+      expect(updated.options).toEqual(['Website']);
+
+      await expect(new CustomFieldsApi(db, supervisorEmail).updateDefinition(def.id, { key: 'nope' })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    });
+
+    it('denies an AGENT from creating or updating definitions', async () => {
+      await expect(new CustomFieldsApi(db, AGENT_EMAIL).createDefinition({ entityType: 'lead', label: 'X', type: 'text' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    });
+
+    it('rejects a duplicate label for the same entity type, and a select field with no options', async () => {
+      await new CustomFieldsApi(db, ADMIN_EMAIL).createDefinition({ entityType: 'lead', label: 'Campaign Name', type: 'text' });
+      await expect(new CustomFieldsApi(db, ADMIN_EMAIL).createDefinition({ entityType: 'lead', label: 'Campaign Name', type: 'text' })).rejects.toMatchObject({ code: 'CONFLICT' });
+      await expect(new CustomFieldsApi(db, ADMIN_EMAIL).createDefinition({ entityType: 'customer', label: 'Campaign Name', type: 'text' })).resolves.toMatchObject({ entityType: 'customer' }); // same label, different entityType is fine
+      await expect(new CustomFieldsApi(db, ADMIN_EMAIL).createDefinition({ entityType: 'lead', label: 'Product', type: 'select', options: [] })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    });
+
+    it('listDefinitions is readable by any authenticated user, filtered by entityType, sorted by sequenceOrder', async () => {
+      await new CustomFieldsApi(db, ADMIN_EMAIL).createDefinition({ entityType: 'lead', label: 'First', type: 'text' });
+      await new CustomFieldsApi(db, ADMIN_EMAIL).createDefinition({ entityType: 'lead', label: 'Second', type: 'text' });
+      await new CustomFieldsApi(db, ADMIN_EMAIL).createDefinition({ entityType: 'customer', label: 'Only Customer', type: 'text' });
+
+      const leadDefs = await new CustomFieldsApi(db, AGENT_EMAIL).listDefinitions('lead');
+      expect(leadDefs.map((d) => d.label)).toEqual(['First', 'Second']);
+      const all = await new CustomFieldsApi(db, AGENT_EMAIL).listDefinitions();
+      expect(all).toHaveLength(3);
     });
   });
 });

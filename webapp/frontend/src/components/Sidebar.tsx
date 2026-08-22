@@ -5,6 +5,7 @@ import { AvailabilityToggle } from './AvailabilityToggle';
 export type Page = 'inbox' | 'leads' | 'reminders' | 'callHistory' | 'customers' | 'dashboard' | 'admin';
 
 const REPORTS_ROLES = ['ADMIN', 'SUPERVISOR', 'SITE_MANAGER', 'VIEWER'];
+const ADMIN_PAGE_ROLES = ['ADMIN', 'SUPERVISOR', 'SITE_MANAGER'];
 
 export function Sidebar({
   number, whoAmI, page, needsResponseCount, onNavigate, onSwitchNumber, onSignOut,
@@ -69,7 +70,7 @@ export function Sidebar({
               <span className="nav-label">Dashboard</span>
             </button>
           )}
-          {whoAmI.roleKeys.includes('ADMIN') && (
+          {whoAmI.roleKeys.some((r) => ADMIN_PAGE_ROLES.includes(r)) && (
             <button className={`nav-item${page === 'admin' ? ' active' : ''}`} onClick={() => navigate('admin')}>
               <span className="nav-icon">⚙️</span>
               <span className="nav-label">Admin</span>

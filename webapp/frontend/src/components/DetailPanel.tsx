@@ -3,6 +3,7 @@ import type { AuditEntryWithActor, Stage, Workspace } from '../types';
 import { backendApi } from '../lib/backendApi';
 import { ApiClientError } from '../lib/api';
 import { ActivityFeed } from './ActivityFeed';
+import { CustomFieldsSection } from './CustomFieldsSection';
 
 function fmtDue(iso: string): string {
   const d = new Date(iso);
@@ -130,6 +131,17 @@ export function DetailPanel({ workspace, stages, onChanged, mobileOpen, onCloseM
           <button className="btn" disabled={busy || !customer || !tagInput.trim()} onClick={addTag}>Add</button>
         </div>
       </div>
+
+      {customer && (
+        <CustomFieldsSection
+          entityType="customer"
+          entityId={customer.id}
+          values={customer.customFields}
+          editable
+          busy={busy}
+          onSave={(key, value) => void guard(() => backendApi.updateCustomer(customer.id, { customFields: { [key]: value } }))}
+        />
+      )}
 
       {error && <div className="compose-error">{error}</div>}
 

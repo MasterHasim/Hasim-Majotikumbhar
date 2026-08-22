@@ -48,6 +48,10 @@ export function registerPhase1Routes(router: RouterType) {
     const ctx = await buildContext(request, env);
     return Response.json(await ctx.phase1.listRoles());
   });
+  router.patch('/api/roles/:id', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    return Response.json(await ctx.phase1.updateRole(param(request, 'id'), await json(request)));
+  });
 
   router.post('/api/teams', async (request: IRequest, env: Env) => {
     const ctx = await buildContext(request, env);
