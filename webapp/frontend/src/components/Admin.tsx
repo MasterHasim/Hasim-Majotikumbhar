@@ -20,6 +20,7 @@ function UsersTab({ roles }: { roles: Role[] }) {
   const [users, setUsers] = useState<User[] | null>(null);
   const [email, setEmail] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [phone, setPhone] = useState('');
   const [newRoleIds, setNewRoleIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -98,6 +99,7 @@ function UsersTab({ roles }: { roles: Role[] }) {
       <div className="form-row">
         <input placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
         <input placeholder="Display name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
+        <input placeholder="Phone (for WhatsApp welcome)" style={{ width: 170 }} value={phone} onChange={(e) => setPhone(e.target.value)} />
         {roles.map((r) => (
           <label key={r.id} className="inline">
             <input
@@ -112,9 +114,10 @@ function UsersTab({ roles }: { roles: Role[] }) {
           className="btn primary"
           disabled={busy || !email.trim() || !displayName.trim()}
           onClick={() => {
-            const input = { email: email.trim(), displayName: displayName.trim(), roleIds: newRoleIds };
+            const input = { email: email.trim(), displayName: displayName.trim(), phone: phone.trim(), roleIds: newRoleIds };
             setEmail('');
             setDisplayName('');
+            setPhone('');
             setNewRoleIds([]);
             void guard(() => backendApi.createUser(input));
           }}
@@ -276,20 +279,28 @@ function NumbersTab() {
   return (
     <div className="card" style={{ maxWidth: 'none' }}>
       <h2 className="section-title" style={{ marginTop: 0 }}>WhatsApp Numbers</h2>
+      <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+        WABA ID is the WhatsApp Business Account this number belongs to (Meta Business Manager →
+        WhatsApp Accounts → the ID next to the account name — not the Business Portfolio ID, and
+        not the phone number's own "Phone Profile" ID). Needed for Templates → Create/Sync.
+      </p>
       <table className="data-table">
-        <thead><tr><th>Name</th><th>Phone</th><th>Active</th></tr></thead>
+        <thead><tr><th>Name</th><th>Phone</th><th>WABA ID</th><th>Active</th></tr></thead>
         <tbody>
-          {numbers === null && <tr><td colSpan={3} className="empty">Loading…</td></tr>}
+          {numbers === null && <tr><td colSpan={4} className="empty">Loading…</td></tr>}
           {numbers?.map((n) => (
             <tr key={n.id}>
               <td>
                 <input defaultValue={n.displayName} onBlur={(e) => { if (e.target.value !== n.displayName) void guard(() => backendApi.updateNumber(n.id, { displayName: e.target.value })); }} />
               </td>
               <td>{n.phoneNumber}</td>
+              <td>
+                <input placeholder="e.g. 1960468407986497" style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }} defaultValue={n.wabaId} onBlur={(e) => { if (e.target.value !== n.wabaId) void guard(() => backendApi.updateNumber(n.id, { wabaId: e.target.value.trim() })); }} />
+              </td>
               <td><input type="checkbox" checked={n.active} disabled={busy} onChange={(e) => void guard(() => backendApi.updateNumber(n.id, { active: e.target.checked }))} /></td>
             </tr>
           ))}
-          {numbers?.length === 0 && <tr><td colSpan={3} className="empty">None yet.</td></tr>}
+          {numbers?.length === 0 && <tr><td colSpan={4} className="empty">None yet.</td></tr>}
         </tbody>
       </table>
       {error && <div className="form-error">{error}</div>}
@@ -672,7 +683,8 @@ function QuickRepliesSection() {
   );
 }
 
-function TemplatesSection() {
+function TemplatesSection({ numbers }: { numbers: WhatsAppNumber[] }) {
+  const numbersWithWaba = numbers.filter((n) => n.wabaId);
   const [items, setItems] = useState<Template[] | null>(null);
   const [name, setName] = useState('');
   const [language, setLanguage] = useState('en');
@@ -742,7 +754,10 @@ function TemplatesSection() {
           <option value="UTILITY">Utility</option>
           <option value="AUTHENTICATION">Authentication</option>
         </select>
-        <input placeholder="WABA ID (needed to submit)" value={wabaId} onChange={(e) => setWabaId(e.target.value)} />
+        <select value={wabaId} onChange={(e) => setWabaId(e.target.value)}>
+          <option value="">WABA ID (needed to submit)…</option>
+          {numbersWithWaba.map((n) => <option key={n.id} value={n.wabaId}>{n.displayName}</option>)}
+        </select>
       </div>
       <div className="form-row">
         <textarea rows={2} style={{ width: '100%', boxSizing: 'border-box' }} placeholder="Body text — use {{1}}, {{2}} for variables" value={bodyText} onChange={(e) => setBodyText(e.target.value)} />
@@ -752,8 +767,14 @@ function TemplatesSection() {
       </div>
 
       <h2 className="section-title">Sync from Exotel</h2>
+      {numbersWithWaba.length === 0 && (
+        <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>No number has a WABA ID set yet — add one under Admin → Numbers first.</p>
+      )}
       <div className="form-row">
-        <input placeholder="WABA ID" value={syncWabaId} onChange={(e) => setSyncWabaId(e.target.value)} />
+        <select value={syncWabaId} onChange={(e) => setSyncWabaId(e.target.value)}>
+          <option value="">WABA ID…</option>
+          {numbersWithWaba.map((n) => <option key={n.id} value={n.wabaId}>{n.displayName}</option>)}
+        </select>
         <button
           className="btn"
           disabled={busy || !syncWabaId.trim()}
@@ -1176,7 +1197,7 @@ export function Admin({ whoAmI }: { whoAmI: WhoAmI }) {
       {tab === 'access' && <NumberAccessTab users={users} numbers={numbers} />}
       {tab === 'assignment' && <AssignmentRulesTab users={users} numbers={numbers} />}
       {tab === 'quickReplies' && <QuickRepliesSection />}
-      {tab === 'templates' && <TemplatesSection />}
+      {tab === 'templates' && <TemplatesSection numbers={numbers} />}
       {tab === 'leadStages' && <LeadStagesTab />}
       {tab === 'customFields' && <CustomFieldsTab />}
       {tab === 'products' && <ProductsTab />}

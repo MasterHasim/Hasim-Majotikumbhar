@@ -5,13 +5,21 @@
  */
 import { ApiError, type Env } from '../types';
 import { ALL_PERMISSIONS, Ids, Permissions, RoleDefinitions, ROLE_KEYS, Roles, Status, Validation, type Permission, type RoleKey } from '../domain/phase1';
-import type { AssignmentEligibility, Availability, NumberAccess, Role, Team, TeamMember, User } from '../domain/types';
+import type { AssignmentEligibility, Availability, NumberAccess, Role, Team, TeamMember, Template, User, WhatsAppNumber } from '../domain/types';
 import { Repository } from '../lib/repository';
 import { AccessControl, type Phase1Repositories } from '../lib/accessControl';
 import { AuditLogService } from '../lib/auditLog';
 import { FirebaseDb } from '../lib/firebaseAdmin';
 import { buildPhase1Repositories } from '../lib/phase1Repositories';
 import { getEmailConfig, sendEmail, welcomeEmailHtml, type EmailConfig } from '../lib/email';
+import { substituteTemplateVariables, toE164 } from './phase6Api';
+import { ExotelProvider, type ExotelConfig } from './exotelProvider';
+
+/** Name of the Utility template a new team member's welcome WhatsApp message is sent from —
+ * created and approved specifically for this ("Hi {{1}}, you've been added to ECHT Connect as
+ * {{2}}. Sign in at {{3}}..."), same wording as welcomeEmailHtml. Not admin-configurable (yet) —
+ * one agreed template, hardcoded, same way the email's subject line is a literal string too. */
+const WELCOME_WHATSAPP_TEMPLATE_NAME = 'team_member_welcome';
 
 // The Apps Script build's sanitizeUserRecord_ stripped passwordHash/passwordSalt
 // before any user record reached the client (see Phase1Services.gs) — not needed
@@ -70,6 +78,10 @@ export class Phase1Api {
   private availabilityRepo: Repository<Availability>;
   private eligibilityRepo: Repository<AssignmentEligibility>;
   private emailConfig: EmailConfig | null;
+  private exotelConfig: ExotelConfig | null;
+  private templates: Repository<Template>;
+  private numbers: Repository<WhatsAppNumber>;
+  private frontendUrl: string;
 
   constructor(db: FirebaseDb, identityEmail: string, env?: Env) {
     this.repos = buildPhase1Repositories(db);
@@ -80,6 +92,35 @@ export class Phase1Api {
     this.eligibilityRepo = new Repository<AssignmentEligibility>(db, 'assignmentEligibility');
     this.eligibilitySvc = new AssignmentEligibilityService(this.repos.users, this.eligibilityRepo, this.availabilityRepo, this.repos.numberAccess, this.teamMembers, this.repos.teams);
     this.emailConfig = env ? getEmailConfig(env) : null;
+    this.exotelConfig = env?.EXOTEL_API_KEY && env.EXOTEL_API_TOKEN && env.EXOTEL_ACCOUNT_SID && env.EXOTEL_SUBDOMAIN
+      ? { apiKey: env.EXOTEL_API_KEY, apiToken: env.EXOTEL_API_TOKEN, accountSid: env.EXOTEL_ACCOUNT_SID, subdomain: env.EXOTEL_SUBDOMAIN }
+      : null;
+    this.templates = new Repository<Template>(db, 'templates');
+    this.numbers = new Repository<WhatsAppNumber>(db, 'numbers');
+    this.frontendUrl = env?.FRONTEND_URL || '';
+  }
+
+  /**
+   * Best-effort — mirrors createUser's own email send: a failed or unconfigured WhatsApp
+   * notification never blocks user creation, and a missing phone/template/sending-number just
+   * means silently no message, not an error. The sending number is resolved from the approved
+   * template's own wabaId (Template.wabaId) — whichever WhatsAppNumber shares that wabaId is the
+   * one Meta will actually let this template send through.
+   */
+  private async sendWelcomeWhatsApp(phone: string, displayName: string, roleNames: string[]): Promise<boolean> {
+    if (!this.exotelConfig || !phone) return false;
+    const template = await this.templates.findOne((t) => t.name === WELCOME_WHATSAPP_TEMPLATE_NAME && t.status === 'APPROVED');
+    if (!template) return false;
+    const number = await this.numbers.findOne((n) => n.wabaId === template.wabaId && n.active);
+    if (!number) return false;
+    const components = substituteTemplateVariables(template.components, { 1: displayName, 2: roleNames.join(', ') || 'no role assigned yet', 3: this.frontendUrl });
+    try {
+      await new ExotelProvider(this.exotelConfig).sendTemplate(toE164(number.phoneNumber), toE164(phone), template.name, template.language, components);
+      return true;
+    } catch (e) {
+      console.error('sendWelcomeWhatsApp failed', e);
+      return false;
+    }
   }
 
   private async roleNamesFor(roleIds: string[]): Promise<string[]> {
@@ -124,10 +165,13 @@ export class Phase1Api {
     await this.repos.users.create(record);
     await this.audit.write(actor.id, 'user.created', 'user', record.id, { email: record.email });
     // Best-effort — a failed or unconfigured email notification never blocks the user from actually being created.
+    const roleNames = await this.roleNamesFor(roleIds);
     if (this.emailConfig) {
-      const roleNames = await this.roleNamesFor(roleIds);
       const sent = await sendEmail(this.emailConfig, record.email, 'Welcome to ECHT Connect', welcomeEmailHtml(this.emailConfig, record.displayName, roleNames));
       if (sent) await this.audit.write(actor.id, 'user.welcomeEmailSent', 'user', record.id, {});
+    }
+    if (await this.sendWelcomeWhatsApp(record.phone, record.displayName, roleNames)) {
+      await this.audit.write(actor.id, 'user.welcomeWhatsAppSent', 'user', record.id, {});
     }
     return record;
   }

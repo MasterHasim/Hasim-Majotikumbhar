@@ -23,8 +23,8 @@ import { FirebaseDb } from '../lib/firebaseAdmin';
 import { buildPhase1Repositories } from '../lib/phase1Repositories';
 import { ExotelProvider, requireExotelConfig, type ExotelConfig } from './exotelProvider';
 
-/** UNVERIFIED — best-effort placeholder substitution ({{1}}, {{2}}, ...) matching Meta/WhatsApp template component conventions, same flag apps-script/src/Phase6Services.gs's substituteTemplateVariables_ carries. */
-function substituteTemplateVariables(components: unknown[], variables: Record<string, unknown>): unknown[] {
+/** UNVERIFIED — best-effort placeholder substitution ({{1}}, {{2}}, ...) matching Meta/WhatsApp template component conventions, same flag apps-script/src/Phase6Services.gs's substituteTemplateVariables_ carries. Exported — Phase1Api's new-user WhatsApp notification reuses this exact substitution rather than duplicating it. */
+export function substituteTemplateVariables(components: unknown[], variables: Record<string, unknown>): unknown[] {
   return (components || []).map((component) => {
     const c = component as { type?: string; text?: string } | null;
     if (!c || c.type !== 'BODY' || typeof c.text !== 'string') return component;

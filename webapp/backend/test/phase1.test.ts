@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { setupMockFirebase, type MockFirebaseContext } from './helpers/mockFirebase';
 import { FirebaseDb } from '../src/lib/firebaseAdmin';
 import { Phase1Api } from '../src/services/phase1Api';
+import { Phase3Api } from '../src/services/phase3Api';
+import { Phase10Api } from '../src/services/phase10Api';
 import { ApiError } from '../src/types';
 import { Roles } from '../src/domain/phase1';
 
@@ -114,6 +116,52 @@ describe('Phase1Api (ported from apps-script/src/Phase1Services.gs)', () => {
       await expect(apiAs(ADMIN_EMAIL).sendWelcomeEmail(agentId)).rejects.toMatchObject({ code: 'CONFIGURATION_ERROR' });
       await expect(apiAsWithEmail(ADMIN_EMAIL).sendWelcomeEmail(agentId)).resolves.toMatchObject({ sent: true });
       expect(mock.resendCalls.some((c) => c.to.includes(AGENT_EMAIL))).toBe(true);
+    });
+  });
+
+  describe('welcome WhatsApp', () => {
+    const fullEnv = () => ({ ...mock.emailEnv, ...mock.exotelConfig } as never);
+
+    async function seedApprovedWelcomeTemplate() {
+      const number = await new Phase3Api(db, ADMIN_EMAIL).createNumber({ displayName: 'Sending Number', phoneNumber: '079-485-02801', provider: 'exotel', wabaId: 'waba-welcome-1' });
+      mock.setNextExotelResponse(200, { response: { whatsapp: { templates: [{ data: { id: 'ptpl-welcome', name: 'team_member_welcome', language: 'en', category: 'UTILITY', status: 'APPROVED', components: [{ type: 'BODY', text: 'Hi {{1}}, you are now a {{2}}. Sign in at {{3}}.' }] } }] } } });
+      await new Phase10Api(db, ADMIN_EMAIL, mock.exotelConfig as never).syncTemplatesFromProvider('waba-welcome-1');
+      return number;
+    }
+
+    it('createUser sends a best-effort WhatsApp welcome when Exotel + an APPROVED team_member_welcome template are configured, and is silent otherwise', async () => {
+      await seedApprovedWelcomeTemplate();
+      const sendsSoFar = () => mock.exotelCalls.filter((c) => c.path === 'messages').length;
+
+      // No env at all — silent, no attempt.
+      const noEnv = await apiAs(ADMIN_EMAIL).createUser({ email: 'wa1@example.com', displayName: 'Wa One', phone: '+919876500001' });
+      expect(sendsSoFar()).toBe(0);
+      expect(noEnv.phone).toBe('+919876500001');
+
+      // Env configured but no phone on the new user — silent, no attempt.
+      await new Phase1Api(db, ADMIN_EMAIL, fullEnv()).createUser({ email: 'wa2@example.com', displayName: 'Wa Two' });
+      expect(sendsSoFar()).toBe(0);
+
+      // Env configured and phone present — sends.
+      await new Phase1Api(db, ADMIN_EMAIL, fullEnv()).createUser({ email: 'wa3@example.com', displayName: 'Wa Three', phone: '+919876500003' });
+      const sendCall = mock.exotelCalls.find((c) => c.path === 'messages');
+      expect(sendCall).toBeTruthy();
+      const body = sendCall!.body as { whatsapp: { messages: { to: string; content: { type: string; template: { name: string } } } [] } };
+      expect(body.whatsapp.messages[0]!.to).toContain('919876500003');
+      expect(body.whatsapp.messages[0]!.content.type).toBe('template');
+      expect(body.whatsapp.messages[0]!.content.template.name).toBe('team_member_welcome');
+    });
+
+    it('audits user.welcomeWhatsAppSent only on a successful send', async () => {
+      await seedApprovedWelcomeTemplate();
+      const user = await new Phase1Api(db, ADMIN_EMAIL, fullEnv()).createUser({ email: 'wa4@example.com', displayName: 'Wa Four', phone: '+919876500004' });
+      const entries = await apiAs(ADMIN_EMAIL).listAuditLog();
+      expect(entries.some((e) => e.action === 'user.welcomeWhatsAppSent' && e.targetId === user.id)).toBe(true);
+    });
+
+    it('does not fail user creation, and does not audit, when no APPROVED template exists yet', async () => {
+      await expect(new Phase1Api(db, ADMIN_EMAIL, fullEnv()).createUser({ email: 'wa5@example.com', displayName: 'Wa Five', phone: '+919876500005' })).resolves.toMatchObject({ email: 'wa5@example.com' });
+      expect(mock.exotelCalls).toHaveLength(0);
     });
   });
 

@@ -99,7 +99,7 @@ export const backendApi = {
 
   listUsers: () => apiFetch<User[]>('/api/users'),
 
-  createUser: (input: { email: string; displayName: string; roleIds: string[] }) =>
+  createUser: (input: { email: string; displayName: string; phone?: string; roleIds: string[] }) =>
     apiFetch<User>('/api/users', { method: 'POST', body: JSON.stringify(input) }),
 
   updateUser: (id: string, patch: Record<string, unknown>) =>

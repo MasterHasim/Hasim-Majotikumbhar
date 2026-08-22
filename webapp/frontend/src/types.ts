@@ -5,6 +5,7 @@ export interface WhatsAppNumber {
   displayName: string;
   phoneNumber: string;
   active: boolean;
+  wabaId?: string;
 }
 
 export interface Customer {
