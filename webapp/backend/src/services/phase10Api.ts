@@ -31,6 +31,15 @@ function countTemplateVariableSlots(components: unknown[]): number {
   return slots.size;
 }
 
+/** Real bug, confirmed live 2026-08-23: some Template records predate the `variables` field
+ * (created/synced before it existed) and are missing it entirely — RTDB just omits an absent
+ * key rather than storing null, so `record.variables` came back `undefined` and crashed the
+ * frontend's `.join(...)`. Normalizing here means every reader (list/get) gets a real array,
+ * not just the one call site that happened to hit this first. */
+function normalizeTemplate(t: Template): Template {
+  return { ...t, components: t.components ?? [], variables: t.variables ?? [] };
+}
+
 function extractTemplateEntries(raw: unknown): { data?: Record<string, unknown> }[] {
   // Confirmed live shape (Phase 3, apps-script): {response: {whatsapp: {templates: [{data: {...}}]}}}.
   const r = raw as { response?: { whatsapp?: { templates?: { data?: Record<string, unknown> }[] } } } | undefined;
@@ -116,14 +125,14 @@ export class Phase10Api {
 
   async listTemplates(): Promise<Template[]> {
     await this.access.currentUser();
-    return this.templates.list();
+    return (await this.templates.list()).map(normalizeTemplate);
   }
 
   async getTemplate(id: string): Promise<Template> {
     await this.access.currentUser();
     const record = await this.templates.get(id);
     if (!record) throw new ApiError(404, 'NOT_FOUND', 'Template was not found.');
-    return record;
+    return normalizeTemplate(record);
   }
 
   async submitTemplateForReview(id: string): Promise<Template> {

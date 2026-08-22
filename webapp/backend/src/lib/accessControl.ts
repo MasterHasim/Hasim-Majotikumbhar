@@ -26,15 +26,30 @@ export interface ConversationOperationContext {
 }
 
 export class AccessControl {
+  /** Real bug, confirmed live 2026-08-23: currentUser() is called internally by nearly every
+   * other method here (require, requireConversationOperation, requireTeamOperation, ...), and
+   * each call wrote a fresh "authentication.accepted" audit entry — 2 subrequests (existence
+   * check + write) every time. listConversationsInternal calls requireConversationOperation
+   * once per conversation to filter visibility, so a number with 40-plus conversations blew
+   * straight through Cloudflare's per-invocation subrequest limit on that alone
+   * ("INTERNAL_ERROR: Too many subrequests", reproduced against a real number with 46+ open
+   * conversations). One AccessControl instance lives for exactly one request (buildContext
+   * constructs a fresh one every time), so caching the resolved user here — and writing the
+   * acceptance audit entry only once — is scoped correctly and loses no real audit coverage:
+   * the identity was authenticated once for this request either way. */
+  private cachedUser: User | undefined;
+
   constructor(private repos: Phase1Repositories, private auditLog: AuditLogService, private identityEmail: string) {}
 
   async currentUser(): Promise<User> {
+    if (this.cachedUser) return this.cachedUser;
     const user = await this.repos.users.findOne((u) => u.email === this.identityEmail);
     if (!user || user.status !== Status.ACTIVE) {
       await this.audit(null, 'authentication.denied', 'identity', this.identityEmail, { reason: !user ? 'UNKNOWN_USER' : 'USER_NOT_ACTIVE' });
       throw new ApiError(401, 'UNAUTHENTICATED', 'The signed-in user is not active in this application.');
     }
     await this.audit(user.id, 'authentication.accepted', 'user', user.id, {});
+    this.cachedUser = user;
     return user;
   }
 

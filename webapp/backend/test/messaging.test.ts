@@ -111,6 +111,20 @@ describe('Messaging core (ported from Phase 3-6 + WorkspaceServices.gs)', () => 
       const detail = await new Phase5Api(db, ADMIN_EMAIL).getConversationDetail(conversationId);
       expect(detail.messages.map((m) => m.messageText)).toEqual(['second (09:30 UTC really)', 'first (10:00 UTC)']);
     });
+
+    it('listConversations does not write a fresh audit entry per conversation — real bug, confirmed live 2026-08-23: AccessControl.currentUser() wrote an "authentication.accepted" audit entry (2 subrequests) on every call, and requireConversationOperation calls currentUser() once per conversation while filtering visibility, so a number with 40+ conversations blew through Cloudflare\'s subrequest limit ("INTERNAL_ERROR: Too many subrequests") on this endpoint alone', async () => {
+      for (let i = 0; i < 15; i++) {
+        await new Phase4Api(db).ingestInboundMessage({ providerMessageId: `msg-bulk-${i}`, fromPhone: `+9198765${String(i).padStart(5, '0')}`, providerNumberId: '+917948502801', direction: 'INBOUND', messageType: 'text', text: 'Hi', timestamp: new Date().toISOString(), status: null });
+      }
+      const before = (await new Phase1Api(db, ADMIN_EMAIL).listAuditLog()).filter((e) => e.action === 'authentication.accepted').length;
+      const conversations = await new Phase5Api(db, ADMIN_EMAIL).listConversations(numberId);
+      expect(conversations.length).toBeGreaterThanOrEqual(15);
+      const after = (await new Phase1Api(db, ADMIN_EMAIL).listAuditLog()).filter((e) => e.action === 'authentication.accepted').length;
+      // Without the fix this would scale with conversation count (15+); with the fix, one
+      // AccessControl instance writes the acceptance entry at most once no matter how many
+      // times currentUser() is called internally within that single request.
+      expect(after - before).toBeLessThanOrEqual(3);
+    });
   });
 
   describe('Phase5Api — authorized conversation listing', () => {

@@ -22,7 +22,7 @@ function windowState(conversation: Workspace['conversation']): { inWindow: boole
 
 /** {{1}}, {{2}}, ... placeholders in a template's BODY component, in the same positional convention Phase6Api's substituteTemplateVariables expects. */
 function templateVariableSlots(template: Template): string[] {
-  const body = template.components.find((c) => c.type === 'BODY');
+  const body = (template.components ?? []).find((c) => c.type === 'BODY');
   const matches = [...(body?.text ?? '').matchAll(/\{\{(\d+)\}\}/g)];
   return [...new Set(matches.map((m) => m[1]!))].sort((a, b) => Number(a) - Number(b));
 }
@@ -197,7 +197,7 @@ export function ChatPane({ workspace, quickReplies, templates, onAfterSend, onRe
             {approvedTemplates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
           {selectedTemplate && templateVariableSlots(selectedTemplate).map((slot) => {
-            const label = selectedTemplate.variables[Number(slot) - 1];
+            const label = (selectedTemplate.variables ?? [])[Number(slot) - 1];
             return (
               <input
                 key={slot}

@@ -685,7 +685,7 @@ function QuickRepliesSection() {
 
 /** Distinct {{n}} placeholders in a template's BODY component — same convention as ChatPane's own templateVariableSlots. */
 function templatePlaceholderCount(t: Template): number {
-  const body = t.components.find((c) => c.type === 'BODY');
+  const body = (t.components ?? []).find((c) => c.type === 'BODY');
   return new Set([...(body?.text ?? '').matchAll(/\{\{(\d+)\}\}/g)].map((m) => m[1])).size;
 }
 
@@ -743,19 +743,19 @@ function TemplatesSection({ numbers }: { numbers: WhatsAppNumber[] }) {
                   ) : (
                     <>
                       <input
-                        defaultValue={t.variables.join(', ')}
+                        defaultValue={(t.variables ?? []).join(', ')}
                         placeholder={Array.from({ length: slotCount }, (_, i) => `{{${i + 1}}} label`).join(', ')}
                         style={{ width: 220, fontSize: 11 }}
                         disabled={busy}
                         onBlur={(e) => {
                           const next = e.target.value.split(',').map((s) => s.trim()).filter(Boolean);
-                          const current = t.variables.join(', ');
+                          const current = (t.variables ?? []).join(', ');
                           if (e.target.value.trim() === current) return;
                           if (next.length !== slotCount) { setError(`This template has ${slotCount} variable(s) ({{1}}..{{${slotCount}}}) — enter exactly ${slotCount} comma-separated label(s).`); return; }
                           void guard(() => backendApi.updateTemplateVariableLabels(t.id, next));
                         }}
                       />
-                      {t.variables.length !== slotCount && <div style={{ fontSize: 10, color: 'var(--danger)' }}>Needs {slotCount} label(s) — shown as {'{{n}}'} to agents until set</div>}
+                      {(t.variables ?? []).length !== slotCount && <div style={{ fontSize: 10, color: 'var(--danger)' }}>Needs {slotCount} label(s) — shown as {'{{n}}'} to agents until set</div>}
                     </>
                   )}
                 </td>

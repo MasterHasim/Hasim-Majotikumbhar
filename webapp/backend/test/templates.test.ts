@@ -85,6 +85,23 @@ describe('Phase10Api / Phase11Api / Phase6Api template+media additions', () => {
       expect(fetched.id).toBe(draft.id);
     });
 
+    it('listTemplates/getTemplate normalize a legacy record missing "variables" (and/or "components") entirely — real bug, confirmed live 2026-08-23: RTDB omits absent keys, so an old pre-variables-field record came back as undefined and crashed the frontend\'s .join(...)', async () => {
+      const draft = await new Phase10Api(db, ADMIN_EMAIL).createDraftTemplate({ name: 'legacy', language: 'en', category: 'MARKETING' });
+      const raw = (await db.get(`templates/${draft.id}`)) as Record<string, unknown>;
+      delete raw.variables;
+      delete raw.components;
+      await db.put(`templates/${draft.id}`, raw);
+
+      const list = await new Phase10Api(db, AGENT_EMAIL).listTemplates();
+      const listed = list.find((t) => t.id === draft.id)!;
+      expect(listed.variables).toEqual([]);
+      expect(listed.components).toEqual([]);
+
+      const fetched = await new Phase10Api(db, AGENT_EMAIL).getTemplate(draft.id);
+      expect(fetched.variables).toEqual([]);
+      expect(fetched.components).toEqual([]);
+    });
+
     it('updateTemplateVariableLabels sets per-placeholder labels on an APPROVED template (unlike updateDraftTemplate, not restricted to LOCAL_DRAFT), enforces the label count matches the placeholder count, and denies a non-manager', async () => {
       mock.setNextExotelResponse(200, { response: { whatsapp: { templates: [{ data: { id: 'ptpl-2', name: 'greet', language: 'en', category: 'UTILITY', status: 'APPROVED', components: [{ type: 'BODY', text: 'Hi {{1}}, your order {{2}} is ready.' }] } }] } } });
       const [synced] = await new Phase10Api(db, ADMIN_EMAIL, mock.exotelConfig as never).syncTemplatesFromProvider('waba-1');
