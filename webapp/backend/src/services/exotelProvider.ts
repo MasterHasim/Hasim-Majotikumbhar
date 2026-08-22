@@ -23,7 +23,11 @@ export function requireExotelConfig(env: { EXOTEL_API_KEY?: string; EXOTEL_API_T
   return { apiKey: EXOTEL_API_KEY, apiToken: EXOTEL_API_TOKEN, accountSid: EXOTEL_ACCOUNT_SID, subdomain: EXOTEL_SUBDOMAIN };
 }
 
-const StatusCodes: Record<number, string> = { 30001: 'SENT', 30002: 'DELIVERED', 30003: 'READ' };
+/** 30017 (EX_MEDIA_UPLOAD_ERROR) confirmed live 2026-08-23 — Exotel/Meta rejected a degenerate
+ * 1x1 test image; a real photo sent immediately after with the same code path arrived fine
+ * (30001/EX_MESSAGE_SENT). Mapped to FAILED so a real rejection surfaces as FAILED in the Inbox
+ * instead of getting stuck at whatever status the send itself first guessed. */
+const StatusCodes: Record<number, string> = { 30001: 'SENT', 30002: 'DELIVERED', 30003: 'READ', 30017: 'FAILED' };
 
 export interface NormalizedWebhookMessage {
   providerMessageId: string | null;
@@ -52,9 +56,19 @@ export class ExotelProvider {
     return this.sendMessages([{ from: providerNumberId, to: toPhone, content: { type: 'text', text: { body: text } } }]);
   }
 
+  /** Confirmed 2026-08-22 against developer.exotel.com/docs/whatsapp-api/api-reference/send-message:
+   * "recipient_type" is required (same missing-field bug sendTemplate had), and "document" uses
+   * "filename" rather than "caption". image/document shapes are confirmed live; video/audio follow
+   * the same WhatsApp Cloud API convention (caption on video, no caption field on audio) but are
+   * not separately confirmed in Exotel's docs — same "reasoned, not proven" flag as elsewhere. */
   sendMedia(providerNumberId: string, toPhone: string, mediaType: string, mediaUrl: string, caption: string) {
-    const content: Record<string, unknown> = { type: mediaType };
-    content[mediaType] = { link: mediaUrl, caption: caption || '' };
+    const body: Record<string, unknown> = { link: mediaUrl };
+    if (mediaType === 'document') {
+      body.filename = caption || 'document';
+    } else if (mediaType !== 'audio') {
+      body.caption = caption || '';
+    }
+    const content: Record<string, unknown> = { recipient_type: 'individual', type: mediaType, [mediaType]: body };
     return this.sendMessages([{ from: providerNumberId, to: toPhone, content }]);
   }
 
@@ -83,11 +97,31 @@ export class ExotelProvider {
     return { providerMessageId, status: (code && StatusCodes[code]) || 'UNKNOWN', raw: response };
   }
 
-  /** Confirmed live 2026-08-10 against a real inbound Exotel WhatsApp Console webhook. */
+  /**
+   * Confirmed live 2026-08-10 against a real inbound Exotel WhatsApp Console webhook (the
+   * "content" branch below). Confirmed live 2026-08-23 that delivery-status callbacks
+   * (sent/delivered/read/failed for a message *we* sent) arrive in this SAME
+   * whatsapp.messages[] array — not the separate flat message_sid/status_code shape this
+   * code originally assumed — identified by "callback_type": "dlr". Real payload seen:
+   * {"whatsapp":{"messages":[{"callback_type":"dlr","sid":"...","to":"+91...","exo_status_code":30001,
+   * "exo_detailed_status":"EX_MESSAGE_SENT","description":"Message Sent","timestamp":"..."}]}}
+   * — critically, "to" here is the CUSTOMER's number (who our message was delivered to), the
+   * opposite of what "to" means on a genuine inbound entry (our own WABA number) — treating a
+   * dlr entry as INBOUND would look up "to" as if it were our own number and always fail with
+   * "No registered number matches", which is exactly the bug this branch fixes.
+   */
   processWebhook(payload: { whatsapp?: { messages?: unknown[] }; message_sid?: string; status_code?: number; timestamp?: string }): NormalizedWebhookMessage {
     const message = payload?.whatsapp?.messages?.[0] as
-      | { sid?: string; id?: string; message_sid?: string; from?: string; to?: string; timestamp?: string; profile_name?: string; content?: { type?: string; text?: { body?: string }; [key: string]: unknown } }
+      | { sid?: string; id?: string; message_sid?: string; from?: string; to?: string; timestamp?: string; profile_name?: string; content?: { type?: string; text?: { body?: string }; [key: string]: unknown }; callback_type?: string; exo_status_code?: number }
       | undefined;
+    if (message?.callback_type === 'dlr') {
+      return {
+        providerMessageId: message.sid || message.id || message.message_sid || null,
+        fromPhone: null, providerNumberId: null, direction: null, messageType: null, text: null, mediaUrl: null,
+        timestamp: message.timestamp || new Date().toISOString(),
+        status: (message.exo_status_code && StatusCodes[message.exo_status_code]) || 'UNKNOWN',
+      };
+    }
     if (message) {
       return {
         providerMessageId: message.sid || message.id || message.message_sid || null,

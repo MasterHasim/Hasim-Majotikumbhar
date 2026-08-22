@@ -118,8 +118,9 @@ export function registerMessagingRoutes(router: RouterType) {
       return Response.json({ status: 'error', message: 'unauthorized' });
     }
     let outcome: unknown;
+    let payload: unknown;
     try {
-      const payload = await request.json();
+      payload = await request.json();
       const serviceAccount = parseServiceAccount(env);
       const db = new FirebaseDb(serviceAccount, env.FIREBASE_DATABASE_URL);
       const normalized = new ExotelProvider(requireExotelConfig(env)).processWebhook(payload as never);
@@ -127,6 +128,10 @@ export function registerMessagingRoutes(router: RouterType) {
       outcome = { status: 'ok', result };
     } catch (err) {
       outcome = { status: 'error', message: err instanceof Error ? err.message : String(err) };
+      // Raw payload only logged on failure — diagnosing a shape we haven't seen before
+      // (e.g. a status-callback shape distinct from the confirmed-live inbound-message shape)
+      // needs the real body, and logging every successful webhook would be noisy at volume.
+      console.log('webhook/exotel raw payload (on error)', JSON.stringify(payload));
     }
     console.log('webhook/exotel', JSON.stringify(outcome));
     return Response.json(outcome);

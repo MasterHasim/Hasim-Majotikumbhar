@@ -84,6 +84,18 @@ describe('Phase10Api / Phase11Api / Phase6Api template+media additions', () => {
       const fetched = await new Phase10Api(db, AGENT_EMAIL).getTemplate(draft.id);
       expect(fetched.id).toBe(draft.id);
     });
+
+    it('updateTemplateVariableLabels sets per-placeholder labels on an APPROVED template (unlike updateDraftTemplate, not restricted to LOCAL_DRAFT), enforces the label count matches the placeholder count, and denies a non-manager', async () => {
+      mock.setNextExotelResponse(200, { response: { whatsapp: { templates: [{ data: { id: 'ptpl-2', name: 'greet', language: 'en', category: 'UTILITY', status: 'APPROVED', components: [{ type: 'BODY', text: 'Hi {{1}}, your order {{2}} is ready.' }] } }] } } });
+      const [synced] = await new Phase10Api(db, ADMIN_EMAIL, mock.exotelConfig as never).syncTemplatesFromProvider('waba-1');
+
+      const labeled = await new Phase10Api(db, ADMIN_EMAIL).updateTemplateVariableLabels(synced!.id, ['Customer Name', 'Order ID']);
+      expect(labeled.variables).toEqual(['Customer Name', 'Order ID']);
+      expect(labeled.status).toBe('APPROVED'); // still approved — labels don't touch template content/status
+
+      await expect(new Phase10Api(db, ADMIN_EMAIL).updateTemplateVariableLabels(synced!.id, ['Only One'])).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+      await expect(new Phase10Api(db, AGENT_EMAIL).updateTemplateVariableLabels(synced!.id, ['Customer Name', 'Order ID'])).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    });
   });
 
   describe('Phase11Api — quick replies', () => {
@@ -125,6 +137,10 @@ describe('Phase10Api / Phase11Api / Phase6Api template+media additions', () => {
       const message = await new Phase6Api(db, AGENT_EMAIL, mock.exotelConfig as never).sendTemplateReply(conversationId, synced!.id, { 1: 'Priya' });
       expect(message.status).toBe('SENT');
       expect(message.messageType).toBe('template');
+      // The Inbox should show the customer-facing text, not a bracketed placeholder — and the
+      // template name is tracked separately (templateName) so Dashboard reporting doesn't depend on parsing messageText.
+      expect(message.messageText).toBe('Hi Priya, welcome!');
+      expect(message.templateName).toBe('greet');
       expect(mock.exotelCalls.at(-1)!.path).toBe('messages');
       const sentBody = mock.exotelCalls.at(-1)!.body as { whatsapp: { messages: [{ content: { type: string; template: { language: { code: string; policy: string }; components: [{ type: string; parameters: { type: string; text: string }[] }] } } }] } };
       const sentContent = sentBody.whatsapp.messages[0]!.content;
@@ -141,6 +157,16 @@ describe('Phase10Api / Phase11Api / Phase6Api template+media additions', () => {
       const workspace = await new WorkspaceApi(db, ADMIN_EMAIL, { FIREBASE_WEB_API_KEY: 'test-key' }).getConversationWorkspace(conversationId, false);
       const sentMessage = workspace.messages.find((m) => m.id === message.id);
       expect(sentMessage?.media).toMatchObject({ mediaType: 'image', mediaUrl: 'https://example.com/photo.jpg', caption: 'A photo' });
+    });
+
+    it('sends the correct Exotel payload shape for image and document media (recipient_type required, document uses filename not caption)', async () => {
+      await new Phase6Api(db, AGENT_EMAIL, mock.exotelConfig as never).sendMediaReply(conversationId, 'image', 'https://example.com/photo.jpg', 'A photo');
+      const imageContent = (mock.exotelCalls.at(-1)!.body as { whatsapp: { messages: [{ content: Record<string, unknown> }] } }).whatsapp.messages[0]!.content;
+      expect(imageContent).toEqual({ recipient_type: 'individual', type: 'image', image: { link: 'https://example.com/photo.jpg', caption: 'A photo' } });
+
+      await new Phase6Api(db, AGENT_EMAIL, mock.exotelConfig as never).sendMediaReply(conversationId, 'document', 'https://example.com/invoice.pdf', 'Invoice #42');
+      const docContent = (mock.exotelCalls.at(-1)!.body as { whatsapp: { messages: [{ content: Record<string, unknown> }] } }).whatsapp.messages[0]!.content;
+      expect(docContent).toEqual({ recipient_type: 'individual', type: 'document', document: { link: 'https://example.com/invoice.pdf', filename: 'Invoice #42' } });
     });
   });
 

@@ -130,12 +130,15 @@ export class Phase14Api {
     return stages.map((stage) => ({ stageId: stage.id, name: stage.name, count: byStageId.get(stage.id) ?? 0 }));
   }
 
+  /** Prefers the dedicated templateName field (set on every send since messageText switched to
+   * showing the actual rendered text); falls back to the older "[Template: name]" display-text
+   * marker for messages sent before that field existed, so historical usage isn't lost. */
   private computeTemplateUsage(messages: Message[]) {
     const counts = new Map<string, number>();
     for (const m of messages) {
       if (m.messageType !== 'template') continue;
-      const match = /^\[Template: (.+)\]$/.exec(m.messageText || '');
-      const name = match ? match[1]! : '(unknown)';
+      const legacyMatch = /^\[Template: (.+)\]$/.exec(m.messageText || '');
+      const name = m.templateName || (legacyMatch ? legacyMatch[1]! : '(unknown)');
       counts.set(name, (counts.get(name) ?? 0) + 1);
     }
     return [...counts.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);

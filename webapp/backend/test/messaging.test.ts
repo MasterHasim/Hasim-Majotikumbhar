@@ -96,6 +96,21 @@ describe('Messaging core (ported from Phase 3-6 + WorkspaceServices.gs)', () => 
       const detail = await new Phase5Api(db, ADMIN_EMAIL).getConversationDetail(ingested.conversationId!);
       expect(detail.messages[0]!.status).toBe('DELIVERED');
     });
+
+    it('orders messages by actual chronological time, not by comparing timestamp strings — outbound timestamps are UTC ("...Z") but Exotel\'s real inbound webhooks use a local offset ("...+05:30"), which sorts wrong as plain strings', async () => {
+      // Outbound message stamped 10:00 UTC (how Ids.now() always formats it).
+      const first = await new Phase4Api(db).ingestInboundMessage({ providerMessageId: 'msg-out', fromPhone: '+919876543210', providerNumberId: '+917948502801', direction: 'INBOUND', messageType: 'text', text: 'first (10:00 UTC)', timestamp: '2026-01-01T10:00:00.000Z', status: null });
+      const conversationId = first.conversationId!;
+      const outboundRecord = (await db.get(`webapp_messages/${first.messageId}`)) as Record<string, unknown>;
+      await db.put(`webapp_messages/${first.messageId}`, { ...outboundRecord, direction: 'OUTBOUND', messageText: 'first (10:00 UTC)' });
+
+      // Real inbound reply at 15:00 IST (+05:30) = 09:30 UTC — chronologically EARLIER than the
+      // message above, even though "15:00:00+05:30" > "10:00:00.000Z" as a raw string.
+      await new Phase4Api(db).ingestInboundMessage({ providerMessageId: 'msg-in', fromPhone: '+919876543210', providerNumberId: '+917948502801', direction: 'INBOUND', messageType: 'text', text: 'second (09:30 UTC really)', timestamp: '2026-01-01T15:00:00+05:30', status: null });
+
+      const detail = await new Phase5Api(db, ADMIN_EMAIL).getConversationDetail(conversationId);
+      expect(detail.messages.map((m) => m.messageText)).toEqual(['second (09:30 UTC really)', 'first (10:00 UTC)']);
+    });
   });
 
   describe('Phase5Api — authorized conversation listing', () => {
@@ -223,6 +238,32 @@ describe('Messaging core (ported from Phase 3-6 + WorkspaceServices.gs)', () => 
         whatsapp: { messages: [{ callback_type: 'incoming_message', sid: 'SM123', from: '+919876543210', to: '+917948502801', timestamp: '2026-01-01T00:00:00.000Z', profile_name: 'Test User', content: { type: 'text', text: { body: 'Hello' } } }] },
       });
       expect(normalized).toMatchObject({ providerMessageId: 'SM123', fromPhone: '+919876543210', providerNumberId: '+917948502801', direction: 'INBOUND', text: 'Hello', profileName: 'Test User' });
+    });
+
+    it('parses a real delivery-status (dlr) callback as a status update, not an inbound message — same messages[] array shape as inbound, but "to" here is the customer, not our own number', () => {
+      const normalized = new ExotelProvider(mock.exotelConfig).processWebhook({
+        whatsapp: { messages: [{ callback_type: 'dlr', sid: 'SM123', to: '+918490903043', exo_status_code: 30001, exo_detailed_status: 'EX_MESSAGE_SENT', description: 'Message Sent', timestamp: '2026-08-23T00:13:07+05:30' }] },
+      } as never);
+      expect(normalized).toMatchObject({ providerMessageId: 'SM123', direction: null, providerNumberId: null, status: 'SENT' });
+    });
+
+    it('maps EX_MEDIA_UPLOAD_ERROR (30017) to FAILED', () => {
+      const normalized = new ExotelProvider(mock.exotelConfig).processWebhook({
+        whatsapp: { messages: [{ callback_type: 'dlr', sid: 'SM456', to: '+918490903043', exo_status_code: 30017, exo_detailed_status: 'EX_MEDIA_UPLOAD_ERROR', description: 'Media error_type not supported', timestamp: '2026-08-23T00:08:38+05:30' }] },
+      } as never);
+      expect(normalized.status).toBe('FAILED');
+    });
+
+    it('a dlr callback applies as a status update via ingestInboundMessage instead of failing with "No registered number matches"', async () => {
+      const inbound = await new Phase4Api(db).ingestInboundMessage({ providerMessageId: 'msg-seed', fromPhone: '+919876543210', providerNumberId: '+917948502801', direction: 'INBOUND', messageType: 'text', text: 'Hi', timestamp: new Date().toISOString(), status: null });
+      const sent = await new Phase6Api(db, ADMIN_EMAIL, mock.exotelConfig as never).sendReply(inbound.conversationId!, 'Outbound text');
+      const providerMessageId = (await db.get(`webapp_messages/${sent.id}`) as { providerMessageId: string }).providerMessageId;
+      const normalized = new ExotelProvider(mock.exotelConfig).processWebhook({
+        whatsapp: { messages: [{ callback_type: 'dlr', sid: providerMessageId, to: '+919876543210', exo_status_code: 30002, exo_detailed_status: 'EX_MESSAGE_DELIVERED', description: 'Delivered', timestamp: new Date().toISOString() }] },
+      } as never);
+      const result = await new Phase4Api(db).ingestInboundMessage(normalized);
+      expect(result).toMatchObject({ statusUpdate: true, applied: true, status: 'DELIVERED' });
+      expect((await db.get(`webapp_messages/${sent.id}`) as { status: string }).status).toBe('DELIVERED');
     });
   });
 });

@@ -196,15 +196,19 @@ export function ChatPane({ workspace, quickReplies, templates, onAfterSend, onRe
             <option value="">Template…</option>
             {approvedTemplates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
-          {selectedTemplate && templateVariableSlots(selectedTemplate).map((slot) => (
-            <input
-              key={slot}
-              placeholder={`{{${slot}}}`}
-              style={{ width: 90 }}
-              value={templateVars[slot] ?? ''}
-              onChange={(e) => setTemplateVars((prev) => ({ ...prev, [slot]: e.target.value }))}
-            />
-          ))}
+          {selectedTemplate && templateVariableSlots(selectedTemplate).map((slot) => {
+            const label = selectedTemplate.variables[Number(slot) - 1];
+            return (
+              <input
+                key={slot}
+                placeholder={label || `{{${slot}}}`}
+                title={label ? `{{${slot}}} — ${label}` : `{{${slot}}} — no label set (Admin → Templates)`}
+                style={{ width: label ? 130 : 90 }}
+                value={templateVars[slot] ?? ''}
+                onChange={(e) => setTemplateVars((prev) => ({ ...prev, [slot]: e.target.value }))}
+              />
+            );
+          })}
           {selectedTemplate && (
             <button
               disabled={sending}

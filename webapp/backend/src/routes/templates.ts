@@ -24,6 +24,11 @@ export function registerTemplateRoutes(router: RouterType) {
     const ctx = await buildContext(request, env);
     return Response.json(await new Phase10Api(ctx.db, ctx.identityEmail).updateDraftTemplate(param(request, 'id'), await json(request)));
   });
+  router.patch('/api/templates/:id/labels', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    const body = (await json(request)) as { variables: unknown };
+    return Response.json(await new Phase10Api(ctx.db, ctx.identityEmail).updateTemplateVariableLabels(param(request, 'id'), body.variables));
+  });
   router.get('/api/templates', async (request: IRequest, env: Env) => {
     const ctx = await buildContext(request, env);
     return Response.json(await new Phase10Api(ctx.db, ctx.identityEmail).listTemplates());

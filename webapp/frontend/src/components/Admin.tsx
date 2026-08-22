@@ -683,6 +683,12 @@ function QuickRepliesSection() {
   );
 }
 
+/** Distinct {{n}} placeholders in a template's BODY component — same convention as ChatPane's own templateVariableSlots. */
+function templatePlaceholderCount(t: Template): number {
+  const body = t.components.find((c) => c.type === 'BODY');
+  return new Set([...(body?.text ?? '').matchAll(/\{\{(\d+)\}\}/g)].map((m) => m[1])).size;
+}
+
 function TemplatesSection({ numbers }: { numbers: WhatsAppNumber[] }) {
   const numbersWithWaba = numbers.filter((n) => n.wabaId);
   const [items, setItems] = useState<Template[] | null>(null);
@@ -720,25 +726,50 @@ function TemplatesSection({ numbers }: { numbers: WhatsAppNumber[] }) {
     <div className="card">
       <h2 className="section-title" style={{ marginTop: 0 }}>WhatsApp Templates</h2>
       <table className="data-table">
-        <thead><tr><th>Name</th><th>Language</th><th>Category</th><th>Status</th><th></th></tr></thead>
+        <thead><tr><th>Name</th><th>Language</th><th>Category</th><th>Status</th><th>Variable labels</th><th></th></tr></thead>
         <tbody>
-          {items === null && <tr><td colSpan={5} className="empty">Loading…</td></tr>}
-          {items?.map((t) => (
-            <tr key={t.id}>
-              <td>{t.name}</td>
-              <td>{t.language}</td>
-              <td>{t.category}</td>
-              <td><span className="lead-status-tag ASSIGNED">{t.status}</span></td>
-              <td>
-                {t.status === 'LOCAL_DRAFT' && (
-                  <button className="btn" disabled={busy || !t.wabaId} title={t.wabaId ? '' : 'Set a wabaId first'} onClick={() => void guard(() => backendApi.submitTemplateForReview(t.id))}>
-                    Submit for review
-                  </button>
-                )}
-              </td>
-            </tr>
-          ))}
-          {items?.length === 0 && <tr><td colSpan={5} className="empty">None yet.</td></tr>}
+          {items === null && <tr><td colSpan={6} className="empty">Loading…</td></tr>}
+          {items?.map((t) => {
+            const slotCount = templatePlaceholderCount(t);
+            return (
+              <tr key={t.id}>
+                <td>{t.name}</td>
+                <td>{t.language}</td>
+                <td>{t.category}</td>
+                <td><span className="lead-status-tag ASSIGNED">{t.status}</span></td>
+                <td>
+                  {slotCount === 0 ? (
+                    <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>No variables</span>
+                  ) : (
+                    <>
+                      <input
+                        defaultValue={t.variables.join(', ')}
+                        placeholder={Array.from({ length: slotCount }, (_, i) => `{{${i + 1}}} label`).join(', ')}
+                        style={{ width: 220, fontSize: 11 }}
+                        disabled={busy}
+                        onBlur={(e) => {
+                          const next = e.target.value.split(',').map((s) => s.trim()).filter(Boolean);
+                          const current = t.variables.join(', ');
+                          if (e.target.value.trim() === current) return;
+                          if (next.length !== slotCount) { setError(`This template has ${slotCount} variable(s) ({{1}}..{{${slotCount}}}) — enter exactly ${slotCount} comma-separated label(s).`); return; }
+                          void guard(() => backendApi.updateTemplateVariableLabels(t.id, next));
+                        }}
+                      />
+                      {t.variables.length !== slotCount && <div style={{ fontSize: 10, color: 'var(--danger)' }}>Needs {slotCount} label(s) — shown as {'{{n}}'} to agents until set</div>}
+                    </>
+                  )}
+                </td>
+                <td>
+                  {t.status === 'LOCAL_DRAFT' && (
+                    <button className="btn" disabled={busy || !t.wabaId} title={t.wabaId ? '' : 'Set a wabaId first'} onClick={() => void guard(() => backendApi.submitTemplateForReview(t.id))}>
+                      Submit for review
+                    </button>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+          {items?.length === 0 && <tr><td colSpan={6} className="empty">None yet.</td></tr>}
         </tbody>
       </table>
 

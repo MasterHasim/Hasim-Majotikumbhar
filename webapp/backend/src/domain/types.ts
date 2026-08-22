@@ -123,6 +123,10 @@ export interface Message extends Record_ {
   providerMessageId: string;
   status: MessageStatus;
   timestamp: string;
+  /** Set only for messageType 'template' — the template's own name, kept separate from
+   * messageText (which now shows the actual rendered text a customer would recognize) so
+   * Dashboard's template-usage report has something stable to key off. */
+  templateName?: string;
 }
 
 // --- CRM core (port of Phase7/8/9/12's slice of Phase2Domain.gs's Phase2Schemas) ---

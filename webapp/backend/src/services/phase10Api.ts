@@ -19,6 +19,18 @@ import { FirebaseDb } from '../lib/firebaseAdmin';
 import { buildPhase1Repositories } from '../lib/phase1Repositories';
 import { ExotelProvider, requireExotelConfig, type ExotelConfig } from './exotelProvider';
 
+/** Distinct {{n}} placeholders across a template's components, same positional convention as
+ * Phase6Api's renderTemplateDisplayText/buildTemplateSendComponents. */
+function countTemplateVariableSlots(components: unknown[]): number {
+  const slots = new Set<string>();
+  for (const component of components || []) {
+    const c = component as { text?: string } | null;
+    if (!c || typeof c.text !== 'string') continue;
+    for (const match of c.text.matchAll(/\{\{(\d+)\}\}/g)) slots.add(match[1]!);
+  }
+  return slots.size;
+}
+
 function extractTemplateEntries(raw: unknown): { data?: Record<string, unknown> }[] {
   // Confirmed live shape (Phase 3, apps-script): {response: {whatsapp: {templates: [{data: {...}}]}}}.
   const r = raw as { response?: { whatsapp?: { templates?: { data?: Record<string, unknown> }[] } } } | undefined;
@@ -76,6 +88,29 @@ export class Phase10Api {
     }
     const updated = await this.templates.update(id, safePatch as Partial<Template>);
     await this.audit.write(actor.id, 'template.draftUpdated', 'template', id, {});
+    return updated;
+  }
+
+  /**
+   * Admin-facing labels for a template's {{1}}, {{2}}, ... placeholders (e.g. "Customer Name",
+   * "Order ID") — purely local UX metadata, never sent to Meta/Exotel, so unlike
+   * updateDraftTemplate this is allowed on a template of any status (including the APPROVED ones
+   * agents actually send). The Send Template compose row shows these instead of bare {{n}}
+   * placeholders so an agent knows what to type instead of guessing. Length must match the
+   * template's own placeholder count when it has any, so a stale label set can't silently
+   * mismatch what the template actually needs.
+   */
+  async updateTemplateVariableLabels(id: string, variables: unknown): Promise<Template> {
+    const actor = await this.access.require(Permissions.TEMPLATES_MANAGE);
+    const record = await this.templates.get(id);
+    if (!record) throw new ApiError(404, 'NOT_FOUND', 'Template was not found.');
+    const labels = Validation.stringArray(variables ?? [], 'variables').map((v) => v.trim());
+    const slotCount = countTemplateVariableSlots(record.components);
+    if (slotCount > 0 && labels.length !== slotCount) {
+      throw new ApiError(400, 'VALIDATION_ERROR', `This template has ${slotCount} variable(s) ({{1}}..{{${slotCount}}}) — provide exactly ${slotCount} label(s).`);
+    }
+    const updated = await this.templates.update(id, { variables: labels });
+    await this.audit.write(actor.id, 'template.variableLabelsUpdated', 'template', id, { variables: labels });
     return updated;
   }
 

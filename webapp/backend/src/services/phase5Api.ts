@@ -100,9 +100,15 @@ export class Phase5Api {
 
     const customer = await this.customers.get(conversation.customerId);
     const number = await this.numbers.get(conversation.numberId);
+    // Real bug, confirmed live 2026-08-23: outbound timestamps are always UTC ("...Z", from
+    // Ids.now()), but Exotel's inbound webhook timestamps arrive with a local offset (e.g.
+    // "...+05:30", confirmed against a real payload) — string comparison (localeCompare) sorts
+    // those two formats inconsistently even though both are valid ISO 8601, so an inbound reply
+    // could appear out of chronological order. Parsing to an actual instant sorts correctly
+    // regardless of which offset format either side used.
     const messages = (await this.messages.list())
       .filter((m) => m.conversationId === conversationId)
-      .sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''));
+      .sort((a, b) => new Date(a.timestamp || 0).getTime() - new Date(b.timestamp || 0).getTime());
     return { conversation, customer, number, messages };
   }
 }

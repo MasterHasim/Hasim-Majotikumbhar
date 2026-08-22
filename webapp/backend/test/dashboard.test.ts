@@ -118,4 +118,16 @@ describe('Phase14Api (ported from Phase14Services.gs)', () => {
     const metrics = await new Phase14Api(db, ADMIN_EMAIL).getDashboardMetrics();
     expect(metrics.templateUsage).toEqual([{ name: 'welcome', count: 1 }]);
   });
+
+  it('prefers the templateName field over the display-text marker when both a real customer-facing message and a templateName are present', async () => {
+    const result = await ingest('msg-2', '+919876543211');
+    await new Phase7Api(db, ADMIN_EMAIL).reassignConversation(result.conversationId!, agentId);
+    await db.put(`webapp_messages/msg_template_2`, {
+      id: 'msg_template_2', conversationId: result.conversationId, numberId, senderUserId: agentId,
+      direction: 'OUTBOUND', messageType: 'template', messageText: 'Hi Priya, welcome!', templateName: 'welcome', providerMessageId: '', status: 'SENT', timestamp: new Date().toISOString(),
+    });
+
+    const metrics = await new Phase14Api(db, ADMIN_EMAIL).getDashboardMetrics();
+    expect(metrics.templateUsage).toEqual([{ name: 'welcome', count: 1 }]);
+  });
 });

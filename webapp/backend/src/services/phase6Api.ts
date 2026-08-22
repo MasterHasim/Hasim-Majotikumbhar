@@ -47,6 +47,22 @@ export function buildTemplateSendComponents(components: unknown[], variables: Re
   return result;
 }
 
+/** Human-readable rendering of a template's BODY text with {{n}} placeholders filled in — used
+ * as the chat display text (messageText) so the Inbox shows what the customer actually received
+ * instead of a bracketed "[Template: name]" placeholder. Independent from
+ * buildTemplateSendComponents, which builds the different shape the send API itself needs. */
+export function renderTemplateDisplayText(components: unknown[], variables: Record<string, unknown>): string {
+  const body = (components || []).find((c) => {
+    const comp = c as { type?: string } | null;
+    return !!comp && (comp.type || '').toUpperCase() === 'BODY';
+  }) as { text?: string } | undefined;
+  if (!body || typeof body.text !== 'string') return '';
+  return body.text.replace(/\{\{(\d+)\}\}/g, (match, index) => {
+    const value = variables[index];
+    return value !== undefined && value !== '' ? String(value) : match;
+  });
+}
+
 const CUSTOMER_SERVICE_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 /**
@@ -126,8 +142,8 @@ export class Phase6Api {
     if (!template) throw new ApiError(404, 'NOT_FOUND', 'Template was not found.');
     if (template.status !== 'APPROVED') throw new ApiError(400, 'VALIDATION_ERROR', 'Only an APPROVED template can be sent.');
     const components = buildTemplateSendComponents(template.components, variables || {});
-    const displayText = `[Template: ${template.name}]`;
-    return this.sendOutbound(conversationId, 'template', displayText, false, (provider, number, customer) => provider.sendTemplate(toE164(number.phoneNumber), toE164(customer.phone), template.name, template.language, components));
+    const displayText = renderTemplateDisplayText(template.components, variables || {}) || `[Template: ${template.name}]`;
+    return this.sendOutbound(conversationId, 'template', displayText, false, (provider, number, customer) => provider.sendTemplate(toE164(number.phoneNumber), toE164(customer.phone), template.name, template.language, components), template.name);
   }
 
   /** Send a media message (image/document/etc). UNVERIFIED — sendMedia has never been called live, same as sendText/sendTemplate. Expects an already-hosted mediaUrl (see routes/media.ts for the R2-backed upload that produces one). */
@@ -245,7 +261,8 @@ export class Phase6Api {
     messageType: string,
     displayText: string,
     requiresWindow: boolean,
-    sendFn: (provider: ExotelProvider, number: WhatsAppNumber, customer: Customer) => Promise<unknown>
+    sendFn: (provider: ExotelProvider, number: WhatsAppNumber, customer: Customer) => Promise<unknown>,
+    templateName?: string
   ): Promise<Message> {
     const conversation = await this.conversations.get(conversationId);
     if (!conversation) throw new ApiError(404, 'NOT_FOUND', 'Conversation was not found.');
@@ -272,6 +289,7 @@ export class Phase6Api {
     const message: Message = {
       id: Ids.create('message'), conversationId, numberId: conversation.numberId, senderUserId: actor.id,
       direction: 'OUTBOUND', messageType, messageText: displayText, providerMessageId, status, timestamp: now,
+      ...(templateName ? { templateName } : {}),
     };
     await this.messages.create(message);
 

@@ -298,6 +298,9 @@ export const backendApi = {
 
   syncTemplatesFromProvider: (wabaId: string) => apiFetch<Template[]>('/api/templates/sync', { method: 'POST', body: JSON.stringify({ wabaId }) }),
 
+  updateTemplateVariableLabels: (id: string, variables: string[]) =>
+    apiFetch<Template>(`/api/templates/${encodeURIComponent(id)}/labels`, { method: 'PATCH', body: JSON.stringify({ variables }) }),
+
   listQuickReplies: () => apiFetch<QuickReply[]>('/api/quick-replies'),
 
   createQuickReply: (input: { shortcut: string; text: string }) =>
