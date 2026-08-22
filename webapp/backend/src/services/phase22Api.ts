@@ -91,6 +91,7 @@ export class Phase22Api {
         const name = Validation.requiredString(row.name, 'name');
         const phone = Phase22Validation.phone(row.phone, 'phone');
         const location = Phase22Validation.location(row.location);
+        if (!(await this.canSeeLocation(actor, location))) throw new ApiError(403, 'FORBIDDEN', `You do not have access to upload leads for ${location}.`);
         if (await this.leads.findOne((lead) => lead.phone === phone && lead.location === location)) { skipped++; continue; }
         const lead: Lead = { id: Ids.create('lead'), name, phone, location, status: Phase22LeadStatus.NEW, assignedUserId: '', assignedAt: '', uploadBatchId: batchId, uploadedBy: actor.id, createdAt: now, updatedAt: now };
         await this.leads.create(lead);
@@ -108,6 +109,7 @@ export class Phase22Api {
     const actor = await this.access.require(Permissions.LEADS_MANAGE);
     const lead = await this.leads.get(leadId);
     if (!lead) throw new ApiError(404, 'NOT_FOUND', 'Lead was not found.');
+    if (!(await this.canSeeLocation(actor, lead.location))) await this.denied(actor, leadId);
     const validUserId = Validation.requiredString(userId, 'userId');
     if (!(await this.phase1Repos.users.get(validUserId))) throw new ApiError(404, 'NOT_FOUND', 'User was not found.');
     const record = await this.leads.update(leadId, { status: Phase22LeadStatus.ASSIGNED, assignedUserId: validUserId, assignedAt: Ids.now() });
@@ -115,28 +117,41 @@ export class Phase22Api {
     return record;
   }
 
-  /** ADMIN/SITE_MANAGER (LEADS_MANAGE) see every lead; AGENT (LEADS_VIEW_ASSIGNED) sees only their own. */
+  /** ADMIN sees every lead. SITE_MANAGER (LEADS_MANAGE) sees every lead for locations they have
+   * number access to — see canSeeLocation. AGENT (LEADS_VIEW_ASSIGNED) sees only their own. */
   async listLeads(filters: { location?: string; status?: string; assignedUserId?: string } = {}): Promise<Lead[]> {
     const actor = await this.access.currentUser();
     const isManager = await this.isLeadManager(actor);
     if (isManager) await this.access.require(Permissions.LEADS_MANAGE);
     else await this.access.require(Permissions.LEADS_VIEW_ASSIGNED);
     const all = await this.leads.list();
-    const scoped = isManager ? all : all.filter((lead) => lead.assignedUserId === actor.id);
+    let scoped: Lead[];
+    if (!isManager) {
+      scoped = all.filter((lead) => lead.assignedUserId === actor.id);
+    } else {
+      const locationAccess = new Map<string, boolean>();
+      scoped = [];
+      for (const lead of all) {
+        if (!locationAccess.has(lead.location)) locationAccess.set(lead.location, await this.canSeeLocation(actor, lead.location));
+        if (locationAccess.get(lead.location)) scoped.push(lead);
+      }
+    }
     return scoped
       .filter((lead) => (!filters.location || lead.location === filters.location) && (!filters.status || lead.status === filters.status) && (!filters.assignedUserId || lead.assignedUserId === filters.assignedUserId))
       .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
   }
 
   async getLocationConfig(location: string): Promise<LocationAssignmentConfig | null> {
-    await this.access.require(Permissions.LEADS_MANAGE);
+    const actor = await this.access.require(Permissions.LEADS_MANAGE);
     Phase22Validation.location(location);
+    if (!(await this.canSeeLocation(actor, location))) await this.deniedLocation(actor, location);
     return this.locationConfig.findOne((record) => record.location === location);
   }
 
   async setLocationConfig(location: string, patch: Record<string, unknown>): Promise<LocationAssignmentConfig> {
     const actor = await this.access.require(Permissions.LEADS_MANAGE);
     Phase22Validation.location(location);
+    if (!(await this.canSeeLocation(actor, location))) await this.deniedLocation(actor, location);
     const allowed = ['mode', 'singleUserId', 'active', 'callerId'];
     const safePatch: Record<string, unknown> = {};
     for (const key of Object.keys(patch || {})) {
@@ -161,13 +176,15 @@ export class Phase22Api {
   }
 
   async listLocationParticipants(location: string): Promise<LocationAssignmentUser[]> {
-    await this.access.require(Permissions.LEADS_MANAGE);
+    const actor = await this.access.require(Permissions.LEADS_MANAGE);
+    if (!(await this.canSeeLocation(actor, location))) await this.deniedLocation(actor, location);
     return (await this.locationUsers.list()).filter((p) => p.location === location).sort((a, b) => a.sequenceOrder - b.sequenceOrder);
   }
 
   async addLocationParticipant(location: string, userId: string, sequenceOrder?: number): Promise<LocationAssignmentUser> {
     const actor = await this.access.require(Permissions.LEADS_MANAGE);
     Phase22Validation.location(location);
+    if (!(await this.canSeeLocation(actor, location))) await this.deniedLocation(actor, location);
     if (!(await this.phase1Repos.users.get(userId))) throw new ApiError(404, 'NOT_FOUND', 'User was not found.');
     if (await this.locationUsers.findOne((p) => p.location === location && p.userId === userId)) throw new ApiError(409, 'CONFLICT', 'User is already a participant for this location.');
     const now = Ids.now();
@@ -179,7 +196,9 @@ export class Phase22Api {
 
   async updateLocationParticipant(id: string, patch: Record<string, unknown>): Promise<LocationAssignmentUser> {
     const actor = await this.access.require(Permissions.LEADS_MANAGE);
-    if (!(await this.locationUsers.get(id))) throw new ApiError(404, 'NOT_FOUND', 'Location participant was not found.');
+    const existing = await this.locationUsers.get(id);
+    if (!existing) throw new ApiError(404, 'NOT_FOUND', 'Location participant was not found.');
+    if (!(await this.canSeeLocation(actor, existing.location))) await this.deniedLocation(actor, existing.location);
     const allowed = ['sequenceOrder', 'active'];
     const safePatch: Record<string, unknown> = {};
     for (const key of Object.keys(patch || {})) {
@@ -462,13 +481,36 @@ export class Phase22Api {
     return (await this.access.hasRole(actor, Roles.ADMIN)) || (await this.access.hasRole(actor, Roles.SITE_MANAGER));
   }
 
+  /**
+   * Isolation boundary: a manager only sees/touches leads for a location whose resolved
+   * WhatsApp number (via findNumberForLocation, the same name-match startWhatsAppFromLead
+   * already relies on) they actually have access to — same Team/NumberAccess grant
+   * Conversations already enforce, reused rather than inventing a second access model. A
+   * location that doesn't resolve to any number (not yet named to match the convention)
+   * stays visible to every manager, same "unconfigured, not locked down" fallback
+   * findNumberForLocation's own caller already accepts.
+   */
+  private async canSeeLocation(actor: User, location: string): Promise<boolean> {
+    if (await this.access.hasRole(actor, Roles.ADMIN)) return true;
+    const number = await this.findNumberForLocation(location);
+    if (!number) return true;
+    if (await this.access.hasGrantedNumber(actor.id, number.id)) return true;
+    return (await this.access.resolveTeamIdForNumber(number.id)) !== null;
+  }
+
   private async canTouchLead(actor: User, lead: Lead): Promise<boolean> {
-    return (await this.isLeadManager(actor)) || lead.assignedUserId === actor.id;
+    if (lead.assignedUserId === actor.id) return true;
+    return (await this.isLeadManager(actor)) && (await this.canSeeLocation(actor, lead.location));
   }
 
   private async denied(actor: User, leadId: string): Promise<never> {
     await this.audit.write(actor.id, 'authorization.denied', 'lead', leadId, { reason: 'NOT_ASSIGNED_TO_CALLER' });
     throw new ApiError(403, 'FORBIDDEN', 'Access is denied.');
+  }
+
+  private async deniedLocation(actor: User, location: string): Promise<never> {
+    await this.audit.write(actor.id, 'authorization.denied', 'location', location, { reason: 'NUMBER_ACCESS' });
+    throw new ApiError(403, 'FORBIDDEN', `You do not have access to the ${location} location.`);
   }
 
   private async assignLead(lead: Lead): Promise<Lead> {

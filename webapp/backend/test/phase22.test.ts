@@ -468,4 +468,71 @@ describe('Phase22Api (ported from Phase22Domain.gs + Phase22Services.gs)', () =>
       expect(all).toHaveLength(3);
     });
   });
+
+  describe('lead/location isolation (a manager only sees a location if they have access to its resolved WhatsApp number)', () => {
+    const MANAGER_A_EMAIL = 'manager-a@example.com';
+    const MANAGER_B_EMAIL = 'manager-b@example.com';
+    let managerAId: string;
+    let managerBId: string;
+    let raipurNumberId: string;
+    let raipurLeadId: string;
+    let rajsamandLeadId: string;
+
+    beforeEach(async () => {
+      const roles = await new Phase1Api(db, ADMIN_EMAIL).listRoles();
+      const siteManagerRoleId = roles.find((r) => r.key === Roles.SITE_MANAGER)!.id;
+
+      const managerA = await new Phase1Api(db, ADMIN_EMAIL).createUser({ email: MANAGER_A_EMAIL, displayName: 'Manager A', roleIds: [siteManagerRoleId] });
+      managerAId = managerA.id;
+      const managerB = await new Phase1Api(db, ADMIN_EMAIL).createUser({ email: MANAGER_B_EMAIL, displayName: 'Manager B', roleIds: [siteManagerRoleId] });
+      managerBId = managerB.id;
+
+      // findNumberForLocation matches by display name containing the location string.
+      const number = await new Phase3Api(db, ADMIN_EMAIL).createNumber({ displayName: 'Entartica - Raipur', phoneNumber: '079-485-02804', provider: 'exotel' });
+      raipurNumberId = number.id;
+      await new Phase1Api(db, ADMIN_EMAIL).grantNumberAccess({ userId: managerAId, numberId: raipurNumberId });
+      // Manager B gets no grant to the Raipur number at all — this is the isolation boundary under test.
+
+      await new Phase22Api(db, ADMIN_EMAIL).uploadLeads([
+        { name: 'Raipur Lead', phone: '+919876500010', location: 'Raipur' },
+        { name: 'Rajsamand Lead', phone: '+919876500011', location: 'Rajsamand' }, // no number named after "Rajsamand" exists — unconfigured, stays visible to every manager
+      ]);
+      const leads = await new Phase22Api(db, ADMIN_EMAIL).listLeads();
+      raipurLeadId = leads.find((l) => l.location === 'Raipur')!.id;
+      rajsamandLeadId = leads.find((l) => l.location === 'Rajsamand')!.id;
+    });
+
+    it('listLeads: manager with number access sees the Raipur lead, manager without it does not; both see the unconfigured Rajsamand lead; ADMIN sees both', async () => {
+      const asA = await new Phase22Api(db, MANAGER_A_EMAIL).listLeads();
+      expect(asA.map((l) => l.id).sort()).toEqual([raipurLeadId, rajsamandLeadId].sort());
+
+      const asB = await new Phase22Api(db, MANAGER_B_EMAIL).listLeads();
+      expect(asB.map((l) => l.id)).toEqual([rajsamandLeadId]);
+
+      const asAdmin = await new Phase22Api(db, ADMIN_EMAIL).listLeads();
+      expect(asAdmin.map((l) => l.id).sort()).toEqual([raipurLeadId, rajsamandLeadId].sort());
+    });
+
+    it('reassignLead: manager without Raipur number access is denied touching a Raipur lead, manager with access is not', async () => {
+      await expect(new Phase22Api(db, MANAGER_B_EMAIL).reassignLead(raipurLeadId, managerBId)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      await expect(new Phase22Api(db, MANAGER_A_EMAIL).reassignLead(raipurLeadId, managerAId)).resolves.toMatchObject({ assignedUserId: managerAId });
+    });
+
+    it('uploadLeads: a row for a location the manager cannot see is reported as an individual row error, not a thrown exception', async () => {
+      const result = await new Phase22Api(db, MANAGER_B_EMAIL).uploadLeads([{ name: 'New Raipur Lead', phone: '+919876500099', location: 'Raipur' }]);
+      expect(result.created).toBe(0);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0]!.message).toMatch(/access/i);
+    });
+
+    it('getLocationConfig/setLocationConfig/listLocationParticipants/addLocationParticipant: manager without Raipur access is denied', async () => {
+      await expect(new Phase22Api(db, MANAGER_B_EMAIL).getLocationConfig('Raipur')).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      await expect(new Phase22Api(db, MANAGER_B_EMAIL).setLocationConfig('Raipur', { mode: 'manual' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      await expect(new Phase22Api(db, MANAGER_B_EMAIL).listLocationParticipants('Raipur')).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      await expect(new Phase22Api(db, MANAGER_B_EMAIL).addLocationParticipant('Raipur', managerBId)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+      await expect(new Phase22Api(db, MANAGER_A_EMAIL).getLocationConfig('Raipur')).resolves.toBeNull(); // no config set yet, but the call itself is not denied
+      await expect(new Phase22Api(db, MANAGER_A_EMAIL).addLocationParticipant('Raipur', managerAId)).resolves.toMatchObject({ location: 'Raipur', userId: managerAId });
+    });
+  });
 });
