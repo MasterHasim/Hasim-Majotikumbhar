@@ -207,36 +207,38 @@ export function Dashboard({ number }: { number: WhatsAppNumber | null }) {
             </table>
           </div>
 
-          <div className="card" style={{ maxWidth: 'none' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-              <h2 className="section-title" style={{ marginTop: 0, marginBottom: 0 }}>Lead funnel</h2>
-              <select value={funnelLocation} onChange={(e) => setFunnelLocation(e.target.value)}>
-                <option value="">All locations</option>
-                {LEAD_LOCATIONS.map((l) => <option key={l} value={l}>{l}</option>)}
-              </select>
+          <div className="dashboard-grid">
+            <div className="card">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                <h2 className="section-title" style={{ marginTop: 0, marginBottom: 0 }}>Lead funnel</h2>
+                <select value={funnelLocation} onChange={(e) => setFunnelLocation(e.target.value)}>
+                  <option value="">All locations</option>
+                  {LEAD_LOCATIONS.map((l) => <option key={l} value={l}>{l}</option>)}
+                </select>
+              </div>
+              <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                The Leads Kanban board's own stage progression — each bar shows what share of leads that reached the first stage also reached this one.
+              </p>
+              {!funnel ? <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>Loading…</p> : <FunnelChart funnel={funnel} />}
             </div>
-            <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-              The Leads Kanban board's own stage progression — each bar shows what share of leads that reached the first stage also reached this one.
-            </p>
-            {!funnel ? <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>Loading…</p> : <FunnelChart funnel={funnel} />}
-          </div>
 
-          <div className="card" style={{ maxWidth: 'none' }}>
-            <h2 className="section-title" style={{ marginTop: 0 }}>Customer stage distribution</h2>
-            <BarList rows={metrics.stageDistribution.map((s) => ({ label: s.name, count: s.count }))} />
-          </div>
+            <div className="card">
+              <h2 className="section-title" style={{ marginTop: 0 }}>Customer stage distribution</h2>
+              <BarList rows={metrics.stageDistribution.map((s) => ({ label: s.name, count: s.count }))} />
+            </div>
 
-          <div className="card" style={{ maxWidth: 'none' }}>
-            <h2 className="section-title" style={{ marginTop: 0 }}>Template usage</h2>
-            <BarList rows={metrics.templateUsage.map((t) => ({ label: t.name, count: t.count }))} />
-          </div>
+            <div className="card">
+              <h2 className="section-title" style={{ marginTop: 0 }}>Template usage</h2>
+              <BarList rows={metrics.templateUsage.map((t) => ({ label: t.name, count: t.count }))} />
+            </div>
 
-          <div className="card">
-            <h2 className="section-title" style={{ marginTop: 0 }}>Lead conversion</h2>
-            <div className="cust-fields" style={{ padding: 0, border: 'none' }}>
-              <div className="field-row"><span className="field-label">Customers with a stage</span><span className="field-value">{metrics.leadConversion.totalCustomersWithStage}</span></div>
-              <div className="field-row"><span className="field-label">Won</span><span className="field-value">{metrics.leadConversion.wonCount}</span></div>
-              <div className="field-row"><span className="field-label">Conversion rate</span><span className="field-value">{metrics.leadConversion.conversionRate === null ? '—' : `${metrics.leadConversion.conversionRate}%`}</span></div>
+            <div className="card">
+              <h2 className="section-title" style={{ marginTop: 0 }}>Lead conversion</h2>
+              <div className="cust-fields" style={{ padding: 0, border: 'none' }}>
+                <div className="field-row"><span className="field-label">Customers with a stage</span><span className="field-value">{metrics.leadConversion.totalCustomersWithStage}</span></div>
+                <div className="field-row"><span className="field-label">Won</span><span className="field-value">{metrics.leadConversion.wonCount}</span></div>
+                <div className="field-row"><span className="field-label">Conversion rate</span><span className="field-value">{metrics.leadConversion.conversionRate === null ? '—' : `${metrics.leadConversion.conversionRate}%`}</span></div>
+              </div>
             </div>
           </div>
         </>

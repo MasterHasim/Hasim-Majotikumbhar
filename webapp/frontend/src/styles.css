@@ -239,6 +239,12 @@ table.data-table tr.clickable { cursor: pointer; }
 .bar-list .bar-fill { background: var(--accent); height: 100%; border-radius: 4px; }
 .bar-list .bar-count { text-align: right; font-variant-numeric: tabular-nums; color: var(--text-secondary); font-family: var(--font-mono); }
 
+/* Responsive slab layout for smaller Dashboard cards (funnel, distributions, small stat blocks) —
+   auto-fit reflows the column count by available width instead of a fixed breakpoint list, so it
+   naturally goes from one column on mobile to several on a wide monitor. */
+.dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-bottom: 16px; align-items: start; }
+.dashboard-grid .card { max-width: none; margin-bottom: 0; }
+
 .settings-tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
 .settings-tab { padding: 9px 14px; font-size: 13px; font-weight: 600; color: var(--text-secondary); border: none; background: transparent; border-bottom: 2px solid transparent; }
 .settings-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
