@@ -44,16 +44,20 @@ function readFileAsBase64(file: File): Promise<string> {
   });
 }
 
-/** Shown above the first message of a conversation that carries Meta's ad-referral data —
- * i.e. the customer tapped a "Send message" button on a Facebook/Instagram ad. Unverified
- * against real traffic (see MessageReferral doc comment), so kept visually low-key. */
+/** Shown above a message that carries Meta's ad-referral data — i.e. the customer tapped
+ * a "Send message" button on a Facebook/Instagram ad. Mirrors the "AD URL: <link>" card
+ * agents know from Superfone, so it's immediately recognizable. Unverified against real
+ * Exotel traffic (see MessageReferral doc comment) — the layout is ready, the data isn't confirmed yet. */
 function ReferralBadge({ referral }: { referral: NonNullable<Workspace['messages'][number]['referral']> }) {
   return (
-    <div className="referral-badge" title="This conversation started from a Facebook/Instagram ad click">
-      📣 From ad{referral.headline ? `: ${referral.headline}` : ''}
+    <div className="referral-badge">
       {referral.sourceUrl && (
-        <> · <a href={referral.sourceUrl} target="_blank" rel="noreferrer">view ad</a></>
+        <div className="referral-badge-url">
+          <span className="referral-badge-label">AD URL:</span>{' '}
+          <a href={referral.sourceUrl} target="_blank" rel="noreferrer">{referral.sourceUrl}</a>
+        </div>
       )}
+      {referral.headline && <div className="referral-badge-headline">{referral.headline}</div>}
     </div>
   );
 }

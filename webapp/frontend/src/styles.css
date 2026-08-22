@@ -143,8 +143,11 @@ select.btn { -webkit-appearance: none; appearance: none; }
 .message .time { color: var(--text-muted); font-size: 10.5px; margin-top: 5px; font-family: var(--font-mono); }
 .message .media-image { max-width: 100%; border-radius: 8px; display: block; margin-bottom: 6px; cursor: pointer; }
 .message .media-link { display: flex; align-items: center; gap: 6px; padding: 7px 9px; margin-bottom: 6px; background: rgba(255,255,255,.05); border-radius: 8px; color: inherit; text-decoration: none; font-size: 12px; }
-.referral-badge { font-size: 10.5px; color: var(--violet); background: rgba(167,139,250,.12); border-radius: 6px; padding: 3px 7px; margin-bottom: 6px; display: inline-block; }
-.referral-badge a { color: inherit; text-decoration: underline; }
+.referral-badge { font-size: 12px; background: rgba(167,139,250,.1); border: 1px solid rgba(167,139,250,.35); border-radius: 8px; padding: 7px 9px; margin-bottom: 8px; }
+.referral-badge-label { color: var(--violet); font-weight: 700; letter-spacing: .3px; }
+.referral-badge-url { word-break: break-all; }
+.referral-badge-url a { color: var(--violet); text-decoration: underline; }
+.referral-badge-headline { margin-top: 4px; color: var(--text-secondary); font-size: 11.5px; }
 .compose-error { color: var(--danger); font-size: 12px; padding: 0 16px 6px; }
 .compose-window-banner { color: var(--warning); background: var(--warning-light); font-size: 12px; line-height: 1.5; padding: 8px 16px; margin: 0 16px 8px; border-radius: 8px; }
 .compose-toolbar { display: flex; gap: 6px; margin: 0 0 8px; flex-wrap: wrap; align-items: center; }
