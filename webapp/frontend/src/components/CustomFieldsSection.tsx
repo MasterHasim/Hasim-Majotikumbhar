@@ -21,10 +21,19 @@ export function CustomFieldsSection({
 }) {
   const [defs, setDefs] = useState<CustomFieldDefinition[] | null>(null);
   const [local, setLocal] = useState<Record<string, string>>({});
+  const [campaigns, setCampaigns] = useState<string[] | null>(null);
 
   useEffect(() => {
     backendApi.listCustomFieldDefinitions(entityType).then((d) => setDefs(d.filter((x) => x.active))).catch(() => setDefs([]));
   }, [entityType]);
+
+  useEffect(() => {
+    // Only fetched once actually needed — most orgs won't have a 'campaign' field defined.
+    if (defs?.some((d) => d.type === 'campaign') && campaigns === null) {
+      backendApi.listActiveCampaigns().then((rows) => setCampaigns(rows.map((r) => r.name))).catch(() => setCampaigns([]));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defs]);
 
   useEffect(() => { setLocal({}); }, [entityId]);
 
@@ -55,6 +64,13 @@ export function CustomFieldsSection({
               <select className="field-value" disabled={busy} value={valueOf(d)} onChange={(e) => { change(d, e.target.value); onSave(d.key, e.target.value); }}>
                 <option value="">—</option>
                 {d.options.map((o) => <option key={o} value={o}>{o}</option>)}
+              </select>
+            ) : d.type === 'campaign' ? (
+              <select className="field-value" disabled={busy || campaigns === null} value={valueOf(d)} onChange={(e) => { change(d, e.target.value); onSave(d.key, e.target.value); }}>
+                <option value="">{campaigns === null ? 'Loading campaigns…' : campaigns.length === 0 ? 'No active campaigns found' : '—'}</option>
+                {/* Keep a previously-saved value selectable even if that campaign is no longer active/live. */}
+                {valueOf(d) && !(campaigns ?? []).includes(valueOf(d)) && <option value={valueOf(d)}>{valueOf(d)} (no longer live)</option>}
+                {(campaigns ?? []).map((name) => <option key={name} value={name}>{name}</option>)}
               </select>
             ) : (
               <input

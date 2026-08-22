@@ -195,7 +195,10 @@ export interface Lead {
   customFields?: Record<string, string | number>;
 }
 
-export type CustomFieldType = 'text' | 'number' | 'select' | 'date';
+/** 'campaign' behaves exactly like 'text' for storage — the editor renders a dropdown fetched
+ * live from currently-active Meta campaigns (backendApi.listActiveCampaigns) instead of a
+ * static admin-authored options list like 'select' uses. */
+export type CustomFieldType = 'text' | 'number' | 'select' | 'date' | 'campaign';
 export type CustomFieldEntityType = 'lead' | 'customer';
 
 export interface CustomFieldDefinition {

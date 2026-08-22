@@ -886,7 +886,7 @@ function LeadStagesTab() {
 
 // ---------------------------------------------------------------------------
 
-const FIELD_TYPE_LABELS: Record<CustomFieldType, string> = { text: 'Text', number: 'Number', select: 'Dropdown', date: 'Date' };
+const FIELD_TYPE_LABELS: Record<CustomFieldType, string> = { text: 'Text', number: 'Number', select: 'Dropdown', date: 'Date', campaign: 'Dropdown (live campaigns)' };
 
 function CustomFieldsTab() {
   const [entityType, setEntityType] = useState<CustomFieldEntityType>('lead');
@@ -966,7 +966,7 @@ function CustomFieldsTab() {
               <td>{d.sequenceOrder}</td>
               <td>{d.label}</td>
               <td>{FIELD_TYPE_LABELS[d.type]}</td>
-              <td style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{d.type === 'select' ? d.options.join(', ') : '—'}</td>
+              <td style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{d.type === 'select' ? d.options.join(', ') : d.type === 'campaign' ? 'Live from Ad Accounts' : '—'}</td>
               <td>
                 <input type="checkbox" checked={d.active} disabled={busy} onChange={(e) => void guard(() => backendApi.updateCustomFieldDefinition(d.id, { active: e.target.checked }))} />
               </td>

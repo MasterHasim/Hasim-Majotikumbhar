@@ -100,6 +100,11 @@ export function registerPhase22Routes(router: RouterType) {
     const body = (await json(request)) as { tags: unknown };
     return Response.json(await new Phase22Api(ctx.db, ctx.identityEmail).updateLeadTags(param(request, 'id'), body.tags));
   });
+  router.patch('/api/leads/:id', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    const body = (await json(request)) as { name?: unknown; phone?: unknown };
+    return Response.json(await new Phase22Api(ctx.db, ctx.identityEmail).updateLeadDetails(param(request, 'id'), body));
+  });
   router.post('/api/leads/:id/custom-fields', async (request: IRequest, env: Env) => {
     const ctx = await buildContext(request, env);
     const body = (await json(request)) as Record<string, unknown>;

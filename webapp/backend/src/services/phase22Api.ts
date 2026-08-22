@@ -419,6 +419,22 @@ export class Phase22Api {
     return remark;
   }
 
+  /** Same authorization shape as updateLeadTags: lead's assigned agent or a lead manager. Name/phone
+   * only — location/status/assignment have their own dedicated flows and stay off this endpoint. */
+  async updateLeadDetails(leadId: string, patch: { name?: unknown; phone?: unknown }): Promise<Lead> {
+    const lead = await this.leads.get(leadId);
+    if (!lead) throw new ApiError(404, 'NOT_FOUND', 'Lead was not found.');
+    const actor = await this.access.currentUser();
+    if (!(await this.canTouchLead(actor, lead))) await this.denied(actor, leadId);
+    await this.access.require(Permissions.REMARKS_MANAGE);
+    const safePatch: Partial<Lead> = {};
+    if (patch.name !== undefined) safePatch.name = Validation.requiredString(patch.name, 'name');
+    if (patch.phone !== undefined) safePatch.phone = Phase22Validation.phone(patch.phone, 'phone');
+    const record = await this.leads.update(leadId, safePatch);
+    await this.audit.write(actor.id, 'lead.detailsUpdated', 'lead', leadId, { patch: safePatch });
+    return record;
+  }
+
   /** Same authorization shape as addLeadRemark: lead's assigned agent or a lead manager. Replaces the full tag set (not a single add/remove) — simplest contract for a small, client-editable list. */
   async updateLeadTags(leadId: string, tags: unknown): Promise<Lead> {
     const lead = await this.leads.get(leadId);

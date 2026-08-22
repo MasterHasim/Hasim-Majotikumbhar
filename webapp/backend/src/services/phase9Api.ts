@@ -133,3 +133,16 @@ export async function isConversationSnoozed(db: FirebaseDb, conversationId: stri
   if (!record) return false;
   return record.snoozedUntil > Ids.now();
 }
+
+/**
+ * Batched alternative to calling isConversationSnoozed once per conversation — that pattern hit
+ * Cloudflare's per-invocation subrequest limit for real once there were enough numbers/open
+ * conversations (getNeedsResponseCounts loops listConversationsInternal across every accessible
+ * number, so N conversations became N extra subrequests just for snooze checks). One list() call
+ * instead, same "batch instead of N .get()s" fix as backfillCustomerServiceWindow's earlier one.
+ */
+export async function listSnoozedConversationIds(db: FirebaseDb): Promise<Set<string>> {
+  const now = Ids.now();
+  const records = await new Repository<ConversationSnooze>(db, 'conversationSnoozes').list();
+  return new Set(records.filter((r) => r.snoozedUntil > now).map((r) => r.id));
+}

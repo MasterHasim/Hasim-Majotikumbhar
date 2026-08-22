@@ -15,7 +15,7 @@ import { AuditLogService } from '../lib/auditLog';
 import { FirebaseDb } from '../lib/firebaseAdmin';
 import { buildPhase1Repositories } from '../lib/phase1Repositories';
 import type { NumberAccess } from '../domain/types';
-import { isConversationSnoozed } from './phase9Api';
+import { listSnoozedConversationIds } from './phase9Api';
 
 export interface ConversationListItem extends Conversation {
   customerName: string;
@@ -73,11 +73,8 @@ export class Phase5Api {
     let results = (await this.conversations.list()).filter((c) => c.numberId === numberId);
     if (activeOnly) {
       results = results.filter((c) => c.status === 'OPEN');
-      const notSnoozed: Conversation[] = [];
-      for (const conversation of results) {
-        if (!(await isConversationSnoozed(this.db, conversation.id))) notSnoozed.push(conversation);
-      }
-      results = notSnoozed;
+      const snoozedIds = await listSnoozedConversationIds(this.db);
+      results = results.filter((c) => !snoozedIds.has(c.id));
     }
     const visible: Conversation[] = [];
     for (const conversation of results) {

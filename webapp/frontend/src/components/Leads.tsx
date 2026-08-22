@@ -176,6 +176,19 @@ export function Leads({ whoAmI, onOpenConversation }: { whoAmI: WhoAmI; onOpenCo
     }
   }
 
+  async function updateLeadField(lead: Lead, patch: { name?: string; phone?: string }) {
+    setActionBusyId(lead.id);
+    setError(null);
+    try {
+      await backendApi.updateLeadDetails(lead.id, patch);
+      loadLeads();
+    } catch (err) {
+      setError(errMsg(err));
+    } finally {
+      setActionBusyId(null);
+    }
+  }
+
   function toggleSelect(id: string) {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -318,8 +331,31 @@ export function Leads({ whoAmI, onOpenConversation }: { whoAmI: WhoAmI; onOpenCo
                         <input type="checkbox" checked={selectedIds.has(lead.id)} onChange={() => toggleSelect(lead.id)} />
                       </td>
                     )}
-                    <td>{lead.name}</td>
-                    <td>{lead.phone}</td>
+                    {canTouch(lead) ? (
+                      <>
+                        <td onClick={(e) => e.stopPropagation()}>
+                          <input
+                            defaultValue={lead.name}
+                            disabled={actionBusyId === lead.id}
+                            style={{ width: 110 }}
+                            onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== lead.name) void updateLeadField(lead, { name: v }); else e.target.value = lead.name; }}
+                          />
+                        </td>
+                        <td onClick={(e) => e.stopPropagation()}>
+                          <input
+                            defaultValue={lead.phone}
+                            disabled={actionBusyId === lead.id}
+                            style={{ width: 120 }}
+                            onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== lead.phone) void updateLeadField(lead, { phone: v }); else e.target.value = lead.phone; }}
+                          />
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td>{lead.name}</td>
+                        <td>{lead.phone}</td>
+                      </>
+                    )}
                     <td>{lead.location}</td>
                     <td><span className={`lead-status-tag ${lead.status}`}>{lead.status}</span></td>
                     <td>

@@ -126,8 +126,11 @@ describe('Phase10Api / Phase11Api / Phase6Api template+media additions', () => {
       expect(message.status).toBe('SENT');
       expect(message.messageType).toBe('template');
       expect(mock.exotelCalls.at(-1)!.path).toBe('messages');
-      const sentComponents = mock.exotelCalls.at(-1)!.body as { whatsapp: { messages: [{ content: { template: { components: [{ text: string }] } } }] } };
-      expect(sentComponents.whatsapp.messages[0]!.content.template.components[0]!.text).toBe('Hi Priya, welcome!');
+      const sentBody = mock.exotelCalls.at(-1)!.body as { whatsapp: { messages: [{ content: { type: string; template: { language: { code: string; policy: string }; components: [{ type: string; parameters: { type: string; text: string }[] }] } } }] } };
+      const sentContent = sentBody.whatsapp.messages[0]!.content;
+      expect(sentContent.type).toBe('template');
+      expect(sentContent.template.language).toEqual({ code: 'en', policy: 'deterministic' });
+      expect(sentContent.template.components[0]).toEqual({ type: 'body', parameters: [{ type: 'text', text: 'Priya' }] });
     });
 
     it('sends a media message and records a MessageMedia entry', async () => {

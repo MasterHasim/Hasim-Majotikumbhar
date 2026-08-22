@@ -120,4 +120,38 @@ describe('AdsApi (Meta Ads reporting)', () => {
       await expect(apiAs(AGENT_EMAIL).getAdInsights(account.id, '2026-08-01', '2026-08-22')).rejects.toMatchObject({ code: 'FORBIDDEN' });
     });
   });
+
+  describe('listActiveCampaigns — backs the Campaign custom field dropdown', () => {
+    it('is readable by AGENT (deliberately not gated on REPORTS_VIEW — bare campaign names are not financial data)', async () => {
+      await apiAs(ADMIN_EMAIL).createAdAccount({ name: 'Entartica Sea World', externalAccountId: '1030851627297277' });
+      mock.setNextMetaAdsResponse(200, { data: [{ id: 'c2', name: 'Solar Leads - Rajsamand' }, { id: 'c1', name: 'Solar Leads - Alibaug' }] });
+      const result = await apiAs(AGENT_EMAIL).listActiveCampaigns();
+      expect(result).toEqual([{ name: 'Solar Leads - Alibaug' }, { name: 'Solar Leads - Rajsamand' }]); // sorted
+      const call = mock.metaAdsCalls.at(-1)!;
+      expect(call.url).toContain('act_1030851627297277/campaigns');
+      expect(call.url).toContain('effective_status');
+    });
+
+    it('returns an empty list (not an error) when no ad account is registered', async () => {
+      await expect(apiAs(AGENT_EMAIL).listActiveCampaigns()).resolves.toEqual([]);
+    });
+
+    it('returns an empty list when META_ACCESS_TOKEN is not configured', async () => {
+      await new AdsApi(db, ADMIN_EMAIL, mock.metaAdsEnv as never).createAdAccount({ name: 'Entartica Sea World', externalAccountId: '1030851627297277' });
+      await expect(new AdsApi(db, AGENT_EMAIL, {} as never).listActiveCampaigns()).resolves.toEqual([]);
+    });
+
+    it('soft-fails to an empty list on a Meta API error, unlike getAdInsights', async () => {
+      await apiAs(ADMIN_EMAIL).createAdAccount({ name: 'Entartica Sea World', externalAccountId: '1030851627297277' });
+      mock.setNextMetaAdsResponse(400, { error: { message: 'Invalid OAuth access token' } });
+      await expect(apiAs(AGENT_EMAIL).listActiveCampaigns()).resolves.toEqual([]);
+    });
+
+    it('excludes an inactive ad account', async () => {
+      const account = await apiAs(ADMIN_EMAIL).createAdAccount({ name: 'Entartica Sea World', externalAccountId: '1030851627297277' });
+      await apiAs(ADMIN_EMAIL).updateAdAccount(account.id, { active: false });
+      mock.setNextMetaAdsResponse(200, { data: [{ id: 'c1', name: 'Solar Leads - Alibaug' }] });
+      await expect(apiAs(AGENT_EMAIL).listActiveCampaigns()).resolves.toEqual([]);
+    });
+  });
 });

@@ -183,6 +183,8 @@ export const backendApi = {
   getAdInsights: (accountId: string, from: string, to: string) =>
     apiFetch<AdInsights>(`/api/ad-accounts/${encodeURIComponent(accountId)}/insights?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`),
 
+  listActiveCampaigns: () => apiFetch<{ name: string }[]>('/api/ad-campaigns/active'),
+
   getLocationAssignmentConfig: (location: string) => apiFetch<LocationAssignmentConfig | null>(`/api/locations/${encodeURIComponent(location)}/assignment-config`),
 
   setLocationAssignmentConfig: (location: string, patch: Record<string, unknown>) =>
@@ -200,6 +202,9 @@ export const backendApi = {
 
   updateLeadTags: (leadId: string, tags: string[]) =>
     apiFetch<Lead>(`/api/leads/${encodeURIComponent(leadId)}/tags`, { method: 'POST', body: JSON.stringify({ tags }) }),
+
+  updateLeadDetails: (leadId: string, patch: { name?: string; phone?: string }) =>
+    apiFetch<Lead>(`/api/leads/${encodeURIComponent(leadId)}`, { method: 'PATCH', body: JSON.stringify(patch) }),
 
   listCallHistory: () => apiFetch<CallLogWithContext[]>('/api/call-history'),
 

@@ -69,6 +69,23 @@ export class MetaAdsProvider {
       messagesInitiated: extractMessagesInitiated(row.actions),
     }));
   }
+
+  /** Currently-ACTIVE campaigns by name — the Campaign Master List for tagging a Lead against
+   * (see the 'campaign' CustomFieldType), independent of any date range/spend, unlike getInsights. */
+  async listActiveCampaigns(externalAccountId: string): Promise<{ id: string; name: string }[]> {
+    const url = new URL(`https://graph.facebook.com/${GRAPH_API_VERSION}/act_${externalAccountId}/campaigns`);
+    url.searchParams.set('fields', 'name,effective_status');
+    url.searchParams.set('effective_status', JSON.stringify(['ACTIVE']));
+    url.searchParams.set('limit', '200');
+    url.searchParams.set('access_token', this.accessToken);
+
+    const res = await fetch(url.toString());
+    const body = (await res.json().catch(() => null)) as { data?: { id?: string; name?: string }[]; error?: { message?: string } } | null;
+    if (!res.ok || !body || body.error) {
+      throw new ApiError(502, 'PROVIDER_ERROR', `Meta Ads request failed: ${body?.error?.message || res.statusText}`);
+    }
+    return (body.data ?? []).filter((row) => row.id && row.name).map((row) => ({ id: row.id!, name: row.name! }));
+  }
 }
 
 export function requireMetaAdsConfig(env: { META_ACCESS_TOKEN?: string }): string {

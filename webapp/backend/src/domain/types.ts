@@ -268,7 +268,10 @@ export interface Lead extends Record_ {
   customFields?: Record<string, string | number>;
 }
 
-export type CustomFieldType = 'text' | 'number' | 'select' | 'date';
+/** 'campaign' behaves exactly like 'text' for storage/validation — the difference is purely in
+ * how the frontend renders the editor: a dropdown fetched live from the registered ad accounts'
+ * currently-active Meta campaigns, instead of admin-authored static options like 'select' uses. */
+export type CustomFieldType = 'text' | 'number' | 'select' | 'date' | 'campaign';
 export type CustomFieldEntityType = 'lead' | 'customer';
 
 /** Admin (or Supervisor+, per an explicit product decision) defines these once; every Lead/

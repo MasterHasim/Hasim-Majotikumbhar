@@ -34,4 +34,8 @@ export function registerAdsRoutes(router: RouterType) {
     const to = url.searchParams.get('to') ?? '';
     return Response.json(await new AdsApi(ctx.db, ctx.identityEmail, env).getAdInsights(param(request, 'id'), from, to));
   });
+  router.get('/api/ad-campaigns/active', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    return Response.json(await new AdsApi(ctx.db, ctx.identityEmail, env).listActiveCampaigns());
+  });
 }

@@ -313,6 +313,23 @@ describe('Phase22Api (ported from Phase22Domain.gs + Phase22Services.gs)', () =>
       await expect(new Phase22Api(db, ADMIN_EMAIL).updateLeadTags(leadId, ['Manager tag'])).resolves.toMatchObject({ tags: ['Manager tag'] });
     });
 
+    it('the assigned agent can edit name/phone; an unrelated agent cannot; a manager always can; invalid phone is rejected', async () => {
+      const lead = await new Phase22Api(db, AGENT_EMAIL).updateLeadDetails(leadId, { name: 'Renamed Lead', phone: '+919876500099' });
+      expect(lead.name).toBe('Renamed Lead');
+      expect(lead.phone).toBe('+919876500099');
+      await expect(new Phase22Api(db, AGENT2_EMAIL).updateLeadDetails(leadId, { name: 'Nope' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      await expect(new Phase22Api(db, ADMIN_EMAIL).updateLeadDetails(leadId, { name: 'Manager Renamed' })).resolves.toMatchObject({ name: 'Manager Renamed' });
+      await expect(new Phase22Api(db, AGENT_EMAIL).updateLeadDetails(leadId, { phone: 'not-a-phone' })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    });
+
+    it('updateLeadDetails leaves an omitted field untouched', async () => {
+      const before = await new Phase22Api(db, ADMIN_EMAIL).listLeads();
+      const originalPhone = before.find((l) => l.id === leadId)!.phone;
+      const lead = await new Phase22Api(db, AGENT_EMAIL).updateLeadDetails(leadId, { name: 'Only Name Changed' });
+      expect(lead.name).toBe('Only Name Changed');
+      expect(lead.phone).toBe(originalPhone);
+    });
+
     it('trims, drops blanks, dedupes case-insensitively, and caps tags at 20', async () => {
       const lead = await new Phase22Api(db, AGENT_EMAIL).updateLeadTags(leadId, [' Hot ', '', 'hot', 'Cold']);
       expect(lead.tags).toEqual(['Hot', 'Cold']);
@@ -341,6 +358,14 @@ describe('Phase22Api (ported from Phase22Domain.gs + Phase22Services.gs)', () =>
 
       await expect(new Phase22Api(db, AGENT_EMAIL).updateLeadCustomFields(leadId, { lead_source: 'Not An Option' })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
       await expect(new Phase22Api(db, AGENT2_EMAIL).updateLeadCustomFields(leadId, { lead_source: 'Website' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    });
+
+    it('a "campaign" field stores any string like "text" — the live-campaign dropdown is a frontend concern only, not a stored option list', async () => {
+      await new CustomFieldsApi(db, ADMIN_EMAIL).createDefinition({ entityType: 'lead', label: 'Campaign Name', type: 'campaign' });
+      const lead = await new Phase22Api(db, AGENT_EMAIL).updateLeadCustomFields(leadId, { campaign_name: 'Solar Leads - Raipur' });
+      expect(lead.customFields).toEqual({ campaign_name: 'Solar Leads - Raipur' });
+      // Not constrained to a stored options list — any campaign name Meta might return is accepted.
+      await expect(new Phase22Api(db, AGENT_EMAIL).updateLeadCustomFields(leadId, { campaign_name: 'A Brand New Campaign Not Seen Before' })).resolves.toMatchObject({ customFields: { campaign_name: 'A Brand New Campaign Not Seen Before' } });
     });
 
     it('listLeadActivity shows reassignment, stage, tag, and remark events with resolved actor names, newest first, excluding denials', async () => {
@@ -497,6 +522,12 @@ describe('Phase22Api (ported from Phase22Domain.gs + Phase22Services.gs)', () =>
       await expect(new CustomFieldsApi(db, ADMIN_EMAIL).createDefinition({ entityType: 'lead', label: 'Campaign Name', type: 'text' })).rejects.toMatchObject({ code: 'CONFLICT' });
       await expect(new CustomFieldsApi(db, ADMIN_EMAIL).createDefinition({ entityType: 'customer', label: 'Campaign Name', type: 'text' })).resolves.toMatchObject({ entityType: 'customer' }); // same label, different entityType is fine
       await expect(new CustomFieldsApi(db, ADMIN_EMAIL).createDefinition({ entityType: 'lead', label: 'Product', type: 'select', options: [] })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    });
+
+    it('accepts a "campaign" type with no options (unlike "select")', async () => {
+      const def = await new CustomFieldsApi(db, ADMIN_EMAIL).createDefinition({ entityType: 'lead', label: 'Live Campaign', type: 'campaign' });
+      expect(def.type).toBe('campaign');
+      expect(def.options).toEqual([]);
     });
 
     it('listDefinitions is readable by any authenticated user, filtered by entityType, sorted by sequenceOrder', async () => {

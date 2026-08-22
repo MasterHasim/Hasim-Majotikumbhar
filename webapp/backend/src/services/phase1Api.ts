@@ -12,7 +12,7 @@ import { AuditLogService } from '../lib/auditLog';
 import { FirebaseDb } from '../lib/firebaseAdmin';
 import { buildPhase1Repositories } from '../lib/phase1Repositories';
 import { getEmailConfig, sendEmail, welcomeEmailHtml, type EmailConfig } from '../lib/email';
-import { substituteTemplateVariables, toE164 } from './phase6Api';
+import { buildTemplateSendComponents, toE164 } from './phase6Api';
 import { ExotelProvider, type ExotelConfig } from './exotelProvider';
 
 /** Name of the Utility template a new team member's welcome WhatsApp message is sent from —
@@ -113,7 +113,7 @@ export class Phase1Api {
     if (!template) return false;
     const number = await this.numbers.findOne((n) => n.wabaId === template.wabaId && n.active);
     if (!number) return false;
-    const components = substituteTemplateVariables(template.components, { 1: displayName, 2: roleNames.join(', ') || 'no role assigned yet', 3: this.frontendUrl });
+    const components = buildTemplateSendComponents(template.components, { 1: displayName, 2: roleNames.join(', ') || 'no role assigned yet', 3: this.frontendUrl });
     try {
       await new ExotelProvider(this.exotelConfig).sendTemplate(toE164(number.phoneNumber), toE164(phone), template.name, template.language, components);
       return true;

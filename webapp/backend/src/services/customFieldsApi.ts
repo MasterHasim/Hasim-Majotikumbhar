@@ -14,7 +14,7 @@ import { AuditLogService } from '../lib/auditLog';
 import { FirebaseDb } from '../lib/firebaseAdmin';
 import { buildPhase1Repositories } from '../lib/phase1Repositories';
 
-const FIELD_TYPES: readonly CustomFieldType[] = ['text', 'number', 'select', 'date'];
+const FIELD_TYPES: readonly CustomFieldType[] = ['text', 'number', 'select', 'date', 'campaign'];
 const ENTITY_TYPES: readonly CustomFieldEntityType[] = ['lead', 'customer'];
 
 function slugify(label: string): string {

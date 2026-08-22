@@ -80,4 +80,31 @@ export class AdsApi {
     }
     throw new ApiError(500, 'CONFIGURATION_ERROR', `Unsupported ad platform: ${account.platform}`);
   }
+
+  /**
+   * Campaign names currently running across every active registered ad account — backs the
+   * 'campaign' CustomFieldType dropdown (see customFieldsApi.ts), so an agent tagging a Lead
+   * picks from real live campaigns instead of typing a free-text name. Deliberately not gated on
+   * REPORTS_VIEW like the rest of this file: unlike spend/reach, a bare campaign name isn't
+   * financial data, and any agent editing lead custom fields needs to see this list, not just
+   * SUPERVISOR+. Any authenticated user, matching listCustomFieldDefinitions' own reasoning.
+   * Soft-fails to an empty list when Meta isn't configured or no account is registered — this
+   * runs inline while editing a Lead, so it should never block that on an ads-integration gap.
+   */
+  async listActiveCampaigns(): Promise<{ name: string }[]> {
+    await this.access.currentUser();
+    if (!this.env.META_ACCESS_TOKEN) return [];
+    const accounts = (await this.accounts.list()).filter((a) => a.active && a.platform === 'meta');
+    if (accounts.length === 0) return [];
+    try {
+      const perAccount = await Promise.all(accounts.map((a) => new MetaAdsProvider(this.env.META_ACCESS_TOKEN!).listActiveCampaigns(a.externalAccountId)));
+      const names = new Set<string>();
+      for (const campaigns of perAccount) for (const c of campaigns) names.add(c.name);
+      return [...names].sort((a, b) => a.localeCompare(b)).map((name) => ({ name }));
+    } catch {
+      // Best-effort convenience list for a field editor — a transient Meta error should never
+      // block editing a Lead's custom fields, unlike getAdInsights which is the real reporting path.
+      return [];
+    }
+  }
 }

@@ -58,8 +58,9 @@ export class ExotelProvider {
     return this.sendMessages([{ from: providerNumberId, to: toPhone, content }]);
   }
 
+  /** language.policy: 'deterministic' is required by Exotel's documented shape (developer.exotel.com/docs/whatsapp-api/api-reference/templates), confirmed 2026-08-22. */
   sendTemplate(providerNumberId: string, toPhone: string, templateName: string, language: string, components: unknown[]) {
-    return this.sendMessages([{ from: providerNumberId, to: toPhone, content: { type: 'template', template: { name: templateName, language: { code: language }, components: components || [] } } }]);
+    return this.sendMessages([{ from: providerNumberId, to: toPhone, content: { recipient_type: 'individual', type: 'template', template: { name: templateName, language: { code: language, policy: 'deterministic' }, components: components || [] } } }]);
   }
 
   private sendMessages(messages: unknown[]) {

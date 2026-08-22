@@ -84,9 +84,31 @@ export function LeadDetailModal({
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-        <h2 className="section-title" style={{ marginTop: 0 }}>{lead.name}</h2>
+        {canTouch ? (
+          <input
+            className="section-title"
+            style={{ marginTop: 0, marginBottom: 4, width: '100%', border: 'none', background: 'transparent', padding: 0 }}
+            defaultValue={lead.name}
+            disabled={busy}
+            onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== lead.name) void guard(async () => { await backendApi.updateLeadDetails(lead.id, { name: v }); onChanged(); }); else e.target.value = lead.name; }}
+          />
+        ) : (
+          <h2 className="section-title" style={{ marginTop: 0 }}>{lead.name}</h2>
+        )}
         <div className="cust-fields" style={{ padding: 0, border: 'none', marginBottom: 10 }}>
-          <div className="field-row"><span className="field-label">Phone</span><span className="field-value">{lead.phone}</span></div>
+          <div className="field-row">
+            <span className="field-label">Phone</span>
+            {canTouch ? (
+              <input
+                className="field-value"
+                defaultValue={lead.phone}
+                disabled={busy}
+                onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== lead.phone) void guard(async () => { await backendApi.updateLeadDetails(lead.id, { phone: v }); onChanged(); }); else e.target.value = lead.phone; }}
+              />
+            ) : (
+              <span className="field-value">{lead.phone}</span>
+            )}
+          </div>
           <div className="field-row"><span className="field-label">Location</span><span className="field-value">{lead.location}</span></div>
           <div className="field-row"><span className="field-label">Status</span><span className={`lead-status-tag ${lead.status}`}>{lead.status}</span></div>
           {isManager && (

@@ -23,17 +23,28 @@ import { FirebaseDb } from '../lib/firebaseAdmin';
 import { buildPhase1Repositories } from '../lib/phase1Repositories';
 import { ExotelProvider, requireExotelConfig, type ExotelConfig } from './exotelProvider';
 
-/** UNVERIFIED — best-effort placeholder substitution ({{1}}, {{2}}, ...) matching Meta/WhatsApp template component conventions, same flag apps-script/src/Phase6Services.gs's substituteTemplateVariables_ carries. Exported — Phase1Api's new-user WhatsApp notification reuses this exact substitution rather than duplicating it. */
-export function substituteTemplateVariables(components: unknown[], variables: Record<string, unknown>): unknown[] {
-  return (components || []).map((component) => {
+/**
+ * Builds the "components" array Exotel's WhatsApp template-send endpoint actually expects —
+ * confirmed 2026-08-22 against developer.exotel.com/docs/whatsapp-api/api-reference/templates
+ * after a real template send silently failed to deliver. Each component with {{n}} placeholders
+ * needs a lowercase "type" and a positional "parameters" array of {type:'text', text}; sending
+ * the previous shape (uppercase "BODY", the placeholders replaced directly into "text") is what
+ * this replaced — that was a reasoned-but-unverified guess, never checked against the real docs.
+ * Exported — Phase1Api's new-user WhatsApp notification reuses this exact builder.
+ */
+export function buildTemplateSendComponents(components: unknown[], variables: Record<string, unknown>): { type: string; parameters: { type: 'text'; text: string }[] }[] {
+  const result: { type: string; parameters: { type: 'text'; text: string }[] }[] = [];
+  for (const component of components || []) {
     const c = component as { type?: string; text?: string } | null;
-    if (!c || c.type !== 'BODY' || typeof c.text !== 'string') return component;
-    const text = c.text.replace(/\{\{(\d+)\}\}/g, (match, index) => {
-      const value = variables[index];
-      return value !== undefined ? String(value) : match;
+    if (!c || typeof c.text !== 'string') continue;
+    const placeholders = [...c.text.matchAll(/\{\{(\d+)\}\}/g)].map((m) => m[1]!);
+    if (placeholders.length === 0) continue;
+    result.push({
+      type: (c.type || 'BODY').toLowerCase(),
+      parameters: placeholders.map((index) => ({ type: 'text' as const, text: variables[index] !== undefined ? String(variables[index]) : '' })),
     });
-    return { ...c, text };
-  });
+  }
+  return result;
 }
 
 const CUSTOMER_SERVICE_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -114,7 +125,7 @@ export class Phase6Api {
     const template = await this.templates.get(templateId);
     if (!template) throw new ApiError(404, 'NOT_FOUND', 'Template was not found.');
     if (template.status !== 'APPROVED') throw new ApiError(400, 'VALIDATION_ERROR', 'Only an APPROVED template can be sent.');
-    const components = substituteTemplateVariables(template.components, variables || {});
+    const components = buildTemplateSendComponents(template.components, variables || {});
     const displayText = `[Template: ${template.name}]`;
     return this.sendOutbound(conversationId, 'template', displayText, false, (provider, number, customer) => provider.sendTemplate(toE164(number.phoneNumber), toE164(customer.phone), template.name, template.language, components));
   }
