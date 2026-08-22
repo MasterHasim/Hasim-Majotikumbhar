@@ -37,6 +37,9 @@ export const backendApi = {
   getWorkspace: (conversationId: string, includeRealtime = false) =>
     apiFetch<Workspace>(`/api/workspace/${encodeURIComponent(conversationId)}${includeRealtime ? '?includeRealtime=true' : ''}`),
 
+  startNewConversation: (numberId: string, phone: string, name?: string) =>
+    apiFetch<{ customerId: string; conversationId: string; numberId: string }>('/api/conversations/start', { method: 'POST', body: JSON.stringify({ numberId, phone, name }) }),
+
   sendReply: (conversationId: string, text: string) =>
     apiFetch<unknown>(`/api/conversations/${encodeURIComponent(conversationId)}/reply`, { method: 'POST', body: JSON.stringify({ text }) }),
 

@@ -167,6 +167,40 @@ describe('Messaging core (ported from Phase 3-6 + WorkspaceServices.gs)', () => 
     });
   });
 
+  describe('Phase6Api — startNewConversation (ad-hoc, number not yet in the CRM)', () => {
+    it('creates a new customer and conversation, assigns it to the caller, and reuses the same OPEN conversation on a second call', async () => {
+      const result = await new Phase6Api(db, AGENT_EMAIL, mock.exotelConfig as never).startNewConversation(numberId, '+91 98765-00099', 'Walk-in');
+      expect(result.numberId).toBe(numberId);
+      const detail = await new Phase5Api(db, ADMIN_EMAIL).getConversationDetail(result.conversationId);
+      expect(detail.customer?.phone).toBe('+919876500099');
+      expect(detail.customer?.name).toBe('Walk-in');
+      expect(detail.conversation.assignedUserId).toBe(agentId);
+      expect(detail.conversation.lastCustomerMessageAt).toBeUndefined(); // never had a real inbound message — first send must go through a template
+
+      const again = await new Phase6Api(db, AGENT_EMAIL, mock.exotelConfig as never).startNewConversation(numberId, '+919876500099');
+      expect(again.conversationId).toBe(result.conversationId);
+      expect(again.customerId).toBe(result.customerId);
+    });
+
+    it('finds the existing customer by phone rather than creating a duplicate, if one already exists', async () => {
+      const inbound = await new Phase4Api(db).ingestInboundMessage({ providerMessageId: 'msg-1', fromPhone: '+919876543210', providerNumberId: '+917948502801', direction: 'INBOUND', messageType: 'text', text: 'Hi', timestamp: new Date().toISOString(), status: null });
+      const result = await new Phase6Api(db, AGENT_EMAIL, mock.exotelConfig as never).startNewConversation(numberId, '+919876543210');
+      expect(result.customerId).not.toBe(result.conversationId); // sanity
+      const detail = await new Phase5Api(db, ADMIN_EMAIL).getConversationDetail(inbound.conversationId!);
+      expect(result.customerId).toBe(detail.customer!.id);
+    });
+
+    it('rejects an invalid phone number', async () => {
+      await expect(new Phase6Api(db, AGENT_EMAIL, mock.exotelConfig as never).startNewConversation(numberId, '123')).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    });
+
+    it('denies an agent without access to the chosen number, but allows ADMIN regardless', async () => {
+      const otherNumber = await new Phase3Api(db, ADMIN_EMAIL).createNumber({ displayName: 'No Access', phoneNumber: '079-485-09998', provider: 'exotel' });
+      await expect(new Phase6Api(db, AGENT_EMAIL, mock.exotelConfig as never).startNewConversation(otherNumber.id, '+919876500098')).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      await expect(new Phase6Api(db, ADMIN_EMAIL, mock.exotelConfig as never).startNewConversation(otherNumber.id, '+919876500098')).resolves.toMatchObject({ numberId: otherNumber.id });
+    });
+  });
+
   describe('WorkspaceApi — aggregator', () => {
     it('returns conversation + customer + number + messages with sender names, and a realtime token only when asked', async () => {
       const result = await new Phase4Api(db).ingestInboundMessage({ providerMessageId: 'msg-1', fromPhone: '+919876543210', providerNumberId: '+917948502801', direction: 'INBOUND', messageType: 'text', text: 'Hi', timestamp: new Date().toISOString(), status: null });

@@ -59,6 +59,11 @@ export function registerMessagingRoutes(router: RouterType) {
   });
 
   // --- Send / resolve (Phase6Api) ---
+  router.post('/api/conversations/start', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    const body = (await json(request)) as { numberId: string; phone: string; name?: string };
+    return Response.json(await new Phase6Api(ctx.db, ctx.identityEmail, env).startNewConversation(body.numberId, body.phone, body.name));
+  });
   router.post('/api/conversations/:id/reply', async (request: IRequest, env: Env) => {
     const ctx = await buildContext(request, env);
     const body = (await json(request)) as { text: string };

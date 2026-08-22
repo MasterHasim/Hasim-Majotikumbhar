@@ -6,6 +6,7 @@ import { connectRealtimeMessages } from '../lib/realtime';
 import { ConversationList, DEFAULT_FILTERS, type ListFilters } from './ConversationList';
 import { ChatPane } from './ChatPane';
 import { DetailPanel } from './DetailPanel';
+import { NewConversationModal } from './NewConversationModal';
 
 /** Conversation-list refresh — realtime (lib/realtime.ts) only covers the currently
  * open conversation's own messages, same scope the Apps Script build's listener has;
@@ -35,6 +36,7 @@ export function Inbox({ number, initialConversationId, onInitialConversationCons
    * pane at a time — above it these just don't affect anything the media query touches. */
   const [mobileShowList, setMobileShowList] = useState(true);
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
+  const [showNewChat, setShowNewChat] = useState(false);
   const selectedIdRef = useRef<string | null>(null);
   selectedIdRef.current = selectedId;
   const stopRealtimeRef = useRef<(() => void) | null>(null);
@@ -146,8 +148,15 @@ export function Inbox({ number, initialConversationId, onInitialConversationCons
     <>
       <h1 className="page-title" style={{ margin: '0 0 12px' }}>Inbox</h1>
       {error && <div className="compose-error" style={{ padding: '0 0 10px' }}>{error}</div>}
+      {showNewChat && (
+        <NewConversationModal
+          numberId={number.id}
+          onClose={() => setShowNewChat(false)}
+          onCreated={(conversationId) => { setShowNewChat(false); void loadConversations(); void selectConversation(conversationId); }}
+        />
+      )}
       <div className={`split${workspace ? '' : ' no-detail'}${mobileShowList ? ' mobile-list' : ''}`}>
-        <ConversationList conversations={conversations} selectedId={selectedId} search={search} filters={filters} onSearchChange={setSearch} onFiltersChange={setFilters} onSelect={(id) => void selectConversation(id)} />
+        <ConversationList conversations={conversations} selectedId={selectedId} search={search} filters={filters} onSearchChange={setSearch} onFiltersChange={setFilters} onSelect={(id) => void selectConversation(id)} onNewChat={() => setShowNewChat(true)} />
         {workspace ? (
           <>
             <ChatPane

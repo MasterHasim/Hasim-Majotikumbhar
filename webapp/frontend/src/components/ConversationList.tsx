@@ -17,7 +17,7 @@ function timeLabel(iso: string): string {
 }
 
 export function ConversationList({
-  conversations, selectedId, search, filters, onSearchChange, onFiltersChange, onSelect,
+  conversations, selectedId, search, filters, onSearchChange, onFiltersChange, onSelect, onNewChat,
 }: {
   conversations: ConversationListItem[];
   selectedId: string | null;
@@ -26,10 +26,14 @@ export function ConversationList({
   onSearchChange: (value: string) => void;
   onFiltersChange: (filters: ListFilters) => void;
   onSelect: (conversationId: string) => void;
+  onNewChat: () => void;
 }) {
   return (
     <div id="convCol" className="col">
-      <div className="col-header">Conversations</div>
+      <div className="col-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        Conversations
+        <button className="btn" style={{ padding: '4px 10px', fontSize: 12 }} onClick={onNewChat}>+ New</button>
+      </div>
       <div className="list-toolbar">
         <input type="text" placeholder="Search name, phone, or message…" value={search} onChange={(e) => onSearchChange(e.target.value)} />
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>

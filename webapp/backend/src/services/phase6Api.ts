@@ -13,7 +13,8 @@
  * hiccup on the secondary write is exactly as possible here, and the fix costs nothing.
  */
 import { ApiError } from '../types';
-import { Ids, Permissions, Validation } from '../domain/phase1';
+import { Ids, Permissions, Roles, Validation } from '../domain/phase1';
+import { Phase22Validation } from '../domain/phase22';
 import type { Conversation, Customer, Message, MessageMedia, Template, WhatsAppNumber } from '../domain/types';
 import { Repository } from '../lib/repository';
 import { AccessControl } from '../lib/accessControl';
@@ -151,6 +152,38 @@ export class Phase6Api {
     const key = `${Ids.create('media')}-${safeName}`;
     await this.mediaBucket.put(key, bytes, { httpMetadata: { contentType: validMimeType } });
     return { key };
+  }
+
+  /**
+   * Ad-hoc "message/call a number not already in the CRM" — an agent picks a WhatsApp number
+   * they have access to and a raw phone number, and gets a Customer + open Conversation to work
+   * from, same shape startWhatsAppFromLead already returns for the Lead-initiated path (reuses
+   * the normal Inbox/ChatPane/24h-window/template machinery entirely rather than a parallel
+   * "compose new" flow). A conversation created this way has no lastCustomerMessageAt — it's
+   * genuinely never had an inbound message — so the first send is correctly forced through an
+   * approved template by the same 24h-window check sendReply already enforces.
+   */
+  async startNewConversation(numberId: string, phone: string, name?: string): Promise<{ customerId: string; conversationId: string; numberId: string }> {
+    const actor = await this.access.currentUser();
+    const number = await this.numbers.get(numberId);
+    if (!number) throw new ApiError(404, 'NOT_FOUND', 'WhatsApp number was not found.');
+    if (!(await this.access.hasRole(actor, Roles.ADMIN)) && !(await this.access.hasGrantedNumber(actor.id, numberId))) {
+      throw new ApiError(403, 'FORBIDDEN', `You do not have access to the ${number.displayName} WhatsApp number.`);
+    }
+    const validPhone = toE164(Phase22Validation.phone(phone));
+    const now = Ids.now();
+    let customer = await this.customers.findOne((c) => toE164(c.phone) === validPhone);
+    if (!customer) {
+      customer = { id: Ids.create('customer'), phone: validPhone, name: name?.trim() || '', email: '', company: '', source: 'manual', createdAt: now, updatedAt: now };
+      await this.customers.create(customer);
+    }
+    let conversation = await this.conversations.findOne((c) => c.customerId === customer!.id && c.numberId === numberId && c.status === 'OPEN');
+    if (!conversation) {
+      conversation = { id: Ids.create('conversation'), customerId: customer.id, numberId, assignedUserId: actor.id, status: 'OPEN', needsResponse: false, lastMessageAt: now, createdAt: now, updatedAt: now };
+      await this.conversations.create(conversation);
+      await this.audit.write(actor.id, 'conversation.startedManually', 'conversation', conversation.id, { phone: validPhone });
+    }
+    return { customerId: customer.id, conversationId: conversation.id, numberId };
   }
 
   async resolveConversation(conversationId: string): Promise<Conversation> {
