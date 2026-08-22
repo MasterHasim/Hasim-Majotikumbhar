@@ -217,8 +217,14 @@ describe('Phase22Api (ported from Phase22Domain.gs + Phase22Services.gs)', () =>
       expect(mock.exotelVoiceCalls[0]!.params.CallerId).toBe('07948502804');
     });
 
-    it('denies a call for a lead not assigned to the caller', async () => {
+    it('denies a call for a lead not assigned to the caller — unless the caller is a lead manager', async () => {
       await expect(new Phase22Api(db, AGENT2_EMAIL, mock.exotelVoiceConfig as never).initiateCall(leadId)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+      const admin = await new Phase1Api(db, ADMIN_EMAIL).whoAmI();
+      await new Phase1Api(db, ADMIN_EMAIL).updateUser(admin.id, { phone: '+919000000099' });
+      const call = await new Phase22Api(db, ADMIN_EMAIL, mock.exotelVoiceConfig as never).initiateCall(leadId);
+      expect(call.agentPhone).toBe('+919000000099'); // rings the manager's own phone, not the assigned agent's
+      expect(call.leadPhone).toBe('+919876543210');
     });
 
     it('rejects when the agent has no phone on file', async () => {
@@ -354,6 +360,32 @@ describe('Phase22Api (ported from Phase22Domain.gs + Phase22Services.gs)', () =>
       const history = await new Phase22Api(db, AGENT_EMAIL).listConversationCallHistory(conversationId);
       expect(history).toHaveLength(2); // both the lead call and the conversation call show up
       expect(history[0]!.conversationId).toBe(conversationId); // newest first
+    });
+  });
+
+  describe('refreshCallStatus', () => {
+    let leadId: string;
+    let callId: string;
+    beforeEach(async () => {
+      await new Phase22Api(db, ADMIN_EMAIL).uploadLeads([{ name: 'Priya', phone: '+919876543210', location: 'Raipur' }]);
+      leadId = (await new Phase22Api(db, ADMIN_EMAIL).listLeads())[0]!.id;
+      await new Phase22Api(db, ADMIN_EMAIL).reassignLead(leadId, agentId);
+      const call = await new Phase22Api(db, AGENT_EMAIL, mock.exotelVoiceConfig as never).initiateCall(leadId);
+      callId = call.id;
+    });
+
+    it("fetches the call's current status from Exotel and updates the stored record — fixing a status stuck on its initial value forever", async () => {
+      expect((await new Phase22Api(db, ADMIN_EMAIL).listCallLog(leadId))[0]!.status).not.toBe('completed');
+      mock.setNextExotelVoiceResponse(200, { Call: { Sid: 'mock-call-sid-1', Status: 'completed' } });
+      const updated = await new Phase22Api(db, AGENT_EMAIL, mock.exotelVoiceConfig as never).refreshCallStatus(callId);
+      expect(updated.status).toBe('completed');
+      expect((await new Phase22Api(db, ADMIN_EMAIL).listCallLog(leadId))[0]!.status).toBe('completed');
+    });
+
+    it('lets the assigned agent or a lead manager refresh, denies an unrelated agent', async () => {
+      await expect(new Phase22Api(db, AGENT2_EMAIL, mock.exotelVoiceConfig as never).refreshCallStatus(callId)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      mock.setNextExotelVoiceResponse(200, { Call: { Status: 'no-answer' } });
+      await expect(new Phase22Api(db, ADMIN_EMAIL, mock.exotelVoiceConfig as never).refreshCallStatus(callId)).resolves.toMatchObject({ status: 'no-answer' });
     });
   });
 });

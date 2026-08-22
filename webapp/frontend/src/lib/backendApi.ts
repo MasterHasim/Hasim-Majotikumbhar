@@ -181,6 +181,8 @@ export const backendApi = {
 
   listCallHistory: () => apiFetch<CallLogWithContext[]>('/api/call-history'),
 
+  refreshCallStatus: (callId: string) => apiFetch<CallLog>(`/api/calls/${encodeURIComponent(callId)}/refresh-status`, { method: 'POST' }),
+
   getAvailability: (userId: string) => apiFetch<Availability | null>(`/api/availability/${encodeURIComponent(userId)}`),
   setAvailability: (status: AvailabilityStatus) => apiFetch<Availability>('/api/availability', { method: 'POST', body: JSON.stringify({ status }) }),
 

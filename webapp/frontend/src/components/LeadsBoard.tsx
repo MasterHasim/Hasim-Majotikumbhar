@@ -12,18 +12,23 @@ function accentForStage(key: string): string {
   return 'var(--call)';
 }
 
-function LeadCard({ lead, users, currentUserId, dragging, onOpen, onDragStart, onDragEnd }: {
+function LeadCard({ lead, users, currentUserId, isManager, busy, dragging, onOpen, onDragStart, onDragEnd, onCall, onWhatsApp }: {
   lead: Lead;
   users: User[];
   currentUserId: string;
+  isManager: boolean;
+  busy: boolean;
   dragging: boolean;
   onOpen: () => void;
   onDragStart: () => void;
   onDragEnd: () => void;
+  onCall: () => void;
+  onWhatsApp: () => void;
 }) {
   const assigneeName = lead.assignedUserId
     ? (users.find((u) => u.id === lead.assignedUserId)?.displayName ?? (lead.assignedUserId === currentUserId ? 'You' : lead.assignedUserId))
     : null;
+  const canTouch = isManager || lead.assignedUserId === currentUserId;
   return (
     <div
       className="kanban-card"
@@ -45,19 +50,29 @@ function LeadCard({ lead, users, currentUserId, dragging, onOpen, onDragStart, o
           {lead.tags.length > 3 && <span className="tag-chip-more">+{lead.tags.length - 3}</span>}
         </div>
       )}
+      {canTouch && (
+        <div style={{ display: 'flex', gap: 4, marginTop: 8 }}>
+          <button className="btn call" style={{ padding: '3px 8px' }} disabled={busy} title="Call" onClick={(e) => { e.stopPropagation(); onCall(); }}>📞</button>
+          <button className="btn" style={{ padding: '3px 8px' }} disabled={busy} title="Send WhatsApp" onClick={(e) => { e.stopPropagation(); onWhatsApp(); }}>💬</button>
+        </div>
+      )}
     </div>
   );
 }
 
-export function LeadsBoard({ leads, stages, users, currentUserId, onOpenLead, onChanged }: {
+export function LeadsBoard({ leads, stages, users, currentUserId, isManager, actionBusyId, onOpenLead, onChanged, onCall, onWhatsApp }: {
   leads: Lead[];
   /** null = stages haven't loaded yet — kept distinct from [] so the board doesn't
    * flash "no stages configured" while the (separate, parallel) stages fetch is still in flight. */
   stages: Stage[] | null;
   users: User[];
   currentUserId: string;
+  isManager: boolean;
+  actionBusyId: string | null;
   onOpenLead: (lead: Lead) => void;
   onChanged: () => void;
+  onCall: (lead: Lead) => void;
+  onWhatsApp: (lead: Lead) => void;
 }) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverStageId, setDragOverStageId] = useState<string | null>(null);
@@ -95,10 +110,14 @@ export function LeadsBoard({ leads, stages, users, currentUserId, onOpenLead, on
                   lead={lead}
                   users={users}
                   currentUserId={currentUserId}
+                  isManager={isManager}
+                  busy={actionBusyId === lead.id}
                   dragging={draggingId === lead.id}
                   onOpen={() => onOpenLead(lead)}
                   onDragStart={() => setDraggingId(lead.id)}
                   onDragEnd={() => setDraggingId(null)}
+                  onCall={() => onCall(lead)}
+                  onWhatsApp={() => onWhatsApp(lead)}
                 />
               ))}
             </div>
@@ -132,10 +151,14 @@ export function LeadsBoard({ leads, stages, users, currentUserId, onOpenLead, on
                     lead={lead}
                     users={users}
                     currentUserId={currentUserId}
+                    isManager={isManager}
+                    busy={actionBusyId === lead.id}
                     dragging={draggingId === lead.id}
                     onOpen={() => onOpenLead(lead)}
                     onDragStart={() => setDraggingId(lead.id)}
                     onDragEnd={() => setDraggingId(null)}
+                    onCall={() => onCall(lead)}
+                    onWhatsApp={() => onWhatsApp(lead)}
                   />
                 ))}
                 {columnLeads.length === 0 && <div className="kanban-empty">Drop a lead here</div>}

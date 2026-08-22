@@ -184,7 +184,18 @@ export function DetailPanel({ workspace, stages, onChanged, mobileOpen, onCloseM
           {(workspace.calls ?? []).length === 0 && <div className="note-item" style={{ color: 'var(--text-secondary)' }}>No calls placed to this customer yet.</div>}
           {(workspace.calls ?? []).map((call) => (
             <div key={call.id} className="note-item">
-              <div>{call.leadId ? 'Called via Lead' : 'Called from chat'} — <span className={`lead-status-tag ${call.status === 'INITIATED' ? 'CALLED' : call.status}`}>{call.status}</span></div>
+              <div>
+                {call.leadId ? 'Called via Lead' : 'Called from chat'} — <span className={`lead-status-tag ${call.status === 'INITIATED' ? 'CALLED' : call.status}`}>{call.status}</span>
+                <button
+                  className="btn"
+                  style={{ marginLeft: 6, padding: '1px 6px', fontSize: 10 }}
+                  disabled={busy}
+                  title="Fetch this call's current status from Exotel"
+                  onClick={() => void guard(() => backendApi.refreshCallStatus(call.id))}
+                >
+                  ↻
+                </button>
+              </div>
               <div className="note-meta">{fmtDue(call.initiatedAt)}</div>
             </div>
           ))}

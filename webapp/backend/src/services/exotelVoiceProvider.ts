@@ -62,13 +62,26 @@ export class ExotelVoiceProvider {
     return { callSid: call?.Sid || call?.CallSid || null, status: call?.Status || 'UNKNOWN', callerId: effectiveCallerId, raw: response };
   }
 
-  private async request(path: string, formParams: Record<string, string>): Promise<unknown> {
+  /**
+   * connect.json's response only ever reflects the call's state at the instant it was queued
+   * (typically "in-progress" while it's still ringing/connecting) — Exotel never updates that
+   * synchronously, and this codebase has no status-callback webhook wired up yet, so a CallLog
+   * row would otherwise stay on that initial status forever. This is the on-demand alternative:
+   * fetch the call's current state from Exotel directly. UNVERIFIED envelope shape, same caveat
+   * as connectCall above — modeled on Exotel's public "Call Details" docs, not yet exercised.
+   */
+  async getCallStatus(callSid: string): Promise<string> {
+    const response = (await this.request(`Calls/${encodeURIComponent(callSid)}.json`, {}, 'GET')) as { Call?: { Status?: string } } | null;
+    return response?.Call?.Status || 'UNKNOWN';
+  }
+
+  private async request(path: string, formParams: Record<string, string>, method: 'POST' | 'GET' = 'POST'): Promise<unknown> {
     const url = `https://api.exotel.com/v1/Accounts/${encodeURIComponent(this.config.accountSid)}/${path}`;
     const auth = btoa(`${this.config.apiKey}:${this.config.apiToken}`);
     const res = await fetch(url, {
-      method: 'POST',
-      headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams(formParams).toString(),
+      method,
+      headers: { Authorization: `Basic ${auth}`, ...(method === 'POST' ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}) },
+      ...(method === 'POST' ? { body: new URLSearchParams(formParams).toString() } : {}),
     });
     const text = await res.text();
     let parsed: unknown;

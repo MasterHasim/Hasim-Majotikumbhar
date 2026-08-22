@@ -188,15 +188,14 @@ export class Phase22Api {
     return record;
   }
 
-  /** AGENT-only, and only for a lead assigned to themselves — an admin never places calls through this path. */
+  /** The assigned agent, or a lead manager (ADMIN/SITE_MANAGER) acting on their behalf — same
+   * canTouchLead scope as startWhatsAppFromLead below, so a manager can always reach a lead
+   * they can already see. Rings the caller's own phone first regardless of who's assigned. */
   async initiateCall(leadId: string): Promise<CallLog> {
     const actor = await this.access.require(Permissions.LEADS_CALL);
     const lead = await this.leads.get(leadId);
     if (!lead) throw new ApiError(404, 'NOT_FOUND', 'Lead was not found.');
-    if (lead.assignedUserId !== actor.id) {
-      await this.audit.write(actor.id, 'authorization.denied', 'lead', leadId, { reason: 'NOT_ASSIGNED_TO_CALLER' });
-      throw new ApiError(403, 'FORBIDDEN', 'This lead is not assigned to you.');
-    }
+    if (!(await this.canTouchLead(actor, lead))) await this.denied(actor, leadId);
     const agentPhone = (actor.phone || '').toString().trim();
     if (!agentPhone) throw new ApiError(400, 'VALIDATION_ERROR', 'Your profile has no phone number on file — ask an admin to add one.');
     const locationConfig = await this.locationConfig.findOne((record) => record.location === lead.location);
@@ -212,6 +211,20 @@ export class Phase22Api {
   async listCallLog(leadId: string): Promise<CallLog[]> {
     await this.access.require(Permissions.LEADS_MANAGE);
     return (await this.callLog.list()).filter((call) => call.leadId === leadId).sort((a, b) => (a.initiatedAt || '').localeCompare(b.initiatedAt || ''));
+  }
+
+  /** connect.json only ever reports the call's status at the instant it was placed (usually
+   * "in-progress"/queued) — there's no callback webhook wired up to update it afterward, so a
+   * CallLog row otherwise stays on that initial status forever. On-demand fetch instead, callable
+   * by whoever placed the call or any lead manager. */
+  async refreshCallStatus(callId: string): Promise<CallLog> {
+    const actor = await this.access.currentUser();
+    const call = await this.callLog.get(callId);
+    if (!call) throw new ApiError(404, 'NOT_FOUND', 'Call was not found.');
+    if (call.agentUserId !== actor.id && !(await this.isLeadManager(actor))) throw new ApiError(403, 'FORBIDDEN', 'Access is denied.');
+    if (!call.exotelCallSid) throw new ApiError(400, 'VALIDATION_ERROR', 'This call has no Exotel call SID to look up.');
+    const status = await new ExotelVoiceProvider(this.requireVoiceConfig()).getCallStatus(call.exotelCallSid);
+    return this.callLog.update(callId, { status, updatedAt: Ids.now() });
   }
 
   /**

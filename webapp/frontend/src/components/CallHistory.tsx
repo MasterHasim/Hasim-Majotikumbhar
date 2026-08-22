@@ -27,6 +27,15 @@ export function CallHistory({ isManager, onOpenConversation }: {
   const [agentFilter, setAgentFilter] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [refreshingId, setRefreshingId] = useState<string | null>(null);
+
+  function refreshStatus(callId: string) {
+    setRefreshingId(callId);
+    backendApi.refreshCallStatus(callId)
+      .then((updated) => setCalls((prev) => prev && prev.map((c) => (c.id === callId ? { ...c, status: updated.status } : c))))
+      .catch((err) => setError(err instanceof ApiClientError ? `${err.code}: ${err.message}` : String(err)))
+      .finally(() => setRefreshingId(null));
+  }
 
   useEffect(() => {
     backendApi.listCallHistory()
@@ -102,7 +111,18 @@ export function CallHistory({ isManager, onOpenConversation }: {
                   <td>{call.subjectName}{call.subjectLocation ? ` (${call.subjectLocation})` : ''}</td>
                   <td style={{ fontFamily: 'var(--font-mono)' }}>{call.leadPhone}</td>
                   <td>{call.leadId ? 'Lead' : 'Chat'}</td>
-                  <td><span className={`lead-status-tag ${call.status === 'INITIATED' ? 'CALLED' : call.status}`}>{call.status}</span></td>
+                  <td>
+                    <span className={`lead-status-tag ${call.status === 'INITIATED' ? 'CALLED' : call.status}`}>{call.status}</span>
+                    <button
+                      className="btn"
+                      style={{ marginLeft: 6, padding: '1px 6px', fontSize: 10 }}
+                      disabled={refreshingId === call.id}
+                      title="Fetch the call's current status from Exotel"
+                      onClick={() => refreshStatus(call.id)}
+                    >
+                      {refreshingId === call.id ? '…' : '↻'}
+                    </button>
+                  </td>
                   <td>
                     {call.conversationId && call.numberId && (
                       <button className="btn" onClick={() => onOpenConversation(call.conversationId!, call.numberId!)}>Open chat</button>

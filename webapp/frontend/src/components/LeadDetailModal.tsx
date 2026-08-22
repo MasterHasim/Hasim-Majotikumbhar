@@ -137,7 +137,7 @@ export function LeadDetailModal({
           </div>
         )}
 
-        {lead.assignedUserId === currentUserId && (
+        {canTouch && (
           <div className="form-row">
             <button className="btn primary" disabled={busy} onClick={() => void handleCall()}>📞 Call</button>
             <button className="btn primary" disabled={busy} onClick={() => void handleWhatsApp()}>💬 Send WhatsApp</button>

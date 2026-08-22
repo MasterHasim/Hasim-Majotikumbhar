@@ -118,6 +118,7 @@ export function Leads({ whoAmI, onOpenConversation }: { whoAmI: WhoAmI; onOpenCo
   const [bulkReassignTo, setBulkReassignTo] = useState('');
   const [bulkStageId, setBulkStageId] = useState('');
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [actionBusyId, setActionBusyId] = useState<string | null>(null);
 
   function loadLeads() {
     backendApi.listLeads({ location: locationFilter || undefined, status: statusFilter || undefined })
@@ -139,6 +140,38 @@ export function Leads({ whoAmI, onOpenConversation }: { whoAmI: WhoAmI; onOpenCo
     for (const lead of leads ?? []) for (const tag of lead.tags ?? []) set.add(tag);
     return [...set].sort((a, b) => a.localeCompare(b));
   }, [leads]);
+
+  function canTouch(lead: Lead): boolean {
+    return isManager || lead.assignedUserId === whoAmI.id;
+  }
+
+  /** Quick-action icons on the board/table rows, so calling or messaging a lead doesn't
+   * require opening the detail modal first — same handlers LeadDetailModal uses internally. */
+  async function callLead(lead: Lead) {
+    setActionBusyId(lead.id);
+    setError(null);
+    try {
+      await backendApi.initiateLeadCall(lead.id);
+      loadLeads();
+    } catch (err) {
+      setError(errMsg(err));
+    } finally {
+      setActionBusyId(null);
+    }
+  }
+
+  async function whatsappLead(lead: Lead) {
+    setActionBusyId(lead.id);
+    setError(null);
+    try {
+      const result = await backendApi.startWhatsAppFromLead(lead.id);
+      onOpenConversation(result.conversationId, result.numberId);
+    } catch (err) {
+      setError(errMsg(err));
+    } finally {
+      setActionBusyId(null);
+    }
+  }
 
   function toggleSelect(id: string) {
     setSelectedIds((prev) => {
@@ -200,7 +233,18 @@ export function Leads({ whoAmI, onOpenConversation }: { whoAmI: WhoAmI; onOpenCo
         leads.length === 0 ? (
           <div className="empty">No leads {locationFilter || statusFilter ? 'match this filter' : 'yet'}.</div>
         ) : (
-          <LeadsBoard leads={leads} stages={stages} users={users} currentUserId={whoAmI.id} onOpenLead={setSelectedLead} onChanged={loadLeads} />
+          <LeadsBoard
+            leads={leads}
+            stages={stages}
+            users={users}
+            currentUserId={whoAmI.id}
+            isManager={isManager}
+            actionBusyId={actionBusyId}
+            onOpenLead={setSelectedLead}
+            onChanged={loadLeads}
+            onCall={callLead}
+            onWhatsApp={whatsappLead}
+          />
         )
       ) : (
         <>
@@ -241,7 +285,7 @@ export function Leads({ whoAmI, onOpenConversation }: { whoAmI: WhoAmI; onOpenCo
                       <input type="checkbox" checked={leads.length > 0 && selectedIds.size === leads.length} onChange={() => toggleSelectAll(leads.map((l) => l.id))} />
                     </th>
                   )}
-                  <th>Name</th><th>Phone</th><th>Location</th><th>Status</th><th>Tags</th><th>Assigned</th><th>Created</th>
+                  <th>Name</th><th>Phone</th><th>Location</th><th>Status</th><th>Tags</th><th>Assigned</th><th>Created</th><th></th>
                 </tr>
               </thead>
               <tbody>
@@ -266,9 +310,17 @@ export function Leads({ whoAmI, onOpenConversation }: { whoAmI: WhoAmI; onOpenCo
                     </td>
                     <td>{lead.assignedUserId ? (users.find((u) => u.id === lead.assignedUserId)?.displayName ?? (lead.assignedUserId === whoAmI.id ? whoAmI.displayName : lead.assignedUserId)) : '—'}</td>
                     <td>{fmt(lead.createdAt)}</td>
+                    <td onClick={(e) => e.stopPropagation()}>
+                      {canTouch(lead) && (
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          <button className="btn call" style={{ padding: '3px 8px' }} disabled={actionBusyId === lead.id} title="Call" onClick={() => void callLead(lead)}>📞</button>
+                          <button className="btn" style={{ padding: '3px 8px' }} disabled={actionBusyId === lead.id} title="Send WhatsApp" onClick={() => void whatsappLead(lead)}>💬</button>
+                        </div>
+                      )}
+                    </td>
                   </tr>
                 ))}
-                {leads.length === 0 && <tr><td colSpan={isManager ? 8 : 7} className="empty">No leads {locationFilter || statusFilter ? 'match this filter' : 'yet'}.</td></tr>}
+                {leads.length === 0 && <tr><td colSpan={isManager ? 9 : 8} className="empty">No leads {locationFilter || statusFilter ? 'match this filter' : 'yet'}.</td></tr>}
               </tbody>
             </table>
           </div>
