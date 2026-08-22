@@ -1,7 +1,84 @@
 import { useEffect, useState } from 'react';
-import { LEAD_LOCATIONS, type DashboardMetrics, type LeadFunnel, type WhatsAppNumber } from '../types';
+import { LEAD_LOCATIONS, type AdAccount, type AdInsights, type DashboardMetrics, type LeadFunnel, type WhatsAppNumber } from '../types';
 import { backendApi } from '../lib/backendApi';
 import { ApiClientError } from '../lib/api';
+
+function errMsg(err: unknown): string {
+  return err instanceof ApiClientError ? `${err.code}: ${err.message}` : String(err);
+}
+
+function currency(n: number): string {
+  return n.toLocaleString(undefined, { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
+}
+
+/** YYYY-MM-DD, local time — matches what <input type="date"> reads/writes. */
+function dateStamp(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** Ad Name | Portal | Spent Amount | Message Initiated | Reach — Meta today, room for another
+ * platform's rows to land in the same table later without changing this component's shape. */
+function AdPerformanceCard() {
+  const [accounts, setAccounts] = useState<AdAccount[] | null>(null);
+  const [accountId, setAccountId] = useState('');
+  const [from, setFrom] = useState(() => dateStamp(new Date(Date.now() - 29 * 86400000)));
+  const [to, setTo] = useState(() => dateStamp(new Date()));
+  const [insights, setInsights] = useState<AdInsights | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    backendApi.listAdAccounts().then((list) => {
+      setAccounts(list);
+      const active = list.find((a) => a.active);
+      if (active) setAccountId((cur) => cur || active.id);
+    }).catch((err) => setError(errMsg(err)));
+  }, []);
+
+  useEffect(() => {
+    if (!accountId) { setInsights(null); return; }
+    setInsights(null);
+    backendApi.getAdInsights(accountId, from, to).then(setInsights).catch((err) => setError(errMsg(err)));
+  }, [accountId, from, to]);
+
+  if (accounts !== null && accounts.length === 0) return null; // nothing configured yet — no empty card to confuse a viewer
+
+  return (
+    <div className="card" style={{ maxWidth: 'none' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+        <h2 className="section-title" style={{ marginTop: 0, marginBottom: 0 }}>Ad performance</h2>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <select value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+            {accounts === null && <option>Loading…</option>}
+            {accounts?.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-secondary)' }}>
+            From <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-secondary)' }}>
+            To <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+          </label>
+        </div>
+      </div>
+      {error && <div className="form-error">{error}</div>}
+      <table className="data-table">
+        <thead><tr><th>Ad name</th><th>Portal</th><th>Spent</th><th>Messages initiated</th><th>Reach</th></tr></thead>
+        <tbody>
+          {insights === null && <tr><td colSpan={5} className="empty">Loading…</td></tr>}
+          {insights?.rows.map((row) => (
+            <tr key={row.campaignName} style={row.isTotal ? { fontWeight: 700, borderTop: '2px solid var(--border)' } : undefined}>
+              <td>{row.campaignName}</td>
+              <td>{row.isTotal ? '' : insights.platform}</td>
+              <td>{currency(row.spend)}</td>
+              <td>{row.messagesInitiated}</td>
+              <td>{row.reach}</td>
+            </tr>
+          ))}
+          {insights?.rows.length === 0 && <tr><td colSpan={5} className="empty">No ad activity in this date range.</td></tr>}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 function Kpi({ icon, label, value }: { icon: string; label: string; value: number | string }) {
   return (
@@ -101,6 +178,8 @@ export function Dashboard({ number }: { number: WhatsAppNumber | null }) {
             <Kpi icon="👥" label="Total customers" value={metrics.totalCustomers} />
             <Kpi icon="⏱️" label="Avg. first response" value={metrics.responseTime.averageFirstResponseMinutes === null ? '—' : `${metrics.responseTime.averageFirstResponseMinutes}m`} />
           </div>
+
+          <AdPerformanceCard />
 
           <div className="card" style={{ maxWidth: 'none' }}>
             <h2 className="section-title" style={{ marginTop: 0 }}>By number</h2>

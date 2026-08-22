@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState } from 'react';
-import type { AssignmentEligibilityStatus, AuditEntry, CustomFieldDefinition, CustomFieldEntityType, CustomFieldType, NumberAccess, NumberAssignmentConfig, NumberAssignmentUser, Product, QuickReply, Role, Stage, Team, TeamMember, Template, User, WhatsAppNumber, WhoAmI } from '../types';
+import type { AdAccount, AssignmentEligibilityStatus, AuditEntry, CustomFieldDefinition, CustomFieldEntityType, CustomFieldType, NumberAccess, NumberAssignmentConfig, NumberAssignmentUser, Product, QuickReply, Role, Stage, Team, TeamMember, Template, User, WhatsAppNumber, WhoAmI } from '../types';
 import { backendApi } from '../lib/backendApi';
 import { ApiClientError } from '../lib/api';
 
@@ -1066,9 +1066,78 @@ function ProductsTab() {
   );
 }
 
+function AdAccountsTab() {
+  const [accounts, setAccounts] = useState<AdAccount[] | null>(null);
+  const [name, setName] = useState('');
+  const [externalAccountId, setExternalAccountId] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function reload() {
+    backendApi.listAdAccounts().then(setAccounts).catch((err) => setError(errMsg(err)));
+  }
+  useEffect(reload, []);
+
+  async function guard(fn: () => Promise<unknown>) {
+    setBusy(true);
+    setError(null);
+    try {
+      await fn();
+      reload();
+    } catch (err) {
+      setError(errMsg(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function create() {
+    const trimmedName = name.trim();
+    const trimmedId = externalAccountId.trim();
+    if (!trimmedName || !trimmedId) return;
+    setName('');
+    setExternalAccountId('');
+    await guard(() => backendApi.createAdAccount({ name: trimmedName, externalAccountId: trimmedId }));
+  }
+
+  return (
+    <div className="card">
+      <h2 className="section-title" style={{ marginTop: 0 }}>Ad Accounts</h2>
+      <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+        Meta ad accounts to report on in Dashboard → Ad Performance. Paste the numeric account id
+        from Ads Manager (the "act_" prefix, if you copy it with one, is stripped automatically).
+        Reading real spend/reach data also needs a <code>META_ACCESS_TOKEN</code> set on the backend —
+        ask your developer if a new account here shows a configuration error.
+      </p>
+      <table className="data-table">
+        <thead><tr><th>Name</th><th>Account ID</th><th>Active</th></tr></thead>
+        <tbody>
+          {accounts === null && <tr><td colSpan={3} className="empty">Loading…</td></tr>}
+          {accounts?.map((a) => (
+            <tr key={a.id}>
+              <td>{a.name}</td>
+              <td style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{a.externalAccountId}</td>
+              <td>
+                <input type="checkbox" checked={a.active} disabled={busy} onChange={(e) => void guard(() => backendApi.updateAdAccount(a.id, { active: e.target.checked }))} />
+              </td>
+            </tr>
+          ))}
+          {accounts?.length === 0 && <tr><td colSpan={3} className="empty">No ad accounts yet.</td></tr>}
+        </tbody>
+      </table>
+      {error && <div className="form-error">{error}</div>}
+      <div className="form-row">
+        <input placeholder="Account name (e.g. Entartica Sea World)" style={{ flex: 1, minWidth: 200 }} value={name} onChange={(e) => setName(e.target.value)} />
+        <input placeholder="Meta ad account id" style={{ width: 180 }} value={externalAccountId} onChange={(e) => setExternalAccountId(e.target.value)} />
+        <button className="btn primary" disabled={busy || !name.trim() || !externalAccountId.trim()} onClick={() => void create()}>Add account</button>
+      </div>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 
-type AdminTab = 'users' | 'teams' | 'numbers' | 'access' | 'assignment' | 'quickReplies' | 'templates' | 'leadStages' | 'customFields' | 'products' | 'audit' | 'backup';
+type AdminTab = 'users' | 'teams' | 'numbers' | 'access' | 'assignment' | 'quickReplies' | 'templates' | 'leadStages' | 'customFields' | 'products' | 'adAccounts' | 'audit' | 'backup';
 
 export function Admin({ whoAmI }: { whoAmI: WhoAmI }) {
   const isFullAdmin = whoAmI.roleKeys.includes('ADMIN');
@@ -1088,7 +1157,7 @@ export function Admin({ whoAmI }: { whoAmI: WhoAmI }) {
     ? [
         ['users', 'Users'], ['teams', 'Teams'], ['numbers', 'Numbers'], ['access', 'Number Access'],
         ['assignment', 'Assignment Rules'], ['quickReplies', 'Quick Replies'], ['templates', 'Templates'],
-        ['leadStages', 'Lead Stages'], ['customFields', 'Custom Fields'], ['products', 'Products'], ['audit', 'Audit Log'], ['backup', 'Backup'],
+        ['leadStages', 'Lead Stages'], ['customFields', 'Custom Fields'], ['products', 'Products'], ['adAccounts', 'Ad Accounts'], ['audit', 'Audit Log'], ['backup', 'Backup'],
       ]
     : [['customFields', 'Custom Fields'], ['products', 'Products']];
 
@@ -1111,6 +1180,7 @@ export function Admin({ whoAmI }: { whoAmI: WhoAmI }) {
       {tab === 'leadStages' && <LeadStagesTab />}
       {tab === 'customFields' && <CustomFieldsTab />}
       {tab === 'products' && <ProductsTab />}
+      {tab === 'adAccounts' && <AdAccountsTab />}
       {tab === 'audit' && <AuditLogTab users={users} />}
       {tab === 'backup' && <BackupTab />}
     </>

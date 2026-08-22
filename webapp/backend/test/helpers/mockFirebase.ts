@@ -37,6 +37,12 @@ export interface MockFirebaseContext {
   resendCalls: { to: string[]; subject: string; html: string }[];
   /** Override the next Resend response (status + body) — defaults to a 200. */
   setNextResendResponse(status: number, body: unknown): void;
+  /** Mock Meta env, matching src/services/metaAdsProvider.ts's requireMetaAdsConfig() expects. */
+  metaAdsEnv: { META_ACCESS_TOKEN: string };
+  /** Every call made to the mock Meta Graph API endpoint, for assertions. */
+  metaAdsCalls: { url: string }[];
+  /** Override the next Meta Graph API response (status + body) — defaults to a 200 with no rows. */
+  setNextMetaAdsResponse(status: number, body: unknown): void;
 }
 
 function base64UrlFromBuffer(bytes: ArrayBuffer): string {
@@ -92,6 +98,10 @@ export async function setupMockFirebase(projectId = 'test-project'): Promise<Moc
   const resendCalls: { to: string[]; subject: string; html: string }[] = [];
   let nextResendResponse: { status: number; body: unknown } | null = null;
 
+  const metaAdsEnv = { META_ACCESS_TOKEN: 'test-meta-token' };
+  const metaAdsCalls: { url: string }[] = [];
+  let nextMetaAdsResponse: { status: number; body: unknown } | null = null;
+
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
@@ -131,6 +141,16 @@ export async function setupMockFirebase(projectId = 'test-project'): Promise<Moc
         return new Response(JSON.stringify(respBody), { status });
       }
       return new Response(JSON.stringify({ id: 'mock-email-id' }), { status: 200 });
+    }
+
+    if (url.startsWith('https://graph.facebook.com/')) {
+      metaAdsCalls.push({ url });
+      if (nextMetaAdsResponse) {
+        const { status, body: respBody } = nextMetaAdsResponse;
+        nextMetaAdsResponse = null;
+        return new Response(JSON.stringify(respBody), { status });
+      }
+      return new Response(JSON.stringify({ data: [] }), { status: 200 });
     }
 
     if (url === 'https://oauth2.googleapis.com/token') {
@@ -184,6 +204,9 @@ export async function setupMockFirebase(projectId = 'test-project'): Promise<Moc
     emailEnv,
     resendCalls,
     setNextResendResponse: (status: number, body: unknown) => { nextResendResponse = { status, body }; },
+    metaAdsEnv,
+    metaAdsCalls,
+    setNextMetaAdsResponse: (status: number, body: unknown) => { nextMetaAdsResponse = { status, body }; },
     restore: () => {
       globalThis.fetch = originalFetch;
     },

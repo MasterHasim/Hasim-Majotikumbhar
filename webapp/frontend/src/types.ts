@@ -439,6 +439,29 @@ export interface DashboardMetrics {
   leadConversion: { totalCustomersWithStage: number; wonCount: number; conversionRate: number | null };
 }
 
+export type AdPlatform = 'meta';
+
+export interface AdAccount {
+  id: string;
+  platform: AdPlatform;
+  name: string;
+  externalAccountId: string;
+  active: boolean;
+}
+
+export interface AdInsightRow {
+  campaignName: string;
+  spend: number;
+  reach: number;
+  messagesInitiated: number;
+  isTotal?: boolean;
+}
+
+export interface AdInsights {
+  platform: string;
+  rows: AdInsightRow[];
+}
+
 export interface LeadFunnel {
   stages: { stageId: string; name: string; sequenceOrder: number; count: number; pctOfTotal: number | null; pctOfFirstStage: number | null }[];
   noStage: number;

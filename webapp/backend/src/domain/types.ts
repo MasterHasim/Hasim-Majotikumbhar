@@ -290,6 +290,31 @@ export interface CustomFieldDefinition extends Record_ {
   updatedAt: string;
 }
 
+// --- Ad performance (Meta Ads for now; platform is a discriminator for adding Google Ads later) ---
+
+export type AdPlatform = 'meta';
+
+/** An ad account an admin has registered for reporting — the actual credential (one shared
+ * access token, covering however many accounts that token's user has ads_read on) lives outside
+ * Firebase as a Worker secret, never here. */
+export interface AdAccount extends Record_ {
+  platform: AdPlatform;
+  name: string;
+  /** Meta's numeric ad account id, without the "act_" prefix the API calls need — added back at
+   * call time so this stays the plain id an admin would actually copy from Ads Manager. */
+  externalAccountId: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdInsightRow {
+  campaignName: string;
+  spend: number;
+  reach: number;
+  messagesInitiated: number;
+}
+
 export type LocationAssignmentMode = 'single' | 'round_robin' | 'manual';
 
 export interface LocationAssignmentConfig extends Record_ {

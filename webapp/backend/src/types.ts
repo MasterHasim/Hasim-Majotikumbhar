@@ -29,6 +29,10 @@ export interface Env {
   FRONTEND_URL?: string;
   /** Free-tier host for agent-uploaded media (Phase 6/11's uploadConversationMedia) — the equivalent of the Apps Script build's Drive-backed upload, since Workers has no local/persistent disk of its own. */
   MEDIA_BUCKET: R2Bucket;
+  /** Meta Marketing API — a User or System User access token with ads_read on every ad account
+   * added under Admin -> Ad Accounts (`wrangler secret put META_ACCESS_TOKEN`). One token can
+   * cover multiple ad accounts, so this isn't per-account. */
+  META_ACCESS_TOKEN?: string;
 }
 
 export function parseServiceAccount(env: Env): FirebaseServiceAccount {

@@ -1,7 +1,8 @@
 /** Typed wrappers around apiFetch for the endpoints the Inbox UI needs — one-to-one with webapp/backend/src/routes/{phase1,messaging,crm,phase22}.ts. */
 import { apiFetch } from './api';
 import type {
-  AssignableUser, AssignmentEligibility, AssignmentEligibilityStatus, AuditEntry, AuditEntryWithActor, Availability, AvailabilityStatus, CallLog,
+  AdAccount, AdInsights, AssignableUser, AssignmentEligibility, AssignmentEligibilityStatus, AuditEntry, AuditEntryWithActor, Availability,
+  AvailabilityStatus, CallLog,
   CallLogWithContext, Conversation, ConversationListItem, Customer, CustomerStage, CustomFieldDefinition, CustomFieldEntityType, CustomFieldType,
   DashboardMetrics, Lead, LeadFunnel, LeadRemark, LeadStageAssignment,
   LocationAssignmentConfig, LocationAssignmentUser, NumberAccess, NumberAssignmentConfig, NumberAssignmentUser, Product, PublicQuotationView,
@@ -168,6 +169,19 @@ export const backendApi = {
     apiFetch<Lead>(`/api/leads/${encodeURIComponent(leadId)}/reassign`, { method: 'POST', body: JSON.stringify({ userId }) }),
 
   getLeadFunnel: (location?: string) => apiFetch<LeadFunnel>(`/api/leads/funnel${location ? `?location=${encodeURIComponent(location)}` : ''}`),
+
+  // --- Ad Performance (Meta Ads) ---
+
+  listAdAccounts: () => apiFetch<AdAccount[]>('/api/ad-accounts'),
+
+  createAdAccount: (input: { name: string; externalAccountId: string }) =>
+    apiFetch<AdAccount>('/api/ad-accounts', { method: 'POST', body: JSON.stringify(input) }),
+
+  updateAdAccount: (id: string, patch: Record<string, unknown>) =>
+    apiFetch<AdAccount>(`/api/ad-accounts/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+
+  getAdInsights: (accountId: string, from: string, to: string) =>
+    apiFetch<AdInsights>(`/api/ad-accounts/${encodeURIComponent(accountId)}/insights?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`),
 
   getLocationAssignmentConfig: (location: string) => apiFetch<LocationAssignmentConfig | null>(`/api/locations/${encodeURIComponent(location)}/assignment-config`),
 

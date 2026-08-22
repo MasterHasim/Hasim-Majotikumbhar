@@ -10,6 +10,7 @@ import { registerTemplateRoutes } from './routes/templates';
 import { registerSearchRoutes } from './routes/search';
 import { registerDashboardRoutes } from './routes/dashboard';
 import { registerBackupRoutes } from './routes/backup';
+import { registerAdsRoutes } from './routes/ads';
 
 const router = Router();
 
@@ -23,6 +24,7 @@ registerTemplateRoutes(router);
 registerSearchRoutes(router);
 registerDashboardRoutes(router);
 registerBackupRoutes(router);
+registerAdsRoutes(router);
 
 router.all('*', () => new Response('Not found', { status: 404 }));
 
