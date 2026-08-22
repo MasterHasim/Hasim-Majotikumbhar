@@ -282,6 +282,25 @@ describe('Phase22Api (ported from Phase22Domain.gs + Phase22Services.gs)', () =>
       await expect(new Phase22Api(db, ADMIN_EMAIL).setLeadStage(leadId, stageId)).resolves.toMatchObject({ stageId });
     });
 
+    it('listLeadActivity shows reassignment, stage, tag, and remark events with resolved actor names, newest first, excluding denials', async () => {
+      await new Phase22Api(db, AGENT_EMAIL).setLeadStage(leadId, stageId);
+      await new Phase22Api(db, AGENT_EMAIL).updateLeadTags(leadId, ['Hot']);
+      await new Phase22Api(db, AGENT_EMAIL).addLeadRemark(leadId, 'Called, left voicemail.');
+      await expect(new Phase22Api(db, AGENT2_EMAIL).setLeadStage(leadId, stageId)).rejects.toMatchObject({ code: 'FORBIDDEN' }); // should not show up below
+
+      const activity = await new Phase22Api(db, AGENT_EMAIL).listLeadActivity(leadId);
+      const actions = activity.map((e) => e.action);
+      expect(actions).toContain('lead.reassigned');
+      expect(actions).toContain('lead.stageChanged');
+      expect(actions).toContain('lead.tagsUpdated');
+      expect(actions).toContain('leadRemark.added'); // matched via metadata.leadId, not targetType
+      expect(actions).not.toContain('authorization.denied');
+      expect(activity.find((e) => e.action === 'lead.reassigned')!.actorName).toBe('Admin');
+      expect(activity.find((e) => e.action === 'lead.tagsUpdated')!.actorName).toBe('Agent');
+      // newest first
+      expect(new Date(activity[0]!.occurredAt).getTime()).toBeGreaterThanOrEqual(new Date(activity.at(-1)!.occurredAt).getTime());
+    });
+
     it('denormalizes stageId onto the lead record itself, so listLeads() reflects it without a per-lead fetch (for the Kanban board)', async () => {
       await new Phase22Api(db, AGENT_EMAIL).setLeadStage(leadId, stageId);
       const lead = (await new Phase22Api(db, AGENT_EMAIL).listLeads()).find((l) => l.id === leadId);

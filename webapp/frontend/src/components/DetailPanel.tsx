@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import type { Stage, Workspace } from '../types';
+import { useEffect, useState } from 'react';
+import type { AuditEntryWithActor, Stage, Workspace } from '../types';
 import { backendApi } from '../lib/backendApi';
 import { ApiClientError } from '../lib/api';
+import { ActivityFeed } from './ActivityFeed';
 
 function fmtDue(iso: string): string {
   const d = new Date(iso);
@@ -24,6 +25,18 @@ export function DetailPanel({ workspace, stages, onChanged, mobileOpen, onCloseM
   const [tagInput, setTagInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  /** Deliberately NOT bundled into the workspace fetch (unlike Remarks/Reminders/Calls) —
+   * loaded on demand only when this section is actually expanded, since bundling it in once
+   * pushed getConversationWorkspace over Cloudflare's per-invocation subrequest limit and
+   * silently broke sibling fields (including realtime) in the same call. */
+  const [activityOpen, setActivityOpen] = useState(false);
+  const [activity, setActivity] = useState<AuditEntryWithActor[] | null>(null);
+  useEffect(() => {
+    setActivity(null);
+    if (!activityOpen) return;
+    backendApi.listConversationActivity(workspace.conversation.id).then(setActivity).catch(() => setActivity([]));
+  }, [workspace.conversation.id, activityOpen]);
 
   function guard<T>(fn: () => Promise<T>) {
     setBusy(true);
@@ -199,6 +212,13 @@ export function DetailPanel({ workspace, stages, onChanged, mobileOpen, onCloseM
               <div className="note-meta">{fmtDue(call.initiatedAt)}</div>
             </div>
           ))}
+        </div>
+      </details>
+
+      <details className="detail-section" open={activityOpen} onToggle={(e) => setActivityOpen((e.target as HTMLDetailsElement).open)}>
+        <summary>Activity{activity ? ` (${activity.length})` : ''}</summary>
+        <div className="detail-section-body">
+          <ActivityFeed entries={activity} />
         </div>
       </details>
     </div>

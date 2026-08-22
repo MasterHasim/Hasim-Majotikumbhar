@@ -11,6 +11,13 @@ export interface AuditEntry extends Record_ {
   metadata: Record<string, unknown>;
 }
 
+/** listLeadActivity/listConversationActivity's enrichment — same "denormalize for one read
+ * instead of a per-viewer users list" reasoning as CallLogWithContext, since a plain AGENT
+ * can't call listUsers() to resolve someone else's actorUserId into a name themselves. */
+export interface AuditEntryWithActor extends AuditEntry {
+  actorName: string;
+}
+
 export class AuditLogService {
   private repo: Repository<AuditEntry>;
   constructor(db: FirebaseDb) {

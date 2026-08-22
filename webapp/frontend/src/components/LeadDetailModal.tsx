@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import type { Lead, Stage, User } from '../types';
+import type { AuditEntryWithActor, Lead, Stage, User } from '../types';
 import { backendApi } from '../lib/backendApi';
 import { ApiClientError } from '../lib/api';
+import { ActivityFeed } from './ActivityFeed';
 
 function fmt(iso: string): string {
   const d = new Date(iso);
@@ -27,6 +28,7 @@ export function LeadDetailModal({
   const [remarkText, setRemarkText] = useState('');
   const [tags, setTags] = useState<string[]>(lead.tags ?? []);
   const [tagInput, setTagInput] = useState('');
+  const [activity, setActivity] = useState<AuditEntryWithActor[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,6 +37,8 @@ export function LeadDetailModal({
   useEffect(() => {
     backendApi.getLeadStage(lead.id).then((s) => setStageId(s?.stageId ?? '')).catch(() => setStageId(''));
     backendApi.listLeadRemarks(lead.id).then(setRemarks).catch(() => setRemarks([]));
+    setActivity(null);
+    backendApi.listLeadActivity(lead.id).then(setActivity).catch(() => setActivity([]));
     setTags(lead.tags ?? []);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lead.id]);
@@ -172,6 +176,13 @@ export function LeadDetailModal({
               </button>
               <button className="btn" onClick={onClose}>Close</button>
             </div>
+
+            <details className="detail-section">
+              <summary>Activity ({activity?.length ?? 0})</summary>
+              <div className="detail-section-body">
+                <ActivityFeed entries={activity} />
+              </div>
+            </details>
           </>
         )}
         {!canTouch && (

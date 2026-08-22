@@ -22,7 +22,7 @@ import type {
 } from '../domain/types';
 import { Repository } from '../lib/repository';
 import { AccessControl, type Phase1Repositories } from '../lib/accessControl';
-import { AuditLogService } from '../lib/auditLog';
+import { AuditLogService, type AuditEntryWithActor } from '../lib/auditLog';
 import { FirebaseDb } from '../lib/firebaseAdmin';
 import { buildPhase1Repositories } from '../lib/phase1Repositories';
 import { ExotelVoiceProvider, requireExotelVoiceConfig, type ExotelVoiceConfig } from './exotelVoiceProvider';
@@ -336,6 +336,27 @@ export class Phase22Api {
     try { await this.access.require(Permissions.REMARKS_VIEW); hasPermission = true; } catch { /* fall through to REMARKS_MANAGE */ }
     if (!hasPermission) await this.access.require(Permissions.REMARKS_MANAGE);
     return (await this.leadRemarks.list()).filter((remark) => remark.leadId === leadId).sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
+  }
+
+  /**
+   * Activity timeline for the Lead detail view — everything logged directly against this lead
+   * (reassignment, stage/tag changes, calls) plus sub-entity actions that reference it in their
+   * metadata (a remark's own audit row targets the remark, not the lead, e.g.). Excludes
+   * authorization.denied — that's a security signal for Admin's Audit Log, not agent-facing
+   * activity. Same view authorization as remarks/reminders.
+   */
+  async listLeadActivity(leadId: string): Promise<AuditEntryWithActor[]> {
+    const lead = await this.leads.get(leadId);
+    if (!lead) throw new ApiError(404, 'NOT_FOUND', 'Lead was not found.');
+    const actor = await this.access.currentUser();
+    if (!(await this.canTouchLead(actor, lead))) await this.denied(actor, leadId);
+    const entries = (await this.audit.list()).filter((e) => {
+      if (e.action === 'authorization.denied') return false;
+      if (e.targetType === 'lead' && e.targetId === leadId) return true;
+      return e.metadata?.leadId === leadId;
+    });
+    const usersById = new Map((await this.phase1Repos.users.list()).map((u) => [u.id, u]));
+    return entries.map((e) => ({ ...e, actorName: (e.actorUserId && usersById.get(e.actorUserId)?.displayName) || e.actorUserId || 'System' }));
   }
 
   /**

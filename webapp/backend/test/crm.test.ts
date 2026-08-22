@@ -267,6 +267,25 @@ describe('CRM core (ported from Phase7-9 Domain/Services.gs)', () => {
       const updated = await new Phase8Api(db, ADMIN_EMAIL).updateCustomer(detail.customer!.id, { tags: [' Hot ', 'hot', ''] });
       expect(updated.tags).toEqual(['Hot']);
     });
+
+    it('listConversationActivity shows remarks, reassignment, and customer edits with resolved actor names, excluding denials', async () => {
+      const result = await ingest('msg-3', '+919876543212');
+      const conversationId = result.conversationId!;
+      await new Phase7Api(db, ADMIN_EMAIL).reassignConversation(conversationId, agentId);
+      await new Phase8Api(db, AGENT_EMAIL).addRemark(conversationId, 'Called, no answer.');
+      const detail = await new Phase5Api(db, ADMIN_EMAIL).getConversationDetail(conversationId);
+      await new Phase8Api(db, AGENT_EMAIL).updateCustomer(detail.customer!.id, { name: 'Eva' });
+      await expect(new Phase8Api(db, AGENT2_EMAIL).addRemark(conversationId, 'Hi')).rejects.toMatchObject({ code: 'FORBIDDEN' }); // should not show up below
+
+      const activity = await new Phase8Api(db, AGENT_EMAIL).listConversationActivity(conversationId);
+      const actions = activity.map((e) => e.action);
+      expect(actions).toContain('remark.added'); // matched via metadata.conversationId, not targetType
+      expect(actions).toContain('customer.updated'); // matched via targetType 'customer' + the conversation's own customerId
+      expect(actions).not.toContain('authorization.denied');
+      const customerEdit = activity.find((e) => e.action === 'customer.updated')!;
+      expect(customerEdit.actorName).toBe('Agent');
+      expect(customerEdit.metadata.patch).toEqual({ name: 'Eva' });
+    });
   });
 
   describe('Phase9Api — reminders and snooze', () => {

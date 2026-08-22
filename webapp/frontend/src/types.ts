@@ -351,6 +351,10 @@ export interface AuditEntry {
   metadata: Record<string, unknown>;
 }
 
+export interface AuditEntryWithActor extends AuditEntry {
+  actorName: string;
+}
+
 // --- Phase 14 (dashboard & analytics) ---
 
 export interface ConversationSummary {

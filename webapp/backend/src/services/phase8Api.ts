@@ -5,7 +5,7 @@ import { Phase22Validation } from '../domain/phase22';
 import type { Conversation, Customer, CustomerStage, Remark, Stage, User } from '../domain/types';
 import { Repository } from '../lib/repository';
 import { AccessControl, type Phase1Repositories } from '../lib/accessControl';
-import { AuditLogService } from '../lib/auditLog';
+import { AuditLogService, type AuditEntryWithActor } from '../lib/auditLog';
 import { FirebaseDb } from '../lib/firebaseAdmin';
 import { buildPhase1Repositories } from '../lib/phase1Repositories';
 
@@ -160,8 +160,31 @@ export class Phase8Api {
       safePatch[key] = key === 'tags' ? Phase22Validation.tags(patch[key]) : patch[key];
     }
     const record = await this.customers.update(customerId, safePatch as Partial<Customer>);
-    await this.audit.write(actor.id, 'customer.updated', 'customer', customerId, {});
+    await this.audit.write(actor.id, 'customer.updated', 'customer', customerId, { patch: safePatch });
     return record;
+  }
+
+  /**
+   * Activity timeline for the Inbox detail panel — matches entries targeting this conversation
+   * directly (calls, snooze, reassignment) or the conversation's own customer (stage changes,
+   * contact edits), plus anything that names either id in its metadata (a remark's own audit row
+   * targets the remark, not the conversation). Excludes authorization.denied — that's a security
+   * signal for Admin's Audit Log, not agent-facing activity.
+   */
+  async listConversationActivity(conversationId: string): Promise<AuditEntryWithActor[]> {
+    const conversation = await this.conversations.get(conversationId);
+    if (!conversation) throw new ApiError(404, 'NOT_FOUND', 'Conversation was not found.');
+    const teamId = await this.access.resolveTeamIdForNumber(conversation.numberId);
+    await this.access.requireConversationOperation('view', { numberId: conversation.numberId, teamId, assignedUserId: conversation.assignedUserId });
+    const customerId = conversation.customerId;
+    const entries = (await this.audit.list()).filter((e) => {
+      if (e.action === 'authorization.denied') return false;
+      if (e.targetType === 'conversation' && e.targetId === conversationId) return true;
+      if (e.targetType === 'customer' && e.targetId === customerId) return true;
+      return e.metadata?.conversationId === conversationId;
+    });
+    const usersById = new Map((await this.phase1Repos.users.list()).map((u) => [u.id, u]));
+    return entries.map((e) => ({ ...e, actorName: (e.actorUserId && usersById.get(e.actorUserId)?.displayName) || e.actorUserId || 'System' }));
   }
 
   private async canSeeCustomer(actor: User, customerId: string): Promise<boolean> {

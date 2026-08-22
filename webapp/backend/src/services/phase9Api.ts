@@ -49,7 +49,7 @@ export class Phase9Api {
     const actor = await this.requireReminderAccess(reminder.conversationId);
     const validStatus = Validation.enumValue<ReminderStatus>(status, ['PENDING', 'COMPLETED', 'CANCELLED'], 'status');
     const record = await this.reminders.update(reminderId, { status: validStatus });
-    await this.audit.write(actor.id, 'reminder.statusChanged', 'reminder', reminderId, { status: validStatus });
+    await this.audit.write(actor.id, 'reminder.statusChanged', 'reminder', reminderId, { status: validStatus, conversationId: reminder.conversationId });
     return record;
   }
 

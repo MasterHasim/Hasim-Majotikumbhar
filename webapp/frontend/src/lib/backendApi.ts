@@ -1,10 +1,11 @@
 /** Typed wrappers around apiFetch for the endpoints the Inbox UI needs — one-to-one with webapp/backend/src/routes/{phase1,messaging,crm,phase22}.ts. */
 import { apiFetch } from './api';
 import type {
-  AssignableUser, AssignmentEligibility, AssignmentEligibilityStatus, AuditEntry, Availability, AvailabilityStatus, CallLog, CallLogWithContext,
-  Conversation, ConversationListItem, Customer, CustomerStage, DashboardMetrics, Lead, LeadRemark, LeadStageAssignment, LocationAssignmentConfig,
-  LocationAssignmentUser, NumberAccess, NumberAssignmentConfig, NumberAssignmentUser, QuickReply, Remark, Reminder, ReminderWithContext, Role,
-  SearchFilters, SearchResultItem, SnoozeStatus, Stage, Team, TeamMember, Template, UploadLeadsResult, User, WhatsAppNumber, WhoAmI, Workspace,
+  AssignableUser, AssignmentEligibility, AssignmentEligibilityStatus, AuditEntry, AuditEntryWithActor, Availability, AvailabilityStatus, CallLog,
+  CallLogWithContext, Conversation, ConversationListItem, Customer, CustomerStage, DashboardMetrics, Lead, LeadRemark, LeadStageAssignment,
+  LocationAssignmentConfig, LocationAssignmentUser, NumberAccess, NumberAssignmentConfig, NumberAssignmentUser, QuickReply, Remark, Reminder,
+  ReminderWithContext, Role, SearchFilters, SearchResultItem, SnoozeStatus, Stage, Team, TeamMember, Template, UploadLeadsResult, User,
+  WhatsAppNumber, WhoAmI, Workspace,
 } from '../types';
 
 export const backendApi = {
@@ -209,6 +210,10 @@ export const backendApi = {
     apiFetch<LeadRemark>(`/api/leads/${encodeURIComponent(leadId)}/remarks`, { method: 'POST', body: JSON.stringify({ text }) }),
 
   listLeadRemarks: (leadId: string) => apiFetch<LeadRemark[]>(`/api/leads/${encodeURIComponent(leadId)}/remarks`),
+
+  listLeadActivity: (leadId: string) => apiFetch<AuditEntryWithActor[]>(`/api/leads/${encodeURIComponent(leadId)}/activity`),
+
+  listConversationActivity: (conversationId: string) => apiFetch<AuditEntryWithActor[]>(`/api/conversations/${encodeURIComponent(conversationId)}/activity`),
 
   startWhatsAppFromLead: (leadId: string) =>
     apiFetch<{ customerId: string; conversationId: string; numberId: string }>(`/api/leads/${encodeURIComponent(leadId)}/start-whatsapp`, { method: 'POST' }),

@@ -92,6 +92,15 @@ export function registerCrmRoutes(router: RouterType) {
     const ctx = await buildContext(request, env);
     return Response.json(await new Phase8Api(ctx.db, ctx.identityEmail).listRemarks(param(request, 'id')));
   });
+  /** Deliberately not bundled into getConversationWorkspace — the workspace call was already
+   * close to Cloudflare Workers' per-invocation subrequest limit, and this section is collapsed
+   * by default in the UI anyway, so lazy-loading it on expand is strictly better than paying for
+   * it on every conversation open. Learned this the hard way: bundling it in once actually
+   * exceeded the limit and silently broke sibling fields (including realtime) in the same call. */
+  router.get('/api/conversations/:id/activity', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    return Response.json(await new Phase8Api(ctx.db, ctx.identityEmail).listConversationActivity(param(request, 'id')));
+  });
   router.get('/api/customers', async (request: IRequest, env: Env) => {
     const ctx = await buildContext(request, env);
     return Response.json(await new Phase8Api(ctx.db, ctx.identityEmail).listCustomers(query(request, 'numberId')));
