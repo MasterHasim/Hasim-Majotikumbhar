@@ -44,6 +44,15 @@ function readFileAsBase64(file: File): Promise<string> {
   });
 }
 
+/** Meta's Click-to-WhatsApp "Send message" button on a boosted Facebook Page post doesn't send
+ * structured referral metadata (confirmed live, 2026-08-23) — it embeds the ad's link directly
+ * inside the plain message text as "Link:\n<url>\n\n<actual message>". Detects that exact shape
+ * so the link still renders as a clickable AD URL card even without a `referral` object. */
+function extractLinkPrefix(text: string): { url: string; rest: string } | null {
+  const match = /^Link:\n(\S+)\n\n([\s\S]*)$/.exec(text);
+  return match ? { url: match[1]!, rest: match[2]! } : null;
+}
+
 /** Shown above a message that carries Meta's ad-referral data — i.e. the customer tapped
  * a "Send message" button on a Facebook/Instagram ad. Mirrors the "AD URL: <link>" card
  * agents know from Superfone, so it's immediately recognizable. Unverified against real
@@ -58,6 +67,19 @@ function ReferralBadge({ referral }: { referral: NonNullable<Workspace['messages
         </div>
       )}
       {referral.headline && <div className="referral-badge-headline">{referral.headline}</div>}
+    </div>
+  );
+}
+
+/** Same "AD URL:" card as ReferralBadge, for the plain-text "Link:\n<url>" shape instead of a
+ * structured referral object — same visual language, different source of the URL. */
+function LinkPrefixBadge({ url }: { url: string }) {
+  return (
+    <div className="referral-badge">
+      <div className="referral-badge-url">
+        <span className="referral-badge-label">AD URL:</span>{' '}
+        <a href={url} target="_blank" rel="noreferrer">{url}</a>
+      </div>
     </div>
   );
 }
@@ -207,18 +229,23 @@ export function ChatPane({ workspace, quickReplies, templates, onAfterSend, onRe
 
       <div className="messages" ref={messagesRef}>
         {workspace.messages.length === 0 && <div className="empty">No messages yet.</div>}
-        {workspace.messages.map((message) => (
+        {workspace.messages.map((message) => {
+          const linkPrefix = !message.referral && message.messageText ? extractLinkPrefix(message.messageText) : null;
+          const displayText = linkPrefix ? linkPrefix.rest : message.messageText;
+          return (
           <div key={message.id} className={`message-row ${message.direction}`}>
             {message.direction === 'INBOUND' && <div className="msg-avatar">{customerName.charAt(0).toUpperCase()}</div>}
             <div className={`message ${message.direction}${message.status === 'FAILED' ? ' FAILED' : ''}`}>
               {message.referral && <ReferralBadge referral={message.referral} />}
+              {linkPrefix && <LinkPrefixBadge url={linkPrefix.url} />}
               {message.senderName && message.direction === 'OUTBOUND' && <div className="sender">{message.senderName}</div>}
               {message.media && <MediaAttachment media={message.media} />}
-              {message.messageText && <div className="text">{message.messageText}</div>}
+              {displayText && <div className="text">{displayText}</div>}
               <div className="time">{timeLabel(message.timestamp)}{message.status === 'FAILED' ? ' · Failed to send' : ''}</div>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {error && <div className="compose-error">{error}</div>}
