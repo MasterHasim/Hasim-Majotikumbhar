@@ -39,7 +39,7 @@ export default function App() {
   const [bootstrapping, setBootstrapping] = useState(false);
   const [numbers, setNumbers] = useState<WhatsAppNumber[] | null>(null);
   const [activeNumber, setActiveNumber] = useState<WhatsAppNumber | null>(null);
-  const [page, setPage] = useState<Page>('inbox');
+  const [page, setPage] = useState<Page>('dashboard');
   const [pendingConversationId, setPendingConversationId] = useState<string | null>(null);
   const [needsResponseCounts, setNeedsResponseCounts] = useState<Record<string, number>>({});
   const [error, setError] = useState<string | null>(null);

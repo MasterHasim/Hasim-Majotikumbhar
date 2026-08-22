@@ -92,16 +92,61 @@ function Kpi({ icon, label, value }: { icon: string; label: string; value: numbe
   );
 }
 
-function BarList({ rows }: { rows: { label: string; count: number }[] }) {
-  const max = Math.max(1, ...rows.map((r) => r.count));
-  if (rows.length === 0) return <div className="empty">No data yet.</div>;
+const CHART_COLORS = ['var(--accent)', 'var(--call)', 'var(--warning)', 'var(--danger)', 'var(--cyan)', 'var(--violet)'];
+
+/** Donut chart — plain SVG (no charting library), colored from the fixed CHART_COLORS palette so
+ * every pie on the Dashboard reads consistently. Renders a legend with counts/percentages
+ * alongside rather than relying on hover tooltips, since this is meant to be scannable at a
+ * glance for a manager, not explored slice by slice. */
+function PieChart({ rows, size = 140 }: { rows: { label: string; count: number }[]; size?: number }) {
+  const total = rows.reduce((sum, r) => sum + r.count, 0);
+  if (total === 0) return <div className="empty">No data yet.</div>;
+  const radius = size / 2;
+  const innerRadius = radius * 0.55;
+  let cumulative = 0;
+  const point = (angle: number, r: number) => [radius + r * Math.sin(angle), radius - r * Math.cos(angle)];
+  const slices = rows.filter((r) => r.count > 0).map((r, i) => {
+    const startAngle = (cumulative / total) * 2 * Math.PI;
+    cumulative += r.count;
+    const endAngle = (cumulative / total) * 2 * Math.PI;
+    const largeArc = endAngle - startAngle > Math.PI ? 1 : 0;
+    const [x1, y1] = point(startAngle, radius);
+    const [x2, y2] = point(endAngle, radius);
+    const [ix1, iy1] = point(endAngle, innerRadius);
+    const [ix2, iy2] = point(startAngle, innerRadius);
+    const path = `M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2} L ${ix1} ${iy1} A ${innerRadius} ${innerRadius} 0 ${largeArc} 0 ${ix2} ${iy2} Z`;
+    return { ...r, path, color: CHART_COLORS[i % CHART_COLORS.length]! };
+  });
   return (
-    <div className="bar-list">
-      {rows.map((r) => (
-        <div key={r.label} className="bar-row">
-          <span>{r.label}</span>
-          <div className="bar-track"><div className="bar-fill" style={{ width: `${(r.count / max) * 100}%` }} /></div>
-          <span className="bar-count">{r.count}</span>
+    <div className="pie-chart-row">
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ flexShrink: 0 }}>
+        {slices.map((s) => <path key={s.label} d={s.path} fill={s.color} />)}
+      </svg>
+      <div className="pie-chart-legend">
+        {slices.map((s) => (
+          <div key={s.label} className="pie-chart-legend-row">
+            <span className="pie-chart-swatch" style={{ background: s.color }} />
+            <span className="pie-chart-legend-label">{s.label}</span>
+            <span className="pie-chart-legend-value">{s.count} ({Math.round((s.count / total) * 100)}%)</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Vertical bar chart for a handful of categories (e.g. template usage) — visually distinct from
+ * BarList's horizontal rows, closer to a classic "chart" a manager would expect in a report tab. */
+function BarChart({ rows, height = 140 }: { rows: { label: string; count: number }[]; height?: number }) {
+  if (rows.length === 0) return <div className="empty">No data yet.</div>;
+  const max = Math.max(1, ...rows.map((r) => r.count));
+  return (
+    <div className="bar-chart-row" style={{ height }}>
+      {rows.map((r, i) => (
+        <div key={r.label} className="bar-chart-col">
+          <span className="bar-chart-value">{r.count}</span>
+          <div className="bar-chart-fill" style={{ height: `${(r.count / max) * 100}%`, background: CHART_COLORS[i % CHART_COLORS.length] }} />
+          <span className="bar-chart-label" title={r.label}>{r.label}</span>
         </div>
       ))}
     </div>
@@ -209,6 +254,16 @@ export function Dashboard({ number }: { number: WhatsAppNumber | null }) {
 
           <div className="dashboard-grid">
             <div className="card">
+              <h2 className="section-title" style={{ marginTop: 0 }}>Conversation status</h2>
+              <PieChart rows={[
+                { label: 'Open', count: metrics.conversations.open },
+                { label: 'Needs reply', count: metrics.conversations.needsResponse },
+                { label: 'Unassigned', count: metrics.conversations.unassigned },
+                { label: 'Resolved', count: metrics.conversations.resolved },
+              ]} />
+            </div>
+
+            <div className="card">
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
                 <h2 className="section-title" style={{ marginTop: 0, marginBottom: 0 }}>Lead funnel</h2>
                 <select value={funnelLocation} onChange={(e) => setFunnelLocation(e.target.value)}>
@@ -224,12 +279,12 @@ export function Dashboard({ number }: { number: WhatsAppNumber | null }) {
 
             <div className="card">
               <h2 className="section-title" style={{ marginTop: 0 }}>Customer stage distribution</h2>
-              <BarList rows={metrics.stageDistribution.map((s) => ({ label: s.name, count: s.count }))} />
+              <PieChart rows={metrics.stageDistribution.map((s) => ({ label: s.name, count: s.count }))} />
             </div>
 
             <div className="card">
               <h2 className="section-title" style={{ marginTop: 0 }}>Template usage</h2>
-              <BarList rows={metrics.templateUsage.map((t) => ({ label: t.name, count: t.count }))} />
+              <BarChart rows={metrics.templateUsage.map((t) => ({ label: t.name, count: t.count }))} />
             </div>
 
             <div className="card">

@@ -12,7 +12,7 @@
   --text: #EAF0FB; --text-secondary: #8A96B2; --text-muted: #5C6789;
   --accent: #22E9A6; --accent-dark: #0FA97A; --accent-light: #123326;
   --call: #4E7CFF; --call-dark: #2F55D4; --call-light: #131E3A;
-  --cyan: #22D3EE;
+  --cyan: #22D3EE; --violet: #A78BFA;
   --danger: #FF4D6D; --danger-light: #3A1420; --warning: #FFB020; --warning-light: #332008;
   --sidebar-bg: var(--bg-alt); --sidebar-hover: var(--surface2); --sidebar-active: var(--accent);
   --sidebar-text: var(--text-secondary); --sidebar-text-active: var(--text);
@@ -81,8 +81,8 @@ input::placeholder, textarea::placeholder { color: var(--text-muted); }
 #pageContent { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; min-height: 0; }
 
 /* ---- Conversations + chat split ---- */
-.split { display: grid; grid-template-columns: 320px 1fr 300px; gap: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; flex: 1; min-height: 0; }
-.split.no-detail { grid-template-columns: 320px 1fr; }
+.split { display: grid; grid-template-columns: 260px 1fr 300px; gap: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; flex: 1; min-height: 0; }
+.split.no-detail { grid-template-columns: 260px 1fr; }
 .col { overflow-y: auto; border-right: 1px solid var(--border); }
 .col:last-child { border-right: none; }
 .col-header { padding: 13px 14px; font-family: var(--font-display); font-weight: 700; font-size: 13px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface); z-index: 1; color: var(--text); }
@@ -239,6 +239,19 @@ table.data-table tr.clickable { cursor: pointer; }
 .bar-list .bar-fill { background: var(--accent); height: 100%; border-radius: 4px; }
 .bar-list .bar-count { text-align: right; font-variant-numeric: tabular-nums; color: var(--text-secondary); font-family: var(--font-mono); }
 
+/* ---- Dashboard pie/bar charts ---- */
+.pie-chart-row { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+.pie-chart-legend { display: flex; flex-direction: column; gap: 7px; font-size: 12px; flex: 1; min-width: 140px; }
+.pie-chart-legend-row { display: flex; align-items: center; gap: 7px; }
+.pie-chart-swatch { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+.pie-chart-legend-label { color: var(--text-secondary); }
+.pie-chart-legend-value { margin-left: auto; font-family: var(--font-mono); color: var(--text); font-variant-numeric: tabular-nums; }
+.bar-chart-row { display: flex; align-items: flex-end; gap: 12px; padding-top: 10px; overflow-x: auto; }
+.bar-chart-col { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1; min-width: 44px; height: 100%; justify-content: flex-end; }
+.bar-chart-value { font-size: 11px; font-family: var(--font-mono); color: var(--text-secondary); }
+.bar-chart-fill { width: 100%; max-width: 38px; min-height: 3px; background: var(--accent); border-radius: 5px 5px 0 0; }
+.bar-chart-label { font-size: 10px; color: var(--text-secondary); text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; }
+
 /* Responsive slab layout for smaller Dashboard cards (funnel, distributions, small stat blocks) —
    auto-fit reflows the column count by available width instead of a fixed breakpoint list, so it
    naturally goes from one column on mobile to several on a wide monitor. */
@@ -256,7 +269,7 @@ label.inline { display: flex; align-items: center; gap: 4px; font-size: 13px; co
 
 /* ---- Responsive: mobile + tablet ----
  * Below 900px there isn't room for a fixed sidebar plus the Inbox's 3-column split
- * (320px list + 300px detail leaves the message column no space), so:
+ * (260px list + 300px detail leaves the message column no space), so:
  *  - the sidebar becomes an off-canvas drawer, opened by a hamburger toggle
  *  - the Inbox split becomes one pane at a time (list <-> chat), with the detail
  *    panel sliding in as an overlay instead of a third column
