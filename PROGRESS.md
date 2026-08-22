@@ -13,7 +13,9 @@
 
 **Live-campaign dropdown.** A new "campaign" custom field type (Admin → Custom Fields → "Dropdown (live campaigns)") pulls currently-ACTIVE campaign names straight from your registered Meta ad account(s) via the Marketing API's Campaigns endpoint — no manually-typed campaign names, no stale static option lists. Tag a Lead against the exact live campaign it came from, so revenue (via Quotations) can eventually be tied back to campaign performance. Soft-fails to an empty list rather than blocking Lead editing if Meta briefly errors — this is a convenience list, not the core reporting path (`getAdInsights` still surfaces real errors).
 
-9 new backend regression tests (195 total, all passing), clean typecheck (backend + frontend), both deployed. The template fix's actual delivery isn't yet confirmed by a real WhatsApp arrival (still watching live logs for the next real send); the other three are either confirmed via live production logs (needs-response-counts) or fully unit-tested but not yet click-through-verified in the browser (Lead editing, campaign dropdown — this environment's browser session isn't signed in).
+9 new backend regression tests (195 total, all passing), clean typecheck (backend + frontend), both deployed.
+
+**Template delivery — now live-verified for real, not just deployed.** Sent a real `team_member_welcome` template from Entartica - Coimbatore to +918490903043 through the Inbox. It arrived on the phone, and a real inbound WhatsApp reply ("Yeah") came back into the conversation seconds later — correctly reopening the 24-hour window and flipping the conversation to "Needs reply." This is full end-to-end confirmation the payload-shape fix actually resolved the delivery problem, not just a plausible theory. Lead editing and the campaign dropdown are still only unit-tested, not yet click-through-verified in the browser.
 
 ## ✅ WhatsApp welcome notification + WABA ID admin UX (2026-08-22)
 
