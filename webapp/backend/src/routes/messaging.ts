@@ -73,6 +73,11 @@ export function registerMessagingRoutes(router: RouterType) {
     const ctx = await buildContext(request, env);
     return Response.json(await new Phase6Api(ctx.db, ctx.identityEmail, env).resolveConversation(param(request, 'id')));
   });
+  router.patch('/api/conversations/:id/products', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    const body = (await json(request)) as { productIds: unknown };
+    return Response.json(await new Phase6Api(ctx.db, ctx.identityEmail, env).updateConversationProducts(param(request, 'id'), body.productIds));
+  });
   router.post('/api/conversations/:id/send-template', async (request: IRequest, env: Env) => {
     const ctx = await buildContext(request, env);
     const body = (await json(request)) as { templateId: string; variables?: Record<string, unknown> };

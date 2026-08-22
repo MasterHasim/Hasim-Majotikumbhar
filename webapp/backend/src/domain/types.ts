@@ -106,6 +106,10 @@ export interface Conversation extends Record_ {
    * approved template can be sent. Absent on conversations created before this field existed —
    * see Phase6Api.isWithinCustomerServiceWindow for the fallback. */
   lastCustomerMessageAt?: string;
+  /** Which of this number's Products the customer seems interested in, agent-tagged — scoped to
+   * the conversation (not the Customer) since Products themselves are per-number and the same
+   * customer can have separate conversations on different numbers with different interests. */
+  interestedProductIds?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -127,6 +131,19 @@ export interface Message extends Record_ {
    * messageText (which now shows the actual rendered text a customer would recognize) so
    * Dashboard's template-usage report has something stable to key off. */
   templateName?: string;
+  /** Set only when this INBOUND message carries Meta's "Click to WhatsApp" ad-referral data —
+   * present when a customer messaged in response to a Facebook/Instagram ad, so an agent can see
+   * which ad/product prompted the conversation. UNVERIFIED shape — Exotel's own docs don't
+   * document a referral object, this is a best-effort extraction of Meta's own documented Cloud
+   * API convention; needs a real ad-click message to confirm Exotel actually forwards it. */
+  referral?: {
+    headline?: string;
+    body?: string;
+    sourceUrl?: string;
+    mediaType?: string;
+    imageUrl?: string;
+    videoUrl?: string;
+  };
 }
 
 // --- CRM core (port of Phase7/8/9/12's slice of Phase2Domain.gs's Phase2Schemas) ---

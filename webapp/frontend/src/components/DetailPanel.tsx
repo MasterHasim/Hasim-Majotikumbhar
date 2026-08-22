@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { AuditEntryWithActor, Stage, Workspace } from '../types';
+import type { AuditEntryWithActor, Product, Stage, Workspace } from '../types';
 import { backendApi } from '../lib/backendApi';
 import { ApiClientError } from '../lib/api';
 import { ActivityFeed } from './ActivityFeed';
@@ -38,6 +38,22 @@ export function DetailPanel({ workspace, stages, onChanged, mobileOpen, onCloseM
     if (!activityOpen) return;
     backendApi.listConversationActivity(workspace.conversation.id).then(setActivity).catch(() => setActivity([]));
   }, [workspace.conversation.id, activityOpen]);
+
+  // This number's catalog — lets an agent flag which product(s) a customer is asking about,
+  // same "on the Conversation, not the Customer" scoping as the backend field (a customer can
+  // have separate conversations on different numbers with different product interests).
+  const [products, setProducts] = useState<Product[]>([]);
+  useEffect(() => {
+    const numberId = workspace.number?.id;
+    if (!numberId) { setProducts([]); return; }
+    backendApi.listProducts(numberId).then((p) => setProducts(p.filter((x) => x.active))).catch(() => setProducts([]));
+  }, [workspace.number?.id]);
+
+  function toggleProduct(productId: string) {
+    const current = workspace.conversation.interestedProductIds ?? [];
+    const next = current.includes(productId) ? current.filter((id) => id !== productId) : [...current, productId];
+    void guard(() => backendApi.updateConversationProducts(workspace.conversation.id, next));
+  }
 
   function guard<T>(fn: () => Promise<T>) {
     setBusy(true);
@@ -226,6 +242,38 @@ export function DetailPanel({ workspace, stages, onChanged, mobileOpen, onCloseM
           ))}
         </div>
       </details>
+
+      {products.length > 0 && (
+        <details className="detail-section" open>
+          <summary>Products of interest ({(workspace.conversation.interestedProductIds ?? []).length})</summary>
+          <div className="detail-section-body">
+            {products.map((product) => (
+              <label key={product.id} className="note-item" style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  disabled={busy}
+                  checked={(workspace.conversation.interestedProductIds ?? []).includes(product.id)}
+                  onChange={() => toggleProduct(product.id)}
+                />
+                <span>{product.name}{product.sku ? ` (${product.sku})` : ''}</span>
+              </label>
+            ))}
+          </div>
+        </details>
+      )}
+
+      {workspace.matchingLead && (
+        <details className="detail-section">
+          <summary>Lead context</summary>
+          <div className="detail-section-body">
+            <div className="field-row"><span className="field-label">Name</span><span className="field-value">{workspace.matchingLead.name}</span></div>
+            <div className="field-row"><span className="field-label">Location</span><span className="field-value">{workspace.matchingLead.location}</span></div>
+            {Object.entries(workspace.matchingLead.customFields ?? {}).map(([key, val]) => (
+              <div className="field-row" key={key}><span className="field-label">{key}</span><span className="field-value">{String(val)}</span></div>
+            ))}
+          </div>
+        </details>
+      )}
 
       <details className="detail-section" open={activityOpen} onToggle={(e) => setActivityOpen((e.target as HTMLDetailsElement).open)}>
         <summary>Activity{activity ? ` (${activity.length})` : ''}</summary>

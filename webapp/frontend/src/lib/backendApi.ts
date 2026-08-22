@@ -48,6 +48,9 @@ export const backendApi = {
   resolveConversation: (conversationId: string) =>
     apiFetch<Conversation>(`/api/conversations/${encodeURIComponent(conversationId)}/resolve`, { method: 'POST' }),
 
+  updateConversationProducts: (conversationId: string, productIds: string[]) =>
+    apiFetch<Conversation>(`/api/conversations/${encodeURIComponent(conversationId)}/products`, { method: 'PATCH', body: JSON.stringify({ productIds }) }),
+
   sendTemplateReply: (conversationId: string, templateId: string, variables: Record<string, unknown>) =>
     apiFetch<unknown>(`/api/conversations/${encodeURIComponent(conversationId)}/send-template`, { method: 'POST', body: JSON.stringify({ templateId, variables }) }),
 

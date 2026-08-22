@@ -15,7 +15,7 @@
 import { ApiError } from '../types';
 import { Ids, Permissions, Roles, Validation } from '../domain/phase1';
 import { Phase22Validation } from '../domain/phase22';
-import type { Conversation, Customer, Message, MessageMedia, Template, WhatsAppNumber } from '../domain/types';
+import type { Conversation, Customer, Message, MessageMedia, Product, Template, WhatsAppNumber } from '../domain/types';
 import { Repository } from '../lib/repository';
 import { AccessControl } from '../lib/accessControl';
 import { AuditLogService } from '../lib/auditLog';
@@ -126,6 +126,7 @@ export class Phase6Api {
   private messages: Repository<Message>;
   private templates: Repository<Template>;
   private messageMedia: Repository<MessageMedia>;
+  private products: Repository<Product>;
   private exotelConfig: ExotelConfig;
   private mediaBucket?: R2Bucket;
 
@@ -139,6 +140,7 @@ export class Phase6Api {
     this.messages = new Repository<Message>(db, 'webapp_messages');
     this.templates = new Repository<Template>(db, 'templates');
     this.messageMedia = new Repository<MessageMedia>(db, 'messageMedia');
+    this.products = new Repository<Product>(db, 'products');
     this.exotelConfig = requireExotelConfig(env);
     this.mediaBucket = env.MEDIA_BUCKET;
   }
@@ -232,6 +234,26 @@ export class Phase6Api {
     const actor = await this.access.requireConversationOperation('reply', { numberId: conversation.numberId, teamId, assignedUserId: conversation.assignedUserId });
     const record = await this.conversations.update(conversationId, { status: 'CLOSED' });
     await this.audit.write(actor.id, 'conversation.resolved', 'conversation', conversationId, {});
+    return record;
+  }
+
+  /** Which of this conversation's own number's Products the customer seems interested in — same
+   * authorization tier as resolveConversation (the assigned agent or a manager), same "replace
+   * the full set" contract Phase22Api.updateLeadTags already uses for a small agent-editable list.
+   * Rejects a productId that doesn't belong to this conversation's numberId, so the list can't
+   * silently drift to reference another number's catalog. */
+  async updateConversationProducts(conversationId: string, productIds: unknown): Promise<Conversation> {
+    const conversation = await this.conversations.get(conversationId);
+    if (!conversation) throw new ApiError(404, 'NOT_FOUND', 'Conversation was not found.');
+    const teamId = await this.access.resolveTeamIdForNumber(conversation.numberId);
+    const actor = await this.access.requireConversationOperation('reply', { numberId: conversation.numberId, teamId, assignedUserId: conversation.assignedUserId });
+    const validIds = Validation.stringArray(productIds ?? [], 'productIds');
+    const catalog = new Set((await this.products.list()).filter((p) => p.numberId === conversation.numberId).map((p) => p.id));
+    for (const id of validIds) {
+      if (!catalog.has(id)) throw new ApiError(400, 'VALIDATION_ERROR', `Product ${id} does not belong to this conversation's number.`);
+    }
+    const record = await this.conversations.update(conversationId, { interestedProductIds: validIds });
+    await this.audit.write(actor.id, 'conversation.productsUpdated', 'conversation', conversationId, { productIds: validIds });
     return record;
   }
 

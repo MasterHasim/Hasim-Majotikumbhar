@@ -40,6 +40,7 @@ export interface NormalizedWebhookMessage {
   timestamp: string;
   profileName?: string | null;
   status: string | null;
+  referral?: { headline?: string; body?: string; sourceUrl?: string; mediaType?: string; imageUrl?: string; videoUrl?: string } | null;
 }
 
 function extractInboundMediaUrl(content: { type?: string; [key: string]: unknown } | undefined): string | null {
@@ -47,6 +48,25 @@ function extractInboundMediaUrl(content: { type?: string; [key: string]: unknown
   const body = content[content.type] as { link?: string; url?: string } | undefined;
   if (!body) return null;
   return body.link || body.url || null;
+}
+
+/** Best-effort — UNVERIFIED, no real ad-click message has confirmed this shape yet (see
+ * NormalizedWebhookMessage.referral's own doc comment). Extracts Meta's own documented
+ * WhatsApp Cloud API "referral" object (present on an inbound message when a customer replied to
+ * a Click-to-WhatsApp Facebook/Instagram ad) if Exotel forwards it at the same nesting level as
+ * "content" on the message entry — never throws, never blocks ingestion if absent or shaped
+ * differently than expected. */
+function extractReferral(message: Record<string, unknown> | undefined): NormalizedWebhookMessage['referral'] {
+  const r = message?.referral as Record<string, unknown> | undefined;
+  if (!r || typeof r !== 'object') return null;
+  const referral: NonNullable<NormalizedWebhookMessage['referral']> = {};
+  if (typeof r.headline === 'string') referral.headline = r.headline;
+  if (typeof r.body === 'string') referral.body = r.body;
+  if (typeof r.source_url === 'string') referral.sourceUrl = r.source_url;
+  if (typeof r.media_type === 'string') referral.mediaType = r.media_type;
+  if (typeof r.image_url === 'string') referral.imageUrl = r.image_url;
+  if (typeof r.video_url === 'string') referral.videoUrl = r.video_url;
+  return Object.keys(referral).length > 0 ? referral : null;
 }
 
 export class ExotelProvider {
@@ -134,6 +154,7 @@ export class ExotelProvider {
         timestamp: message.timestamp || new Date().toISOString(),
         profileName: message.profile_name || null,
         status: null,
+        referral: extractReferral(message as Record<string, unknown>),
       };
     }
     if (payload && (payload.message_sid || payload.status_code)) {

@@ -8,6 +8,9 @@ import { Phase5Api } from '../src/services/phase5Api';
 import { Phase6Api } from '../src/services/phase6Api';
 import { WorkspaceApi } from '../src/services/workspaceApi';
 import { ExotelProvider } from '../src/services/exotelProvider';
+import { Phase7Api } from '../src/services/phase7Api';
+import { Phase22Api } from '../src/services/phase22Api';
+import { ProductsApi } from '../src/services/productsApi';
 import { Roles } from '../src/domain/phase1';
 
 const ADMIN_EMAIL = 'admin@example.com';
@@ -244,6 +247,43 @@ describe('Messaging core (ported from Phase 3-6 + WorkspaceServices.gs)', () => 
       expect(withRealtime.realtime?.token.split('.')).toHaveLength(3); // a real (mock-signed) JWT shape
       expect(withRealtime.realtime?.webApiKey).toBe('test-web-api-key');
     });
+
+    it('matchingLead resolves a Lead that shares this customer\'s phone number (tail-matched, absorbing formatting differences), and is null when no Lead shares the number', async () => {
+      const env = { FIREBASE_WEB_API_KEY: 'test-web-api-key' };
+      const noLead = await new Phase4Api(db).ingestInboundMessage({ providerMessageId: 'msg-no-lead', fromPhone: '+919876500001', providerNumberId: '+917948502801', direction: 'INBOUND', messageType: 'text', text: 'Hi', timestamp: new Date().toISOString(), status: null });
+      const withoutLead = await new WorkspaceApi(db, ADMIN_EMAIL, env).getConversationWorkspace(noLead.conversationId!, false);
+      expect(withoutLead.matchingLead).toBeNull();
+
+      // Lead phone entered with different formatting (dashes, no country code) than the inbound
+      // E.164 number — same tail-matching heuristic ingestion itself already relies on.
+      await new Phase22Api(db, ADMIN_EMAIL).uploadLeads([{ name: 'Priya', phone: '98765-00002', location: 'Raipur' }]);
+      const inbound = await new Phase4Api(db).ingestInboundMessage({ providerMessageId: 'msg-lead', fromPhone: '+919876500002', providerNumberId: '+917948502801', direction: 'INBOUND', messageType: 'text', text: 'Hi', timestamp: new Date().toISOString(), status: null });
+      const workspace = await new WorkspaceApi(db, ADMIN_EMAIL, env).getConversationWorkspace(inbound.conversationId!, false);
+      expect(workspace.matchingLead).toMatchObject({ name: 'Priya', location: 'Raipur' });
+    });
+  });
+
+  describe('Phase6Api — updateConversationProducts', () => {
+    it('sets/replaces interestedProductIds, rejects a product from a different number, and denies an agent with no access to the conversation', async () => {
+      const inbound = await new Phase4Api(db).ingestInboundMessage({ providerMessageId: 'msg-prod', fromPhone: '+919876543210', providerNumberId: '+917948502801', direction: 'INBOUND', messageType: 'text', text: 'Hi', timestamp: new Date().toISOString(), status: null });
+      const conversationId = inbound.conversationId!;
+      await new Phase7Api(db, ADMIN_EMAIL).reassignConversation(conversationId, agentId);
+
+      const product = await new ProductsApi(db, ADMIN_EMAIL).createProduct({ numberId, name: 'Sunset Cruise', unitPrice: 4999 });
+      const otherNumber = await new Phase3Api(db, ADMIN_EMAIL).createNumber({ displayName: 'Other', phoneNumber: '079-485-09997', provider: 'exotel' });
+      const otherProduct = await new ProductsApi(db, ADMIN_EMAIL).createProduct({ numberId: otherNumber.id, name: 'Other Number Product', unitPrice: 100 });
+
+      const updated = await new Phase6Api(db, AGENT_EMAIL, mock.exotelConfig as never).updateConversationProducts(conversationId, [product.id]);
+      expect(updated.interestedProductIds).toEqual([product.id]);
+
+      await expect(new Phase6Api(db, AGENT_EMAIL, mock.exotelConfig as never).updateConversationProducts(conversationId, [otherProduct.id])).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+
+      const agent2 = await new Phase1Api(db, ADMIN_EMAIL).createUser({ email: 'agent2@example.com', displayName: 'Agent Two', roleIds: [] });
+      const roles = await new Phase1Api(db, ADMIN_EMAIL).listRoles();
+      await new Phase1Api(db, ADMIN_EMAIL).updateUser(agent2.id, { roleIds: [roles.find((r) => r.key === Roles.AGENT)!.id] });
+      await new Phase1Api(db, ADMIN_EMAIL).grantNumberAccess({ userId: agent2.id, numberId });
+      await expect(new Phase6Api(db, 'agent2@example.com', mock.exotelConfig as never).updateConversationProducts(conversationId, [])).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    });
   });
 
   describe('ExotelProvider.processWebhook — real confirmed payload shape', () => {
@@ -252,6 +292,18 @@ describe('Messaging core (ported from Phase 3-6 + WorkspaceServices.gs)', () => 
         whatsapp: { messages: [{ callback_type: 'incoming_message', sid: 'SM123', from: '+919876543210', to: '+917948502801', timestamp: '2026-01-01T00:00:00.000Z', profile_name: 'Test User', content: { type: 'text', text: { body: 'Hello' } } }] },
       });
       expect(normalized).toMatchObject({ providerMessageId: 'SM123', fromPhone: '+919876543210', providerNumberId: '+917948502801', direction: 'INBOUND', text: 'Hello', profileName: 'Test User' });
+      expect(normalized.referral).toBeFalsy(); // no referral on an ordinary message
+    });
+
+    it('extracts a best-effort ad-referral object when present on an inbound message, and it flows through ingestion onto the stored Message — UNVERIFIED shape (no real Click-to-WhatsApp message has confirmed this against Exotel yet), never blocks ingestion when absent', async () => {
+      const normalized = new ExotelProvider(mock.exotelConfig).processWebhook({
+        whatsapp: { messages: [{ sid: 'SM-ad-1', from: '+919876543299', to: '+917948502801', timestamp: '2026-01-01T00:00:00.000Z', content: { type: 'text', text: { body: 'Hi, I saw your ad' } }, referral: { headline: 'Sunset Cruise Offer', body: '20% off this week', source_url: 'https://fb.me/abc123', media_type: 'image', image_url: 'https://scontent.example/ad.jpg' } }] },
+      } as never);
+      expect(normalized.referral).toEqual({ headline: 'Sunset Cruise Offer', body: '20% off this week', sourceUrl: 'https://fb.me/abc123', mediaType: 'image', imageUrl: 'https://scontent.example/ad.jpg' });
+
+      const result = await new Phase4Api(db).ingestInboundMessage(normalized);
+      const stored = (await db.get(`webapp_messages/${result.messageId}`)) as { referral?: unknown };
+      expect(stored.referral).toEqual(normalized.referral);
     });
 
     it('parses a real delivery-status (dlr) callback as a status update, not an inbound message — same messages[] array shape as inbound, but "to" here is the customer, not our own number', () => {

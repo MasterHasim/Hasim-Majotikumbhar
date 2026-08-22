@@ -44,6 +44,20 @@ function readFileAsBase64(file: File): Promise<string> {
   });
 }
 
+/** Shown above the first message of a conversation that carries Meta's ad-referral data —
+ * i.e. the customer tapped a "Send message" button on a Facebook/Instagram ad. Unverified
+ * against real traffic (see MessageReferral doc comment), so kept visually low-key. */
+function ReferralBadge({ referral }: { referral: NonNullable<Workspace['messages'][number]['referral']> }) {
+  return (
+    <div className="referral-badge" title="This conversation started from a Facebook/Instagram ad click">
+      📣 From ad{referral.headline ? `: ${referral.headline}` : ''}
+      {referral.sourceUrl && (
+        <> · <a href={referral.sourceUrl} target="_blank" rel="noreferrer">view ad</a></>
+      )}
+    </div>
+  );
+}
+
 function MediaAttachment({ media }: { media: NonNullable<Workspace['messages'][number]['media']> }) {
   if (media.mediaType === 'image') {
     return <img src={media.mediaUrl} alt={media.caption || 'attachment'} className="media-image" onClick={() => window.open(media.mediaUrl, '_blank')} />;
@@ -155,6 +169,13 @@ export function ChatPane({ workspace, quickReplies, templates, onAfterSend, onRe
     const val = workspace.customer?.customFields?.[def.key];
     if (val !== undefined && val !== '') insertOptions.push({ label: def.label, value: String(val) });
   }
+  // Same customer, matched by phone against the separate Leads table (see Workspace.matchingLead) —
+  // a Lead often carries context (which location, which ad campaign) the Customer record never gets.
+  if (workspace.matchingLead?.name) insertOptions.push({ label: 'Lead Name', value: workspace.matchingLead.name });
+  if (workspace.matchingLead?.location) insertOptions.push({ label: 'Lead Location', value: workspace.matchingLead.location });
+  for (const [key, val] of Object.entries(workspace.matchingLead?.customFields ?? {})) {
+    if (val !== undefined && val !== '') insertOptions.push({ label: `Lead: ${key}`, value: String(val) });
+  }
 
   return (
     <div id="chatCol" className="col">
@@ -186,6 +207,7 @@ export function ChatPane({ workspace, quickReplies, templates, onAfterSend, onRe
           <div key={message.id} className={`message-row ${message.direction}`}>
             {message.direction === 'INBOUND' && <div className="msg-avatar">{customerName.charAt(0).toUpperCase()}</div>}
             <div className={`message ${message.direction}${message.status === 'FAILED' ? ' FAILED' : ''}`}>
+              {message.referral && <ReferralBadge referral={message.referral} />}
               {message.senderName && message.direction === 'OUTBOUND' && <div className="sender">{message.senderName}</div>}
               {message.media && <MediaAttachment media={message.media} />}
               {message.messageText && <div className="text">{message.messageText}</div>}

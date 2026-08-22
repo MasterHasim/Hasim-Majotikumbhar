@@ -28,6 +28,8 @@ export interface Conversation {
   lastMessageAt: string;
   /** Anchor for WhatsApp's 24-hour customer service window — see backend Conversation type. */
   lastCustomerMessageAt?: string;
+  /** Product IDs (from this number's catalog) the customer has expressed interest in during this conversation. */
+  interestedProductIds?: string[];
   createdAt: string;
 }
 
@@ -44,6 +46,18 @@ export interface MessageMedia {
   caption: string;
 }
 
+/** Best-effort Meta "Click-to-WhatsApp" ad context on an inbound message — populated only
+ * when the customer tapped through from a Facebook/Instagram ad. Shape is unverified against
+ * real Exotel traffic (Meta documents it, Exotel doesn't) so treat missing fields as normal. */
+export interface MessageReferral {
+  headline?: string;
+  body?: string;
+  sourceUrl?: string;
+  mediaType?: string;
+  imageUrl?: string;
+  videoUrl?: string;
+}
+
 export interface Message {
   id: string;
   conversationId: string;
@@ -55,6 +69,7 @@ export interface Message {
   timestamp: string;
   senderName?: string | null;
   media?: MessageMedia | null;
+  referral?: MessageReferral | null;
 }
 
 export type TemplateStatus = 'LOCAL_DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED';
@@ -157,6 +172,10 @@ export interface Workspace {
   snoozeStatus: SnoozeStatus | null;
   assignableUsers: AssignableUser[];
   calls: CallLog[] | null;
+  /** The Leads-side record for this same phone number, if one exists (matched by phone tail) —
+   * Leads and Customers are separate entities that happen to share a phone number, not a formal
+   * relationship, so this is best-effort context (location, custom fields), not an authoritative link. */
+  matchingLead: Pick<Lead, 'id' | 'name' | 'location' | 'customFields'> | null;
   realtime?: RealtimeListenToken | null;
 }
 

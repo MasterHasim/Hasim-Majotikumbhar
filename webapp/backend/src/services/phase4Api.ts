@@ -80,6 +80,7 @@ export class Phase4Api {
       id: Ids.create('message'), conversationId: conversation.id, numberId: number.id, senderUserId: '',
       direction: 'INBOUND', messageType: normalized.messageType || 'text', messageText: normalized.text || '',
       providerMessageId: normalized.providerMessageId, status: (normalized.status as Message['status']) || 'RECEIVED', timestamp: normalized.timestamp || now,
+      ...(normalized.referral ? { referral: normalized.referral } : {}),
     };
     await this.messages.create(message);
     if (normalized.mediaUrl) {
