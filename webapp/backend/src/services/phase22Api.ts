@@ -155,6 +155,26 @@ export class Phase22Api {
     return { batchId, created, skipped, errors };
   }
 
+  /** Single-lead counterpart to uploadLeads — same validation, duplicate check, and
+   * assignment-rule application as one row of a bulk upload, for adding an external
+   * lead one at a time instead of pasting a whole batch. */
+  async createLead(input: { name?: unknown; phone?: unknown; location?: unknown }): Promise<Lead> {
+    const actor = await this.access.require(Permissions.LEADS_MANAGE);
+    const name = Validation.requiredString(input.name, 'name');
+    const phone = Phase22Validation.phone(input.phone, 'phone');
+    const location = Phase22Validation.location(input.location);
+    if (!(await this.canSeeLocation(actor, location))) throw new ApiError(403, 'FORBIDDEN', `You do not have access to add leads for ${location}.`);
+    if (await this.leads.findOne((lead) => lead.phone === phone && lead.location === location)) {
+      throw new ApiError(409, 'CONFLICT', 'A lead with this phone number already exists for this location.');
+    }
+    const now = Ids.now();
+    const lead: Lead = { id: Ids.create('lead'), name, phone, location, status: Phase22LeadStatus.NEW, assignedUserId: '', assignedAt: '', uploadBatchId: Ids.create('uploadbatch'), uploadedBy: actor.id, createdAt: now, updatedAt: now };
+    await this.leads.create(lead);
+    const assigned = await this.assignLead(lead);
+    await this.audit.write(actor.id, 'lead.created', 'lead', lead.id, { name, phone, location });
+    return assigned;
+  }
+
   async reassignLead(leadId: string, userId: string): Promise<Lead> {
     const actor = await this.access.require(Permissions.LEADS_MANAGE);
     const lead = await this.leads.get(leadId);

@@ -160,6 +160,9 @@ export const backendApi = {
   uploadLeads: (rows: { name: string; phone: string; location: string }[]) =>
     apiFetch<UploadLeadsResult>('/api/leads/upload', { method: 'POST', body: JSON.stringify({ rows }) }),
 
+  createLead: (lead: { name: string; phone: string; location: string }) =>
+    apiFetch<Lead>('/api/leads', { method: 'POST', body: JSON.stringify(lead) }),
+
   listLeads: (filters: { location?: string; status?: string } = {}) => {
     const params = new URLSearchParams();
     if (filters.location) params.set('location', filters.location);

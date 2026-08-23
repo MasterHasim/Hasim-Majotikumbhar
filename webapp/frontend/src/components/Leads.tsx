@@ -103,6 +103,64 @@ function UploadLeadsForm({ onDone, onConfigureLocation }: { onDone: () => void; 
   );
 }
 
+/** Single-lead counterpart to UploadLeadsForm — for adding one external lead (e.g. a
+ * referral, a walk-in, a lead from a channel outside WhatsApp/CSV) through the exact
+ * same location assignment rule bulk-uploaded leads go through. */
+function AddLeadForm({ onDone, onConfigureLocation }: { onDone: () => void; onConfigureLocation: (location: string) => void }) {
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [location, setLocation] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [configs, setConfigs] = useState<Record<string, LocationAssignmentConfig | null> | null>(null);
+
+  useEffect(() => {
+    Promise.all(LEAD_LOCATIONS.map((loc) => backendApi.getLocationAssignmentConfig(loc).then((c) => [loc, c] as const)))
+      .then((pairs) => setConfigs(Object.fromEntries(pairs)))
+      .catch(() => setConfigs({}));
+  }, []);
+
+  async function submit() {
+    setBusy(true);
+    setError(null);
+    try {
+      const lead = await backendApi.createLead({ name: name.trim(), phone: phone.trim(), location });
+      onDone();
+      return lead;
+    } catch (err) {
+      setError(errMsg(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onDone}>
+      <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+        <h2 className="section-title" style={{ marginTop: 0 }}>Add lead</h2>
+        <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>For a single external lead — goes through the same assignment rule as an uploaded batch.</p>
+
+        <h2 className="section-title" style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--text-secondary)' }}>Assignment rule per location</h2>
+        <LocationAssignmentStatus configs={configs} onConfigure={onConfigureLocation} />
+
+        <div className="form-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+          <input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
+          <input placeholder="Phone (e.g. +919876543210)" value={phone} onChange={(e) => setPhone(e.target.value)} />
+          <select value={location} onChange={(e) => setLocation(e.target.value)}>
+            <option value="">Location…</option>
+            {LEAD_LOCATIONS.map((loc) => <option key={loc} value={loc}>{loc}</option>)}
+          </select>
+        </div>
+        {error && <div className="form-error">{error}</div>}
+        <div className="form-row" style={{ justifyContent: 'flex-end' }}>
+          <button className="btn" onClick={onDone}>Close</button>
+          <button className="btn primary" disabled={busy || !name.trim() || !phone.trim() || !location} onClick={() => void submit()}>{busy ? 'Adding…' : 'Add lead'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function Leads({ whoAmI, onOpenConversation }: { whoAmI: WhoAmI; onOpenConversation: (conversationId: string, numberId: string) => void }) {
   const isManager = whoAmI.roleKeys.includes('ADMIN') || whoAmI.roleKeys.includes('SITE_MANAGER');
   const [leads, setLeads] = useState<Lead[] | null>(null);
@@ -113,6 +171,7 @@ export function Leads({ whoAmI, onOpenConversation }: { whoAmI: WhoAmI; onOpenCo
   const [statusFilter, setStatusFilter] = useState('');
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [showUpload, setShowUpload] = useState(false);
+  const [showAddLead, setShowAddLead] = useState(false);
   const [rulesLocation, setRulesLocation] = useState<string | null>(null);
   const [view, setView] = useState<'table' | 'board'>('board');
   const [error, setError] = useState<string | null>(null);
@@ -254,6 +313,7 @@ export function Leads({ whoAmI, onOpenConversation }: { whoAmI: WhoAmI; onOpenCo
           <option value="CALLED">Called</option>
         </select>
         {isManager && <button className="btn primary" onClick={() => setShowUpload(true)}>+ Upload leads</button>}
+        {isManager && <button className="btn" onClick={() => setShowAddLead(true)}>+ Add lead</button>}
         {isManager && locationFilter && <button className="btn" onClick={() => setRulesLocation(locationFilter)}>Assignment rules for {locationFilter}</button>}
         <button className="btn" disabled={!leads || leads.length === 0} onClick={exportCsv}>⬇ Export CSV</button>
         <div className="view-toggle">
@@ -386,6 +446,7 @@ export function Leads({ whoAmI, onOpenConversation }: { whoAmI: WhoAmI; onOpenCo
       )}
 
       {showUpload && <UploadLeadsForm onDone={() => { setShowUpload(false); loadLeads(); }} onConfigureLocation={(loc) => { setShowUpload(false); setRulesLocation(loc); }} />}
+      {showAddLead && <AddLeadForm onDone={() => { setShowAddLead(false); loadLeads(); }} onConfigureLocation={(loc) => { setShowAddLead(false); setRulesLocation(loc); }} />}
       {rulesLocation && <AssignmentRulesModal location={rulesLocation} users={users} onClose={() => setRulesLocation(null)} />}
       {selectedLead && (
         <LeadDetailModal

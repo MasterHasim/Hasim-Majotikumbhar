@@ -106,6 +106,33 @@ describe('Phase22Api (ported from Phase22Domain.gs + Phase22Services.gs)', () =>
     });
   });
 
+  describe('createLead (single-lead manual add)', () => {
+    it('denies a non-manager', async () => {
+      await expect(new Phase22Api(db, AGENT_EMAIL).createLead({ name: 'X', phone: '+919876543210', location: 'Raipur' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    });
+
+    it('validates fields the same way uploadLeads does', async () => {
+      await expect(new Phase22Api(db, ADMIN_EMAIL).createLead({ name: '', phone: '+919876543210', location: 'Raipur' })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+      await expect(new Phase22Api(db, ADMIN_EMAIL).createLead({ name: 'X', phone: '123', location: 'Raipur' })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+      await expect(new Phase22Api(db, ADMIN_EMAIL).createLead({ name: 'X', phone: '+919876543210', location: 'NotARealPlace' })).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    });
+
+    it('creates one lead and runs it through the same location assignment rule as a bulk upload', async () => {
+      await new Phase22Api(db, ADMIN_EMAIL).setLocationConfig('Raipur', { mode: 'single', singleUserId: agentId, active: true });
+      const lead = await new Phase22Api(db, ADMIN_EMAIL).createLead({ name: 'External Lead', phone: '+919876543210', location: 'Raipur' });
+      expect(lead.status).toBe('ASSIGNED');
+      expect(lead.assignedUserId).toBe(agentId);
+      const leads = await new Phase22Api(db, ADMIN_EMAIL).listLeads();
+      expect(leads).toHaveLength(1);
+      expect(leads[0]!.id).toBe(lead.id);
+    });
+
+    it('rejects a duplicate phone+location, same as uploadLeads skips it, but as a thrown error instead of a silent skip (single-add has no batch to report skips against)', async () => {
+      await new Phase22Api(db, ADMIN_EMAIL).createLead({ name: 'First', phone: '+919876543210', location: 'Raipur' });
+      await expect(new Phase22Api(db, ADMIN_EMAIL).createLead({ name: 'Second', phone: '+919876543210', location: 'Raipur' })).rejects.toMatchObject({ code: 'CONFLICT' });
+    });
+  });
+
   describe('reassignLead', () => {
     let leadId: string;
     beforeEach(async () => {
