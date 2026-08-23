@@ -375,6 +375,12 @@ export interface CallLog extends Record_ {
    * call (initiateCall) has leadId instead and no direct conversation/number of its own. */
   conversationId?: string;
   numberId?: string;
+  /** Populated by the real Exotel status-callback webhook once it fires (see exotelVoiceProvider.ts's
+   * UNVERIFIED note) — absent until then, same as every other "filled in later by a webhook" field
+   * elsewhere in this codebase. Seconds, matching Exotel's documented convention for other duration fields. */
+  duration?: number;
+  recordingUrl?: string;
+  endedAt?: string;
 }
 
 /** listCallHistory()'s enrichment — same "denormalize for one read instead of N+1" reasoning

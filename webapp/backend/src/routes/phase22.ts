@@ -6,6 +6,7 @@ import { FirebaseDb } from '../lib/firebaseAdmin';
 import { Phase22Api, getPublicQuotationView } from '../services/phase22Api';
 import { CustomFieldsApi } from '../services/customFieldsApi';
 import { ProductsApi } from '../services/productsApi';
+import { parseCallStatusCallback } from '../services/exotelVoiceProvider';
 
 async function json(request: IRequest): Promise<Record<string, unknown>> {
   return (await request.json().catch(() => ({}))) as Record<string, unknown>;
@@ -17,6 +18,17 @@ function param(request: IRequest, name: string): string {
 }
 function query(request: IRequest, name: string): string | undefined {
   return new URL(request.url).searchParams.get(name) ?? undefined;
+}
+
+/** Built per-call rather than configured once on Exotel's dashboard (unlike the WhatsApp
+ * webhook) — Exotel's Connect API takes a StatusCallback URL directly in the request, so no
+ * external Exotel-side setup is needed for this piece. Same shared-secret token as the
+ * WhatsApp webhook (WEBHOOK_SECRET_TOKEN) rather than a second secret. Omitted (undefined)
+ * when the token isn't configured, so a misconfigured environment fails obviously (no
+ * StatusCallback param sent, not a webhook silently accepting unauthenticated calls). */
+function voiceStatusCallbackUrl(request: IRequest, env: Env): string | undefined {
+  if (!env.WEBHOOK_SECRET_TOKEN) return undefined;
+  return `${new URL(request.url).origin}/webhook/exotel-voice?token=${encodeURIComponent(env.WEBHOOK_SECRET_TOKEN)}`;
 }
 
 export function registerPhase22Routes(router: RouterType) {
@@ -77,7 +89,7 @@ export function registerPhase22Routes(router: RouterType) {
 
   router.post('/api/leads/:id/call', async (request: IRequest, env: Env) => {
     const ctx = await buildContext(request, env);
-    return Response.json(await new Phase22Api(ctx.db, ctx.identityEmail, env).initiateCall(param(request, 'id')));
+    return Response.json(await new Phase22Api(ctx.db, ctx.identityEmail, env).initiateCall(param(request, 'id'), voiceStatusCallbackUrl(request, env)));
   });
   router.get('/api/leads/:id/call-log', async (request: IRequest, env: Env) => {
     const ctx = await buildContext(request, env);
@@ -136,7 +148,7 @@ export function registerPhase22Routes(router: RouterType) {
   });
   router.post('/api/conversations/:id/call', async (request: IRequest, env: Env) => {
     const ctx = await buildContext(request, env);
-    return Response.json(await new Phase22Api(ctx.db, ctx.identityEmail, env).initiateConversationCall(param(request, 'id')));
+    return Response.json(await new Phase22Api(ctx.db, ctx.identityEmail, env).initiateConversationCall(param(request, 'id'), voiceStatusCallbackUrl(request, env)));
   });
 
   router.get('/api/custom-fields', async (request: IRequest, env: Env) => {
@@ -194,5 +206,41 @@ export function registerPhase22Routes(router: RouterType) {
     const serviceAccount = parseServiceAccount(env);
     const db = new FirebaseDb(serviceAccount, env.FIREBASE_DATABASE_URL);
     return Response.json(await getPublicQuotationView(db, param(request, 'id')));
+  });
+
+  // --- Exotel Voice status callback (no Firebase auth — shared secret token, same pattern as
+  // /webhook/exotel for WhatsApp). UNVERIFIED against real traffic — see exotelVoiceProvider.ts's
+  // note. Registered per-call via the StatusCallback param (see voiceStatusCallbackUrl above),
+  // not configured once on Exotel's dashboard the way the WhatsApp webhook is. ---
+  router.post('/webhook/exotel-voice', async (request: IRequest, env: Env) => {
+    const url = new URL(request.url);
+    const token = url.searchParams.get('token');
+    if (!env.WEBHOOK_SECRET_TOKEN || token !== env.WEBHOOK_SECRET_TOKEN) {
+      return Response.json({ status: 'error', message: 'unauthorized' });
+    }
+    let outcome: unknown;
+    let payload: Record<string, unknown> = {};
+    try {
+      const contentType = request.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        payload = (await request.json()) as Record<string, unknown>;
+      } else {
+        const form = await request.formData();
+        for (const [key, value] of form.entries()) payload[key] = String(value);
+      }
+      const serviceAccount = parseServiceAccount(env);
+      const db = new FirebaseDb(serviceAccount, env.FIREBASE_DATABASE_URL);
+      const event = parseCallStatusCallback(payload);
+      const result = await new Phase22Api(db, 'system@internal').applyCallStatusEvent(event);
+      outcome = { status: 'ok', result };
+    } catch (err) {
+      outcome = { status: 'error', message: err instanceof Error ? err.message : String(err) };
+    }
+    // Always logged (not just on error), unlike the WhatsApp webhook — this shape is
+    // UNVERIFIED against real traffic, so the first several real calls need full visibility
+    // to confirm parseCallStatusCallback is actually reading the right field names.
+    console.log('webhook/exotel-voice payload', JSON.stringify(payload));
+    console.log('webhook/exotel-voice', JSON.stringify(outcome));
+    return Response.json(outcome);
   });
 }

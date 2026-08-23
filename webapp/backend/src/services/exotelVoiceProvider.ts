@@ -41,6 +41,39 @@ export interface ConnectCallResult {
   raw: unknown;
 }
 
+export interface CallStatusEvent {
+  callSid: string;
+  status: string;
+  duration: number | null;
+  recordingUrl: string | null;
+  raw: unknown;
+}
+
+/** Parses whatever Exotel POSTs to the StatusCallback URL connectCall registers. UNVERIFIED
+ * against real traffic, same caveat as the rest of this file — field names are checked
+ * against every plausible alias (Exotel's own docs and the Twilio-style convention this API
+ * was modeled on don't fully agree on naming), so the first real callback has the best chance
+ * of matching without needing a redeploy first. Status is uppercased so callers can compare
+ * against a fixed set of values regardless of which casing Exotel actually sends. */
+export function parseCallStatusCallback(payload: Record<string, unknown>): CallStatusEvent {
+  const get = (...keys: string[]): string | undefined => {
+    for (const key of keys) {
+      const value = payload[key];
+      if (value !== undefined && value !== null && value !== '') return String(value);
+    }
+    return undefined;
+  };
+  const durationRaw = get('CallDuration', 'DialCallDuration', 'Duration', 'duration');
+  const duration = durationRaw !== undefined && Number.isFinite(Number(durationRaw)) ? Number(durationRaw) : null;
+  return {
+    callSid: get('CallSid', 'Sid', 'call_sid') || '',
+    status: (get('DialCallStatus', 'CallStatus', 'Status', 'status') || 'UNKNOWN').toUpperCase(),
+    duration,
+    recordingUrl: get('RecordingUrl', 'recording_url') || null,
+    raw: payload,
+  };
+}
+
 export class ExotelVoiceProvider {
   constructor(private config: ExotelVoiceConfig) {}
 
@@ -49,14 +82,21 @@ export class ExotelVoiceProvider {
    * `callerId` is optional — pass a location's own ExoPhone to have the lead see that
    * brand's number instead of the account-wide default; falls back to the configured
    * default caller ID when omitted.
+   *
+   * `statusCallbackUrl`, when given, is passed as `StatusCallback` so Exotel POSTs real
+   * call-progress/outcome events back to us instead of the CallLog row staying on
+   * whatever status connect.json returned at queue-time forever (see getCallStatus's
+   * doc comment). UNVERIFIED, same caveat as the rest of this file — modeled on Exotel's
+   * publicly documented StatusCallback parameter, not yet exercised against a real call.
    */
-  async connectCall(agentPhone: string, leadPhone: string, callerId?: string): Promise<ConnectCallResult> {
+  async connectCall(agentPhone: string, leadPhone: string, callerId?: string, statusCallbackUrl?: string): Promise<ConnectCallResult> {
     const effectiveCallerId = callerId || this.config.callerId;
     const response = (await this.request('Calls/connect.json', {
       From: agentPhone,
       To: leadPhone,
       CallerId: effectiveCallerId,
       CallType: 'trans', // UNVERIFIED — assumed value for a real-time (non-recorded-prompt) connect call
+      ...(statusCallbackUrl ? { StatusCallback: statusCallbackUrl } : {}),
     })) as { Call?: { Sid?: string; CallSid?: string; Status?: string } } | null; // UNVERIFIED envelope shape
     const call = response?.Call;
     return { callSid: call?.Sid || call?.CallSid || null, status: call?.Status || 'UNKNOWN', callerId: effectiveCallerId, raw: response };

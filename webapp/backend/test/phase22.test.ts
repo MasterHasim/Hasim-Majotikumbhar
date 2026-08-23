@@ -4,9 +4,11 @@ import { FirebaseDb } from '../src/lib/firebaseAdmin';
 import { Phase1Api } from '../src/services/phase1Api';
 import { Phase3Api } from '../src/services/phase3Api';
 import { Phase8Api } from '../src/services/phase8Api';
+import { Phase9Api } from '../src/services/phase9Api';
 import { Phase22Api, computeQuotationTotals, getPublicQuotationView } from '../src/services/phase22Api';
 import { CustomFieldsApi } from '../src/services/customFieldsApi';
 import { ProductsApi } from '../src/services/productsApi';
+import { parseCallStatusCallback } from '../src/services/exotelVoiceProvider';
 import { Roles } from '../src/domain/phase1';
 
 const ADMIN_EMAIL = 'admin@example.com';
@@ -287,6 +289,16 @@ describe('Phase22Api (ported from Phase22Domain.gs + Phase22Services.gs)', () =>
       expect(mock.exotelVoiceCalls[0]!.params.CallerId).toBe('07948502804');
     });
 
+    it('passes statusCallbackUrl through to Exotel as StatusCallback when given', async () => {
+      await new Phase22Api(db, AGENT_EMAIL, mock.exotelVoiceConfig as never).initiateCall(leadId, 'https://backend.example/webhook/exotel-voice?token=secret');
+      expect(mock.exotelVoiceCalls[0]!.params.StatusCallback).toBe('https://backend.example/webhook/exotel-voice?token=secret');
+    });
+
+    it('omits StatusCallback when no statusCallbackUrl is given', async () => {
+      await new Phase22Api(db, AGENT_EMAIL, mock.exotelVoiceConfig as never).initiateCall(leadId);
+      expect(mock.exotelVoiceCalls[0]!.params.StatusCallback).toBeUndefined();
+    });
+
     it('denies a call for a lead not assigned to the caller — unless the caller is a lead manager', async () => {
       await expect(new Phase22Api(db, AGENT2_EMAIL, mock.exotelVoiceConfig as never).initiateCall(leadId)).rejects.toMatchObject({ code: 'FORBIDDEN' });
 
@@ -304,6 +316,69 @@ describe('Phase22Api (ported from Phase22Domain.gs + Phase22Services.gs)', () =>
 
     it('fails with CONFIGURATION_ERROR when Voice credentials are not configured', async () => {
       await expect(new Phase22Api(db, AGENT_EMAIL).initiateCall(leadId)).rejects.toMatchObject({ code: 'CONFIGURATION_ERROR' });
+    });
+  });
+
+  describe('applyCallStatusEvent (Exotel Voice status-callback webhook, 2026-08-23)', () => {
+    it('parseCallStatusCallback reads the plausible field-name aliases and uppercases status', () => {
+      const payload = { CallSid: 'sid-1', DialCallStatus: 'completed', CallDuration: '42', RecordingUrl: 'https://x/rec.mp3' };
+      expect(parseCallStatusCallback(payload)).toEqual({ callSid: 'sid-1', status: 'COMPLETED', duration: 42, recordingUrl: 'https://x/rec.mp3', raw: payload });
+      expect(parseCallStatusCallback({ Sid: 'sid-2', Status: 'no-answer' }).status).toBe('NO-ANSWER');
+      expect(parseCallStatusCallback({}).callSid).toBe('');
+    });
+
+    it('returns applied:false for an unknown callSid, without throwing', async () => {
+      const result = await new Phase22Api(db, ADMIN_EMAIL).applyCallStatusEvent({ callSid: 'no-such-sid', status: 'COMPLETED', duration: null, recordingUrl: null, raw: {} });
+      expect(result).toEqual({ applied: false });
+    });
+
+    it('updates the matching CallLog row with status, duration, recordingUrl, and endedAt', async () => {
+      await new Phase22Api(db, ADMIN_EMAIL).uploadLeads([{ name: 'Lead', phone: '+919876543210', location: 'Raipur' }]);
+      const leadId = (await new Phase22Api(db, ADMIN_EMAIL).listLeads())[0]!.id;
+      await new Phase22Api(db, ADMIN_EMAIL).reassignLead(leadId, agentId);
+      const call = await new Phase22Api(db, AGENT_EMAIL, mock.exotelVoiceConfig as never).initiateCall(leadId);
+
+      const result = await new Phase22Api(db, ADMIN_EMAIL).applyCallStatusEvent({ callSid: call.exotelCallSid, status: 'COMPLETED', duration: 37, recordingUrl: 'https://x/rec.mp3', raw: {} });
+      expect(result).toEqual({ applied: true, callId: call.id, status: 'COMPLETED' });
+
+      const log = await new Phase22Api(db, ADMIN_EMAIL).listCallLog(leadId);
+      expect(log[0]!.status).toBe('COMPLETED');
+      expect(log[0]!.duration).toBe(37);
+      expect(log[0]!.recordingUrl).toBe('https://x/rec.mp3');
+      expect(log[0]!.endedAt).toBeTruthy();
+    });
+
+    it('auto-creates a PENDING reminder on the conversation when a conversation-initiated call is missed, but not for a lead-initiated call (no conversation to attach one to)', async () => {
+      const number = await new Phase3Api(db, ADMIN_EMAIL).createNumber({ displayName: 'Entartica - Raipur', phoneNumber: '079-485-02801', provider: 'exotel' });
+      await new Phase22Api(db, ADMIN_EMAIL).uploadLeads([{ name: 'Priya', phone: '+919876543210', location: 'Raipur' }]);
+      const leadId = (await new Phase22Api(db, ADMIN_EMAIL).listLeads())[0]!.id;
+      await new Phase22Api(db, ADMIN_EMAIL).reassignLead(leadId, agentId);
+      await new Phase1Api(db, ADMIN_EMAIL).grantNumberAccess({ userId: agentId, numberId: number.id });
+      const { conversationId } = await new Phase22Api(db, AGENT_EMAIL).startWhatsAppFromLead(leadId);
+
+      const leadCall = await new Phase22Api(db, AGENT_EMAIL, mock.exotelVoiceConfig as never).initiateCall(leadId);
+      await new Phase22Api(db, ADMIN_EMAIL).applyCallStatusEvent({ callSid: leadCall.exotelCallSid, status: 'NO-ANSWER', duration: null, recordingUrl: null, raw: {} });
+      expect(await new Phase9Api(db, AGENT_EMAIL).listReminders(conversationId)).toHaveLength(0);
+
+      const convCall = await new Phase22Api(db, AGENT_EMAIL, mock.exotelVoiceConfig as never).initiateConversationCall(conversationId);
+      await new Phase22Api(db, ADMIN_EMAIL).applyCallStatusEvent({ callSid: convCall.exotelCallSid, status: 'NO-ANSWER', duration: null, recordingUrl: null, raw: {} });
+      const reminders = await new Phase9Api(db, AGENT_EMAIL).listReminders(conversationId);
+      expect(reminders).toHaveLength(1);
+      expect(reminders[0]!.status).toBe('PENDING');
+      expect(reminders[0]!.ownerUserId).toBe(agentId);
+      expect(reminders[0]!.text).toContain('missed call');
+    });
+
+    it('does not create a reminder for a completed (answered) call', async () => {
+      const number = await new Phase3Api(db, ADMIN_EMAIL).createNumber({ displayName: 'Entartica - Raipur', phoneNumber: '079-485-02801', provider: 'exotel' });
+      await new Phase22Api(db, ADMIN_EMAIL).uploadLeads([{ name: 'Priya', phone: '+919876543210', location: 'Raipur' }]);
+      const leadId = (await new Phase22Api(db, ADMIN_EMAIL).listLeads())[0]!.id;
+      await new Phase22Api(db, ADMIN_EMAIL).reassignLead(leadId, agentId);
+      await new Phase1Api(db, ADMIN_EMAIL).grantNumberAccess({ userId: agentId, numberId: number.id });
+      const { conversationId } = await new Phase22Api(db, AGENT_EMAIL).startWhatsAppFromLead(leadId);
+      const call = await new Phase22Api(db, AGENT_EMAIL, mock.exotelVoiceConfig as never).initiateConversationCall(conversationId);
+      await new Phase22Api(db, ADMIN_EMAIL).applyCallStatusEvent({ callSid: call.exotelCallSid, status: 'COMPLETED', duration: 60, recordingUrl: null, raw: {} });
+      expect(await new Phase9Api(db, AGENT_EMAIL).listReminders(conversationId)).toHaveLength(0);
     });
   });
 

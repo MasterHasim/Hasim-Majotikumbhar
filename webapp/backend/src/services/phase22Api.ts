@@ -18,15 +18,22 @@ import { Ids, Permissions, Roles, Status, Validation } from '../domain/phase1';
 import { Phase22AssignmentModes, Phase22LeadStatus, Phase22Locations, Phase22Validation, type Phase22Location } from '../domain/phase22';
 import type {
   CallLog, CallLogWithContext, Conversation, Customer, CustomFieldDefinition, Lead, LeadRemark, LeadStageAssignment,
-  LocationAssignmentConfig, LocationAssignmentUser, Product, Quotation, QuotationLineItem, Stage, User, WhatsAppNumber,
+  LocationAssignmentConfig, LocationAssignmentUser, Product, Quotation, QuotationLineItem, Reminder, Stage, User, WhatsAppNumber,
 } from '../domain/types';
 import { Repository } from '../lib/repository';
 import { AccessControl, type Phase1Repositories } from '../lib/accessControl';
 import { AuditLogService, type AuditEntryWithActor } from '../lib/auditLog';
 import { FirebaseDb } from '../lib/firebaseAdmin';
 import { buildPhase1Repositories } from '../lib/phase1Repositories';
-import { ExotelVoiceProvider, requireExotelVoiceConfig, type ExotelVoiceConfig } from './exotelVoiceProvider';
+import { ExotelVoiceProvider, requireExotelVoiceConfig, type ExotelVoiceConfig, type CallStatusEvent } from './exotelVoiceProvider';
 import { validateCustomFieldValues } from './customFieldsApi';
+
+/** Call outcomes that mean "the lead/customer never actually picked up" — drives the
+ * missed-call auto-reminder in applyCallStatusEvent. Uppercased to match
+ * parseCallStatusCallback's normalization. UNVERIFIED against real Exotel traffic, same
+ * caveat as exotelVoiceProvider.ts — these are the standard Twilio-style outcome values
+ * that API was modeled on, not yet confirmed against a real callback. */
+const MISSED_CALL_STATUSES = new Set(['NO-ANSWER', 'NO_ANSWER', 'BUSY', 'FAILED', 'CANCELED', 'CANCELLED']);
 
 export interface UploadLeadsResult {
   batchId: string;
@@ -89,6 +96,7 @@ export class Phase22Api {
   private locationConfig: Repository<LocationAssignmentConfig>;
   private locationUsers: Repository<LocationAssignmentUser>;
   private callLog: Repository<CallLog>;
+  private reminders: Repository<Reminder>;
   private stages: Repository<Stage>;
   private leadStages: Repository<LeadStageAssignment>;
   private leadRemarks: Repository<LeadRemark>;
@@ -108,6 +116,7 @@ export class Phase22Api {
     this.locationConfig = new Repository<LocationAssignmentConfig>(db, 'locationAssignmentConfig');
     this.locationUsers = new Repository<LocationAssignmentUser>(db, 'locationAssignmentUsers');
     this.callLog = new Repository<CallLog>(db, 'callLog');
+    this.reminders = new Repository<Reminder>(db, 'reminders');
     this.stages = new Repository<Stage>(db, 'stages');
     this.leadStages = new Repository<LeadStageAssignment>(db, 'leadStageAssignments');
     this.leadRemarks = new Repository<LeadRemark>(db, 'leadRemarks');
@@ -316,7 +325,7 @@ export class Phase22Api {
   /** The assigned agent, or a lead manager (ADMIN/SITE_MANAGER) acting on their behalf — same
    * canTouchLead scope as startWhatsAppFromLead below, so a manager can always reach a lead
    * they can already see. Rings the caller's own phone first regardless of who's assigned. */
-  async initiateCall(leadId: string): Promise<CallLog> {
+  async initiateCall(leadId: string, statusCallbackUrl?: string): Promise<CallLog> {
     const actor = await this.access.require(Permissions.LEADS_CALL);
     const lead = await this.leads.get(leadId);
     if (!lead) throw new ApiError(404, 'NOT_FOUND', 'Lead was not found.');
@@ -324,7 +333,7 @@ export class Phase22Api {
     const agentPhone = (actor.phone || '').toString().trim();
     if (!agentPhone) throw new ApiError(400, 'VALIDATION_ERROR', 'Your profile has no phone number on file — ask an admin to add one.');
     const locationConfig = await this.locationConfig.findOne((record) => record.location === lead.location);
-    const result = await new ExotelVoiceProvider(this.requireVoiceConfig()).connectCall(agentPhone, lead.phone, locationConfig?.callerId);
+    const result = await new ExotelVoiceProvider(this.requireVoiceConfig()).connectCall(agentPhone, lead.phone, locationConfig?.callerId, statusCallbackUrl);
     const now = Ids.now();
     const record: CallLog = { id: Ids.create('call'), leadId, agentUserId: actor.id, exotelCallSid: result.callSid || '', agentPhone, leadPhone: lead.phone, callerId: result.callerId || '', status: result.status || 'INITIATED', initiatedAt: now, updatedAt: now };
     await this.callLog.create(record);
@@ -339,9 +348,10 @@ export class Phase22Api {
   }
 
   /** connect.json only ever reports the call's status at the instant it was placed (usually
-   * "in-progress"/queued) — there's no callback webhook wired up to update it afterward, so a
-   * CallLog row otherwise stays on that initial status forever. On-demand fetch instead, callable
-   * by whoever placed the call or any lead manager. */
+   * "in-progress"/queued) — real progress now arrives via applyCallStatusEvent (the
+   * StatusCallback webhook, wired up 2026-08-23) instead, but this on-demand fetch stays as
+   * a manual fallback (e.g. a call placed before the webhook existed, or the callback never
+   * arrived), callable by whoever placed the call or any lead manager. */
   async refreshCallStatus(callId: string): Promise<CallLog> {
     const actor = await this.access.currentUser();
     const call = await this.callLog.get(callId);
@@ -350,6 +360,44 @@ export class Phase22Api {
     if (!call.exotelCallSid) throw new ApiError(400, 'VALIDATION_ERROR', 'This call has no Exotel call SID to look up.');
     const status = await new ExotelVoiceProvider(this.requireVoiceConfig()).getCallStatus(call.exotelCallSid);
     return this.callLog.update(callId, { status, updatedAt: Ids.now() });
+  }
+
+  /** Applied by the /webhook/exotel-voice route (no signed-in identity — a webhook, same
+   * system-level reasoning as Phase4Api.ingestInboundMessage) when Exotel POSTs a real call
+   * outcome to the StatusCallback URL connectCall registered. Writes directly to the
+   * repositories it needs rather than going through AccessControl-gated methods like
+   * Phase9Api.createReminder, for the same reason Phase4Api does — there's no signed-in user
+   * for those permission checks to run against. UNVERIFIED against real traffic, same caveat
+   * as exotelVoiceProvider.ts. */
+  async applyCallStatusEvent(event: CallStatusEvent): Promise<{ applied: boolean; callId?: string; status?: string }> {
+    if (!event.callSid) return { applied: false };
+    const call = await this.callLog.findOne((c) => c.exotelCallSid === event.callSid);
+    if (!call) return { applied: false };
+    const now = Ids.now();
+    const patch: Partial<CallLog> = { status: event.status, updatedAt: now };
+    if (event.duration !== null) patch.duration = event.duration;
+    if (event.recordingUrl) patch.recordingUrl = event.recordingUrl;
+    const isMissed = MISSED_CALL_STATUSES.has(event.status);
+    if (isMissed || event.status === 'COMPLETED') patch.endedAt = now;
+    await this.callLog.update(call.id, patch);
+    await this.audit.write(null, 'call.statusUpdated', 'call', call.id, { status: event.status, callSid: event.callSid });
+
+    // Missed-call auto-task — only for a conversation-initiated call today. A lead-initiated
+    // call (initiateCall) has no conversationId, and Reminders are conversation-scoped, so
+    // there's nowhere to attach one yet for a bare Lead — see PROGRESS.md's Auto Dialer note.
+    if (isMissed && call.conversationId) {
+      try {
+        const reminder: Reminder = {
+          id: Ids.create('reminder'), conversationId: call.conversationId, ownerUserId: call.agentUserId,
+          text: `Call back — missed call (${event.status.toLowerCase().replace('_', '-')})`, dueAt: now, status: 'PENDING', createdAt: now, updatedAt: now,
+        };
+        await this.reminders.create(reminder);
+        await this.audit.write(null, 'reminder.created', 'reminder', reminder.id, { conversationId: call.conversationId, source: 'missedCall', callId: call.id });
+      } catch (e) {
+        console.error('applyCallStatusEvent: failed to auto-create missed-call reminder', e);
+      }
+    }
+    return { applied: true, callId: call.id, status: event.status };
   }
 
   /**
@@ -653,7 +701,7 @@ export class Phase22Api {
   }
 
   /** conversation.numberId's own phoneNumber as caller ID — the lead sees the same number they're already chatting with. */
-  async initiateConversationCall(conversationId: string): Promise<CallLog> {
+  async initiateConversationCall(conversationId: string, statusCallbackUrl?: string): Promise<CallLog> {
     const conversation = await this.conversations.get(conversationId);
     if (!conversation) throw new ApiError(404, 'NOT_FOUND', 'Conversation was not found.');
     const teamId = await this.access.resolveTeamIdForNumber(conversation.numberId);
@@ -664,7 +712,7 @@ export class Phase22Api {
     if (!number) throw new ApiError(404, 'NOT_FOUND', 'Number was not found.');
     const customer = await this.customers.get(conversation.customerId);
     if (!customer) throw new ApiError(404, 'NOT_FOUND', 'Customer was not found.');
-    const result = await new ExotelVoiceProvider(this.requireVoiceConfig()).connectCall(agentPhone, customer.phone, number.phoneNumber);
+    const result = await new ExotelVoiceProvider(this.requireVoiceConfig()).connectCall(agentPhone, customer.phone, number.phoneNumber, statusCallbackUrl);
     const now = Ids.now();
     const record: CallLog = { id: Ids.create('call'), leadId: '', conversationId, numberId: conversation.numberId, agentUserId: actor.id, exotelCallSid: result.callSid || '', agentPhone, leadPhone: customer.phone, callerId: result.callerId || '', status: result.status || 'INITIATED', initiatedAt: now, updatedAt: now };
     await this.callLog.create(record);
