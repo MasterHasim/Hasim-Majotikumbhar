@@ -130,6 +130,39 @@ describe('Phase13Api (ported from Phase13Services.gs)', () => {
       expect(numberGetCount).toBeLessThanOrEqual(1);
     });
 
+    it('does not re-fetch the same customer\'s stage once per conversation when filtering by stageId — same N+1 bug class as the query/number fix above, found sitting right next to those two already-fixed spots in an audit 2026-08-24', async () => {
+      // Same customer (matched globally by phone, see Phase4Api.ingestInboundMessage) messaging
+      // a second registered number creates a SECOND conversation sharing the SAME customerId —
+      // the real shape that exposes an unmemoized per-conversation lookup.
+      const secondNumber = await new Phase3Api(db, ADMIN_EMAIL).createNumber({ displayName: 'Second Number', phoneNumber: '079-485-02802', provider: 'exotel' });
+      const first = await ingest('msg-stage-1', '+919876500000', 'Priya', 'Hello');
+      const second = await new Phase4Api(db).ingestInboundMessage({
+        providerMessageId: 'msg-stage-2', fromPhone: '+919876500000', providerNumberId: secondNumber.phoneNumber,
+        direction: 'INBOUND', messageType: 'text', text: 'Hi again', timestamp: new Date().toISOString(), status: null,
+        profileName: 'Priya',
+      });
+      expect(second.customerId).toBe(first.customerId);
+
+      const stages = await new Phase8Api(db, ADMIN_EMAIL).seedDefaultLeadStages();
+      await new Phase8Api(db, ADMIN_EMAIL).setCustomerStage(first.customerId!, stages[0]!.id);
+
+      let stageGetCount = 0;
+      const wrappedFetch = globalThis.fetch;
+      globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+        if (/\/customerStages\/[^/]+\.json/.test(url)) stageGetCount += 1;
+        return wrappedFetch(input, init);
+      }) as typeof fetch;
+      let results;
+      try {
+        results = await new Phase13Api(db, ADMIN_EMAIL).searchConversations({ stageId: stages[0]!.id });
+      } finally {
+        globalThis.fetch = wrappedFetch;
+      }
+      expect(results.map((r) => r.id)).toEqual(expect.arrayContaining([first.conversationId, second.conversationId]));
+      expect(stageGetCount).toBe(1);
+    });
+
     it('an agent only sees conversations they are authorized to view (delegates to Phase5Api)', async () => {
       const result = await ingest('msg-1', '+919876543210', 'Priya', 'Hello');
       const denied = await new Phase13Api(db, AGENT_EMAIL).searchConversations();

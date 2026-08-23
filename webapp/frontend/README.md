@@ -16,9 +16,18 @@ Replaces the Apps Script `Index.html` single-file HtmlService app. A real SPA
 npm run dev        # local dev server at http://localhost:5173 (talks to the backend at http://localhost:8787 by default)
 npm run build       # production build
 npm run typecheck
+npm run preview     # serve the production build locally
+npm run deploy      # build, then `wrangler deploy` (Workers Static Assets — see wrangler.toml)
 ```
 
 ## Current state
+
+**This section describes the initial build (Phases 1-15) and is a historical
+snapshot, not a maintained feature list — a lot has shipped since (Phase 22:
+Leads Kanban, Auto Dialer, per-lead Reminders, a Home overview page, and
+more). `PROGRESS.md` at the repo root is the single source of truth for
+current state; treat any specific counts below (e.g. tab/page counts) as
+outdated on sight rather than trusted.**
 
 The real Inbox UI is built, wired to the live backend, and **live-verified
 end-to-end by a real user**: sign-in → bootstrap (first-run only) → number
@@ -66,12 +75,9 @@ auto-fills the URL/type fields on success; inbound/outbound media renders
 inline in the thread (image preview or a link, depending on type).
 
 **The Admin Panel (`components/Admin.tsx`) is built** — a new sidebar item
-(ADMIN-only, replaces the old standalone Settings page) with 8 tabs: Users
-(create, edit phone/status, toggle roles), Teams (create, manage members +
-their per-number scope), Numbers (create/edit/deactivate), Number Access
-(grant/revoke), Assignment Rules (per-number round-robin config —
-enabled/fallback/working-hours/participants), Quick Replies, Templates, and
-a read-only Audit Log.
+(ADMIN-only, replaces the old standalone Settings page). It has grown well
+past its original 8 tabs since this section was last updated; see
+`Admin.tsx`'s own `tabs` array for the current, authoritative list.
 
 **Search/filters + needs-response badges (Phase 13) are wired up.** The
 Inbox's conversation list gained a status filter (Open/Resolved/Any) and
@@ -97,6 +103,11 @@ Cloudflare Cron Triggers are static deploy-time config, and there's nowhere
 durable to store the output without R2 anyway — a deliberate, permanent
 design difference, not a "will fix later" gap).
 
-**This is full Apps Script feature parity** (Phases 1-15) on the new stack.
-See `PROGRESS.md` at the repo root for the full migration plan and status —
-next up is parallel-run validation, then cutover.
+**The above was full Apps Script feature parity (Phases 1-15).** The webapp
+has since become the primary system (parallel-run/cutover both complete) and
+gained a large amount of Phase 22+ functionality — Leads Kanban board with
+location-scoped assignment, an Auto Dialer roadmap (missed-call reminders,
+"call now" prompts, Exotel Voice status callbacks), per-lead Reminders, a
+Home overview page (pie/bar charts distinct from Dashboard's per-number
+reporting), and more. See `PROGRESS.md` at the repo root for the real,
+continuously-updated status.

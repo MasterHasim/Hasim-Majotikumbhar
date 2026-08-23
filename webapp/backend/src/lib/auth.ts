@@ -18,6 +18,20 @@ interface CachedKeys {
 
 let cachedKeys: CachedKeys | null = null;
 
+/** Constant-time string comparison for shared-secret webhook tokens — a plain `===` short-circuits
+ * on the first mismatched byte, which is a (low-severity, but free-to-close) timing side-channel
+ * on a low-entropy secret. Web Crypto's SubtleCrypto has no timingSafeEqual in Workers, so this
+ * compares every byte regardless of where the first mismatch is. */
+export function timingSafeEqual(a: string, b: string): boolean {
+  const enc = new TextEncoder();
+  const aBytes = enc.encode(a);
+  const bBytes = enc.encode(b);
+  if (aBytes.length !== bBytes.length) return false;
+  let diff = 0;
+  for (let i = 0; i < aBytes.length; i++) diff |= aBytes[i]! ^ bBytes[i]!;
+  return diff === 0;
+}
+
 /** Test-only: each test mocks a fresh "Google" with its own throwaway keypair, so the 5-minute production cache (correct in real deployments, where Google's actual keys don't rotate that often) must not survive between test cases. */
 export function __resetKeyCacheForTests(): void {
   cachedKeys = null;

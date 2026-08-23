@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { setupMockFirebase, type MockFirebaseContext } from './helpers/mockFirebase';
-import { verifyIdToken, __resetKeyCacheForTests } from '../src/lib/auth';
+import { verifyIdToken, timingSafeEqual, __resetKeyCacheForTests } from '../src/lib/auth';
 
 describe('verifyIdToken (protects every route — must reject anything not genuinely Google-signed)', () => {
   let mock: MockFirebaseContext;
@@ -37,5 +37,19 @@ describe('verifyIdToken (protects every route — must reject anything not genui
   it('rejects an expired token', async () => {
     const token = await mock.signIdToken({ sub: 'uid-1', email: 'user@example.com', extraClaims: { exp: Math.floor(Date.now() / 1000) - 10 } });
     await expect(verifyIdToken(token, mock.serviceAccount.project_id)).rejects.toThrow(/expired/i);
+  });
+});
+
+describe('timingSafeEqual (used for the two webhook shared-secret checks — audit 2026-08-24 found the original `!==` was a timing side-channel)', () => {
+  it('returns true for identical strings, false for any mismatch', () => {
+    expect(timingSafeEqual('same-secret', 'same-secret')).toBe(true);
+    expect(timingSafeEqual('same-secret', 'different')).toBe(false);
+    expect(timingSafeEqual('same-secret', 'same-secreT')).toBe(false);
+  });
+
+  it('returns false for different-length strings without throwing', () => {
+    expect(timingSafeEqual('short', 'a-lot-longer-than-short')).toBe(false);
+    expect(timingSafeEqual('', 'nonempty')).toBe(false);
+    expect(timingSafeEqual('', '')).toBe(true);
   });
 });

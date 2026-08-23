@@ -67,9 +67,13 @@ export class Phase13Api {
     if (filters.dateFrom) results = results.filter((c) => (c.lastMessageAt || '') >= filters.dateFrom!);
     if (filters.dateTo) results = results.filter((c) => (c.lastMessageAt || '') <= filters.dateTo!);
     if (filters.stageId) {
+      // Same N+1 bug class as the query/number lookups below (re-fetching per conversation
+      // instead of once per distinct id) — memoize instead of one Firebase call per conversation.
+      const stageCache = new Map<string, CustomerStage | null>();
       const filtered: ConversationListItem[] = [];
       for (const c of results) {
-        const stage = await this.customerStages.get(c.customerId);
+        if (!stageCache.has(c.customerId)) stageCache.set(c.customerId, await this.customerStages.get(c.customerId));
+        const stage = stageCache.get(c.customerId) ?? null;
         if (stage && stage.stageId === filters.stageId) filtered.push(c);
       }
       results = filtered;

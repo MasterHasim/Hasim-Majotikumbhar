@@ -11,9 +11,21 @@ FIREBASE_SERVICE_ACCOUNT_JSON={"type":"service_account","project_id":"...","priv
 # Public/safe — same value as the Apps Script build's FIREBASE_WEB_API_KEY.
 FIREBASE_WEB_API_KEY=
 
+# Realtime Database URL for the service account above — e.g.
+# https://<project-id>-default-rtdb.<region>.firebasedatabase.app
+FIREBASE_DATABASE_URL=
+
 # The one identity allowed to call POST /api/bootstrap and become the first
 # ADMIN user — same role Apps Script's wap.phase1.bootstrapAdminEmail played.
 BOOTSTRAP_ADMIN_EMAIL=
+
+# Comma-separated list of origins allowed to call this backend (see lib/cors.ts).
+# Include http://localhost:5173 for local frontend dev.
+ALLOWED_ORIGINS=http://localhost:5173
+
+# The deployed frontend's origin — used to build links in outbound emails/WhatsApp
+# messages (e.g. "Sign in at ...").
+FRONTEND_URL=http://localhost:5173
 
 # Exotel WhatsApp API credentials (needed once we port the send/webhook phase).
 EXOTEL_API_KEY=
@@ -24,3 +36,14 @@ EXOTEL_SUBDOMAIN=
 # Shared secret Exotel's webhook must present (generate a new random value —
 # don't reuse the Apps Script one, keep the two systems fully independent).
 WEBHOOK_SECRET_TOKEN=
+
+# Meta Graph API long-lived user or System User token — powers Dashboard's Ad
+# Performance report and the Leads "Live Campaign" dropdown. Optional: both
+# features soft-fail to empty/no-op without it.
+META_ACCESS_TOKEN=
+
+# Resend (transactional email) — optional: welcome emails silently no-op without it.
+RESEND_API_KEY=
+RESEND_FROM_EMAIL=
+
+# R2 bucket binding is configured in wrangler.toml, not here — see [[r2_buckets]].

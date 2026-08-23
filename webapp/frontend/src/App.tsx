@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { getRedirectResult, onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut, type User } from 'firebase/auth';
 import { auth, googleProvider } from './lib/firebase';
 import { apiFetch, ApiClientError } from './lib/api';
@@ -11,10 +11,15 @@ import { Leads } from './components/Leads';
 import { Reminders } from './components/Reminders';
 import { CallHistory } from './components/CallHistory';
 import { Customers } from './components/Customers';
-import { Admin } from './components/Admin';
-import { Dashboard } from './components/Dashboard';
-import { Home } from './components/Home';
 import { PublicQuotationView } from './components/PublicQuotationView';
+
+// Code-split the three heaviest, least-immediately-needed surfaces (Admin alone is ~1300 lines,
+// over a third of all component code) out of the initial bundle — audit 2026-08-24 flagged the
+// single ~609kB chunk. Each is only rendered behind its own REPORTS_VIEW/ADMIN role gate anyway,
+// so a signed-in AGENT (the common case) never even requests these chunks.
+const Admin = lazy(() => import('./components/Admin').then((m) => ({ default: m.Admin })));
+const Dashboard = lazy(() => import('./components/Dashboard').then((m) => ({ default: m.Dashboard })));
+const Home = lazy(() => import('./components/Home').then((m) => ({ default: m.Home })));
 
 /** Mirrors Sidebar's REPORTS_ROLES — the roles that can see Home/Dashboard. Used to pick a
  * default landing page that a given signed-in user can actually see, instead of always
@@ -225,7 +230,11 @@ export default function App() {
       <Sidebar number={activeNumber} whoAmI={whoAmI} page={page} needsResponseCount={needsResponseCounts[activeNumber.id] ?? 0} leadsToCallCount={leadsToCallCount} onNavigate={setPage} onSwitchNumber={() => setActiveNumber(null)} onSignOut={() => void signOut(auth)} />
       <div id="mainArea">
         <div id="pageContent">
-          {page === 'home' && <Home />}
+          {page === 'home' && (
+            <Suspense fallback={<p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>Loading…</p>}>
+              <Home />
+            </Suspense>
+          )}
           {page === 'inbox' && (
             <Inbox number={activeNumber} initialConversationId={pendingConversationId} onInitialConversationConsumed={() => setPendingConversationId(null)} />
           )}
@@ -235,8 +244,16 @@ export default function App() {
           {page === 'reminders' && <Reminders number={activeNumber} onOpenConversation={openConversation} onOpenLead={openLead} />}
           {page === 'callHistory' && <CallHistory isManager={whoAmI.roleKeys.includes('ADMIN') || whoAmI.roleKeys.includes('SITE_MANAGER')} onOpenConversation={openConversation} />}
           {page === 'customers' && <Customers number={activeNumber} onOpenConversation={openConversation} />}
-          {page === 'dashboard' && <Dashboard number={activeNumber} />}
-          {page === 'admin' && (whoAmI.roleKeys.includes('ADMIN') || whoAmI.roleKeys.includes('SUPERVISOR') || whoAmI.roleKeys.includes('SITE_MANAGER')) && <Admin whoAmI={whoAmI} />}
+          {page === 'dashboard' && (
+            <Suspense fallback={<p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>Loading…</p>}>
+              <Dashboard number={activeNumber} />
+            </Suspense>
+          )}
+          {page === 'admin' && (whoAmI.roleKeys.includes('ADMIN') || whoAmI.roleKeys.includes('SUPERVISOR') || whoAmI.roleKeys.includes('SITE_MANAGER')) && (
+            <Suspense fallback={<p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>Loading…</p>}>
+              <Admin whoAmI={whoAmI} />
+            </Suspense>
+          )}
         </div>
       </div>
     </div>

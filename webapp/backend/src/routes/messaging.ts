@@ -2,6 +2,7 @@ import type { IRequest, RouterType } from 'itty-router';
 import type { Env } from '../types';
 import { ApiError, parseServiceAccount } from '../types';
 import { buildContext } from '../lib/requestContext';
+import { timingSafeEqual } from '../lib/auth';
 import { FirebaseDb } from '../lib/firebaseAdmin';
 import { Phase3Api } from '../services/phase3Api';
 import { Phase4Api } from '../services/phase4Api';
@@ -119,7 +120,7 @@ export function registerMessagingRoutes(router: RouterType) {
   router.post('/webhook/exotel', async (request: IRequest, env: Env) => {
     const url = new URL(request.url);
     const token = url.searchParams.get('token');
-    if (!env.WEBHOOK_SECRET_TOKEN || token !== env.WEBHOOK_SECRET_TOKEN) {
+    if (!env.WEBHOOK_SECRET_TOKEN || !token || !timingSafeEqual(token, env.WEBHOOK_SECRET_TOKEN)) {
       return Response.json({ status: 'error', message: 'unauthorized' });
     }
     let outcome: unknown;

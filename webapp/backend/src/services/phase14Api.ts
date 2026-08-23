@@ -83,9 +83,13 @@ export class Phase14Api {
       if (c.needsResponse) entry.needsResponse++;
       byAgentMap.set(c.assignedUserId, entry);
     }
+    // Same N+1 pattern already fixed in AccessControl/Phase13Api — one Firebase list() call
+    // instead of one get() per distinct assigned agent.
+    const allUsers = await this.users.list();
+    const usersById = new Map(allUsers.map((u) => [u.id, u]));
     const byAgent = [];
     for (const [userId, counts] of byAgentMap) {
-      const user = await this.users.get(userId);
+      const user = usersById.get(userId);
       byAgent.push({ userId, displayName: user ? user.displayName : userId, ...counts });
     }
 
