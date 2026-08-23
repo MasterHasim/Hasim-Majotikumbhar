@@ -497,3 +497,12 @@ export interface LeadFunnel {
   noStage: number;
   total: number;
 }
+
+/** getHomeMetrics()'s return shape — the Home page's cross-location counterpart to
+ * DashboardMetrics, covering factors Dashboard doesn't (where leads come from, whether calls
+ * connect, sales pipeline value). */
+export interface HomeMetrics {
+  leadsByLocation: { location: string; count: number }[];
+  callOutcomes: { label: string; count: number }[];
+  quotationPipeline: { status: string; count: number; totalValue: number }[];
+}

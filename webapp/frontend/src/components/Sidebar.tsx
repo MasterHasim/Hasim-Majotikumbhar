@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { WhatsAppNumber, WhoAmI } from '../types';
 import { AvailabilityToggle } from './AvailabilityToggle';
 
-export type Page = 'inbox' | 'leads' | 'reminders' | 'callHistory' | 'customers' | 'dashboard' | 'admin';
+export type Page = 'home' | 'inbox' | 'leads' | 'reminders' | 'callHistory' | 'customers' | 'dashboard' | 'admin';
 
 const REPORTS_ROLES = ['ADMIN', 'SUPERVISOR', 'SITE_MANAGER', 'VIEWER'];
 const ADMIN_PAGE_ROLES = ['ADMIN', 'SUPERVISOR', 'SITE_MANAGER'];
@@ -48,6 +48,12 @@ export function Sidebar({
           <div className="cn-switch">Switch number ▾</div>
         </button>
         <div id="navList">
+          {whoAmI.roleKeys.some((r) => REPORTS_ROLES.includes(r)) && (
+            <button className={`nav-item${page === 'home' ? ' active' : ''}`} onClick={() => navigate('home')}>
+              <span className="nav-icon">🏠</span>
+              <span className="nav-label">Home</span>
+            </button>
+          )}
           <button className={`nav-item${page === 'inbox' ? ' active' : ''}`} onClick={() => navigate('inbox')}>
             <span className="nav-icon">💬</span>
             <span className="nav-label">Inbox</span>

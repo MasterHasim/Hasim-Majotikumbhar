@@ -4,7 +4,7 @@ import type {
   AdAccount, AdInsights, AssignableUser, AssignmentEligibility, AssignmentEligibilityStatus, AuditEntry, AuditEntryWithActor, Availability,
   AutoDialerSettings, AvailabilityStatus, CallLog,
   CallLogWithContext, Conversation, ConversationListItem, Customer, CustomerStage, CustomFieldDefinition, CustomFieldEntityType, CustomFieldType,
-  DashboardMetrics, Lead, LeadFunnel, LeadRemark, LeadStageAssignment,
+  DashboardMetrics, HomeMetrics, Lead, LeadFunnel, LeadRemark, LeadStageAssignment,
   LocationAssignmentConfig, LocationAssignmentUser, NumberAccess, NumberAssignmentConfig, NumberAssignmentUser, Product, PublicQuotationView,
   QuickReply, Quotation, Remark, Reminder,
   ReminderWithContext, Role, SearchFilters, SearchResultItem, SnoozeStatus, Stage, Team, TeamMember, Template, UploadLeadsResult, User,
@@ -329,6 +329,8 @@ export const backendApi = {
 
   getDashboardMetrics: (numberId?: string) =>
     apiFetch<DashboardMetrics>(`/api/dashboard${numberId ? `?numberId=${encodeURIComponent(numberId)}` : ''}`),
+
+  getHomeMetrics: () => apiFetch<HomeMetrics>('/api/home-metrics'),
 
   backupNow: () => apiFetch<Record<string, unknown>>('/api/backup', { method: 'POST' }),
 };

@@ -465,6 +465,68 @@ describe('Phase22Api (ported from Phase22Domain.gs + Phase22Services.gs)', () =>
     });
   });
 
+  describe('getHomeMetrics (cross-location "Home" overview, 2026-08-24)', () => {
+    it('denies a caller without REPORTS_VIEW (AGENT)', async () => {
+      await expect(new Phase22Api(db, AGENT_EMAIL).getHomeMetrics()).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    });
+
+    it('counts leads by location, scoped to what listLeads() already allows', async () => {
+      await new Phase22Api(db, ADMIN_EMAIL).uploadLeads([
+        { name: 'A', phone: '+919876543210', location: 'Raipur' },
+        { name: 'B', phone: '+919876543211', location: 'Raipur' },
+        { name: 'C', phone: '+919876543212', location: 'Coimbatore' },
+      ]);
+      const metrics = await new Phase22Api(db, ADMIN_EMAIL).getHomeMetrics();
+      expect(metrics.leadsByLocation.find((l) => l.location === 'Raipur')?.count).toBe(2);
+      expect(metrics.leadsByLocation.find((l) => l.location === 'Coimbatore')?.count).toBe(1);
+      expect(metrics.leadsByLocation.find((l) => l.location === 'Alibaug')?.count).toBe(0);
+    });
+
+    it('buckets call outcomes into Answered/Missed/Pending, counting only lead-initiated calls', async () => {
+      await new Phase22Api(db, ADMIN_EMAIL).uploadLeads([{ name: 'Lead', phone: '+919876543210', location: 'Raipur' }]);
+      const leadId = (await new Phase22Api(db, ADMIN_EMAIL).listLeads())[0]!.id;
+      await new Phase22Api(db, ADMIN_EMAIL).reassignLead(leadId, agentId);
+
+      const answered = await new Phase22Api(db, AGENT_EMAIL, mock.exotelVoiceConfig as never).initiateCall(leadId);
+      await new Phase22Api(db, ADMIN_EMAIL).applyCallStatusEvent({ callSid: answered.exotelCallSid, status: 'COMPLETED', duration: 30, recordingUrl: null, raw: {} });
+      const missed = await new Phase22Api(db, AGENT_EMAIL, mock.exotelVoiceConfig as never).initiateCall(leadId);
+      await new Phase22Api(db, ADMIN_EMAIL).applyCallStatusEvent({ callSid: missed.exotelCallSid, status: 'NO-ANSWER', duration: null, recordingUrl: null, raw: {} });
+      await new Phase22Api(db, AGENT_EMAIL, mock.exotelVoiceConfig as never).initiateCall(leadId); // never gets a status callback -> Pending
+
+      const metrics = await new Phase22Api(db, ADMIN_EMAIL).getHomeMetrics();
+      expect(metrics.callOutcomes.find((c) => c.label === 'Answered')?.count).toBe(1);
+      expect(metrics.callOutcomes.find((c) => c.label === 'Missed')?.count).toBe(1);
+      expect(metrics.callOutcomes.find((c) => c.label === 'Pending / unknown')?.count).toBe(1);
+    });
+
+    it('does not count a conversation-initiated call (no leadId) in callOutcomes', async () => {
+      const number = await new Phase3Api(db, ADMIN_EMAIL).createNumber({ displayName: 'Entartica - Raipur', phoneNumber: '079-485-02801', provider: 'exotel' });
+      await new Phase22Api(db, ADMIN_EMAIL).uploadLeads([{ name: 'Priya', phone: '+919876543210', location: 'Raipur' }]);
+      const leadId = (await new Phase22Api(db, ADMIN_EMAIL).listLeads())[0]!.id;
+      await new Phase22Api(db, ADMIN_EMAIL).reassignLead(leadId, agentId);
+      await new Phase1Api(db, ADMIN_EMAIL).grantNumberAccess({ userId: agentId, numberId: number.id });
+      const { conversationId } = await new Phase22Api(db, AGENT_EMAIL).startWhatsAppFromLead(leadId);
+      await new Phase22Api(db, AGENT_EMAIL, mock.exotelVoiceConfig as never).initiateConversationCall(conversationId);
+
+      const metrics = await new Phase22Api(db, ADMIN_EMAIL).getHomeMetrics();
+      expect(metrics.callOutcomes).toHaveLength(0);
+    });
+
+    it('sums quotation pipeline value by status, scoped to accessible leads', async () => {
+      const number = await new Phase3Api(db, ADMIN_EMAIL).createNumber({ displayName: 'Entartica - Raipur', phoneNumber: '079-485-02801', provider: 'exotel' });
+      const product = await new ProductsApi(db, ADMIN_EMAIL).createProduct({ numberId: number.id, name: 'Package', unitPrice: 1000 });
+      await new Phase22Api(db, ADMIN_EMAIL).uploadLeads([{ name: 'Lead', phone: '+919876543210', location: 'Raipur' }]);
+      const leadId = (await new Phase22Api(db, ADMIN_EMAIL).listLeads())[0]!.id;
+      await new Phase22Api(db, ADMIN_EMAIL).reassignLead(leadId, agentId);
+      await new Phase22Api(db, AGENT_EMAIL).createQuotation(leadId, { lineItems: [{ productId: product.id, quantity: 2 }] });
+
+      const metrics = await new Phase22Api(db, ADMIN_EMAIL).getHomeMetrics();
+      const draft = metrics.quotationPipeline.find((p) => p.status === 'DRAFT');
+      expect(draft?.count).toBe(1);
+      expect(draft?.totalValue).toBe(2000);
+    });
+  });
+
   describe('Auto Dialer settings (getAutoDialerSettings / updateAutoDialerSettings, 2026-08-24)', () => {
     it('defaults every flag to true when no record has been saved yet', async () => {
       const settings = await new Phase22Api(db, AGENT_EMAIL).getAutoDialerSettings();

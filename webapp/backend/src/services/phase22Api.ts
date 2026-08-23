@@ -255,6 +255,57 @@ export class Phase22Api {
     return { stages: stageRows, noStage, total };
   }
 
+  /**
+   * Cross-location "Home" overview — added 2026-08-24 as a strategic counterpart to
+   * Phase14Api's per-number Dashboard (conversations/response-time/template usage). Covers
+   * three factors Dashboard doesn't: where leads are coming from, whether calls are actually
+   * connecting, and how much is sitting in the sales pipeline. Gated the same as Dashboard
+   * (REPORTS_VIEW), and reuses listLeads()'s existing manager/agent + location scoping rather
+   * than re-deriving it, so this can never show a location or lead the caller couldn't
+   * otherwise see.
+   *
+   * callOutcomes is deliberately scoped to lead-initiated calls only (CallLog rows with a
+   * leadId this caller's listLeads() already covers) — conversation-initiated calls have no
+   * location of their own to scope by by, and folding them in unscoped would leak call data
+   * across a SITE_MANAGER's location boundary. A real gap once conversation-initiated calls
+   * need representing here too; scope by numberId (Phase5Api.listMyNumbers()) the same way
+   * Phase14Api.getDashboardMetrics does when that need arises.
+   */
+  async getHomeMetrics(): Promise<{
+    leadsByLocation: { location: string; count: number }[];
+    callOutcomes: { label: string; count: number }[];
+    quotationPipeline: { status: string; count: number; totalValue: number }[];
+  }> {
+    await this.access.require(Permissions.REPORTS_VIEW);
+    const leads = await this.listLeads();
+    const leadIds = new Set(leads.map((l) => l.id));
+
+    const leadsByLocation = Phase22Locations.map((location) => ({
+      location, count: leads.filter((l) => l.location === location).length,
+    }));
+
+    const calls = (await this.callLog.list()).filter((c) => c.leadId && leadIds.has(c.leadId));
+    const outcomeBuckets: Record<string, string> = { ANSWERED: 'Answered', COMPLETED: 'Answered', 'NO-ANSWER': 'Missed', NO_ANSWER: 'Missed', BUSY: 'Missed', FAILED: 'Missed', CANCELED: 'Missed', CANCELLED: 'Missed' };
+    const outcomeCounts = new Map<string, number>();
+    for (const call of calls) {
+      const label = outcomeBuckets[(call.status || '').toUpperCase()] ?? 'Pending / unknown';
+      outcomeCounts.set(label, (outcomeCounts.get(label) ?? 0) + 1);
+    }
+    const callOutcomes = [...outcomeCounts.entries()].map(([label, count]) => ({ label, count }));
+
+    const quotations = (await this.quotations.list()).filter((q) => leadIds.has(q.leadId));
+    const pipelineByStatus = new Map<string, { count: number; totalValue: number }>();
+    for (const q of quotations) {
+      const entry = pipelineByStatus.get(q.status) ?? { count: 0, totalValue: 0 };
+      entry.count++;
+      entry.totalValue += computeQuotationTotals(q).total;
+      pipelineByStatus.set(q.status, entry);
+    }
+    const quotationPipeline = [...pipelineByStatus.entries()].map(([status, v]) => ({ status, count: v.count, totalValue: Math.round(v.totalValue * 100) / 100 }));
+
+    return { leadsByLocation, callOutcomes, quotationPipeline };
+  }
+
   async getLocationConfig(location: string): Promise<LocationAssignmentConfig | null> {
     const actor = await this.access.require(Permissions.LEADS_MANAGE);
     Phase22Validation.location(location);

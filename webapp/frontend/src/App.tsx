@@ -13,7 +13,13 @@ import { CallHistory } from './components/CallHistory';
 import { Customers } from './components/Customers';
 import { Admin } from './components/Admin';
 import { Dashboard } from './components/Dashboard';
+import { Home } from './components/Home';
 import { PublicQuotationView } from './components/PublicQuotationView';
+
+/** Mirrors Sidebar's REPORTS_ROLES — the roles that can see Home/Dashboard. Used to pick a
+ * default landing page that a given signed-in user can actually see, instead of always
+ * defaulting to a page an AGENT (no REPORTS_VIEW) would immediately get a 403 on. */
+const REPORTS_ROLES = ['ADMIN', 'SUPERVISOR', 'SITE_MANAGER', 'VIEWER'];
 
 async function signIn() {
   try {
@@ -39,7 +45,7 @@ export default function App() {
   const [bootstrapping, setBootstrapping] = useState(false);
   const [numbers, setNumbers] = useState<WhatsAppNumber[] | null>(null);
   const [activeNumber, setActiveNumber] = useState<WhatsAppNumber | null>(null);
-  const [page, setPage] = useState<Page>('dashboard');
+  const [page, setPage] = useState<Page>('home');
   const [pendingConversationId, setPendingConversationId] = useState<string | null>(null);
   const [pendingLeadId, setPendingLeadId] = useState<string | null>(null);
   const [needsResponseCounts, setNeedsResponseCounts] = useState<Record<string, number>>({});
@@ -94,6 +100,16 @@ export default function App() {
     backendApi.listMyNumbers()
       .then(setNumbers)
       .catch((err) => setError(err instanceof ApiClientError ? `${err.code}: ${err.message}` : String(err)));
+  }, [whoAmI]);
+
+  // Home is the default landing page, but it (like Dashboard) requires REPORTS_VIEW — an AGENT
+  // doesn't have it, so redirect straight to Inbox (which every role can see) instead of landing
+  // on a page that immediately 403s. Runs once whoAmI resolves; never overrides a later manual
+  // navigation since it's only keyed on whoAmI.
+  useEffect(() => {
+    if (!whoAmI) return;
+    if (!whoAmI.roleKeys.some((r) => REPORTS_ROLES.includes(r))) setPage('inbox');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [whoAmI]);
 
   useEffect(() => {
@@ -209,6 +225,7 @@ export default function App() {
       <Sidebar number={activeNumber} whoAmI={whoAmI} page={page} needsResponseCount={needsResponseCounts[activeNumber.id] ?? 0} leadsToCallCount={leadsToCallCount} onNavigate={setPage} onSwitchNumber={() => setActiveNumber(null)} onSignOut={() => void signOut(auth)} />
       <div id="mainArea">
         <div id="pageContent">
+          {page === 'home' && <Home />}
           {page === 'inbox' && (
             <Inbox number={activeNumber} initialConversationId={pendingConversationId} onInitialConversationConsumed={() => setPendingConversationId(null)} />
           )}

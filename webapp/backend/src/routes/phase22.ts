@@ -114,6 +114,11 @@ export function registerPhase22Routes(router: RouterType) {
     return Response.json(await new Phase22Api(ctx.db, ctx.identityEmail).listLeadReminders(param(request, 'id')));
   });
 
+  router.get('/api/home-metrics', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    return Response.json(await new Phase22Api(ctx.db, ctx.identityEmail).getHomeMetrics());
+  });
+
   router.get('/api/auto-dialer-settings', async (request: IRequest, env: Env) => {
     const ctx = await buildContext(request, env);
     return Response.json(await new Phase22Api(ctx.db, ctx.identityEmail).getAutoDialerSettings());
