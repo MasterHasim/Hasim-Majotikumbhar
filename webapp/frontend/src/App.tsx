@@ -42,6 +42,7 @@ export default function App() {
   const [page, setPage] = useState<Page>('dashboard');
   const [pendingConversationId, setPendingConversationId] = useState<string | null>(null);
   const [needsResponseCounts, setNeedsResponseCounts] = useState<Record<string, number>>({});
+  const [leadsToCallCount, setLeadsToCallCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   /** Bridges into the Inbox on whichever number a conversation actually belongs to — which may not
@@ -91,6 +92,19 @@ export default function App() {
     if (!whoAmI) { setNeedsResponseCounts({}); return; }
     function load() {
       backendApi.getNeedsResponseCounts().then(setNeedsResponseCounts).catch(() => {});
+    }
+    load();
+    const interval = setInterval(load, 20000);
+    return () => clearInterval(interval);
+  }, [whoAmI]);
+
+  // "Prompt, don't auto-ring" side of Auto Dialer (see PROGRESS.md) — leads assigned to me
+  // that haven't been called yet, surfaced as a sidebar badge regardless of which page is
+  // open, without ever placing a call automatically.
+  useEffect(() => {
+    if (!whoAmI) { setLeadsToCallCount(0); return; }
+    function load() {
+      backendApi.listLeads({ assignedUserId: whoAmI!.id, status: 'ASSIGNED' }).then((leads) => setLeadsToCallCount(leads.length)).catch(() => {});
     }
     load();
     const interval = setInterval(load, 20000);
@@ -169,7 +183,7 @@ export default function App() {
 
   return (
     <div id="app">
-      <Sidebar number={activeNumber} whoAmI={whoAmI} page={page} needsResponseCount={needsResponseCounts[activeNumber.id] ?? 0} onNavigate={setPage} onSwitchNumber={() => setActiveNumber(null)} onSignOut={() => void signOut(auth)} />
+      <Sidebar number={activeNumber} whoAmI={whoAmI} page={page} needsResponseCount={needsResponseCounts[activeNumber.id] ?? 0} leadsToCallCount={leadsToCallCount} onNavigate={setPage} onSwitchNumber={() => setActiveNumber(null)} onSignOut={() => void signOut(auth)} />
       <div id="mainArea">
         <div id="pageContent">
           {page === 'inbox' && (

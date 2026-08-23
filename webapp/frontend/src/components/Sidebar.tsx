@@ -8,12 +8,16 @@ const REPORTS_ROLES = ['ADMIN', 'SUPERVISOR', 'SITE_MANAGER', 'VIEWER'];
 const ADMIN_PAGE_ROLES = ['ADMIN', 'SUPERVISOR', 'SITE_MANAGER'];
 
 export function Sidebar({
-  number, whoAmI, page, needsResponseCount, onNavigate, onSwitchNumber, onSignOut,
+  number, whoAmI, page, needsResponseCount, leadsToCallCount, onNavigate, onSwitchNumber, onSignOut,
 }: {
   number: WhatsAppNumber;
   whoAmI: WhoAmI;
   page: Page;
   needsResponseCount: number;
+  /** Leads assigned to me, not yet called — the "prompt, don't auto-ring" side of Auto
+   * Dialer (see PROGRESS.md): surfaces the need to call regardless of which page an agent
+   * is on, without actually placing a call for them. */
+  leadsToCallCount: number;
   onNavigate: (page: Page) => void;
   onSwitchNumber: () => void;
   onSignOut: () => void;
@@ -51,6 +55,7 @@ export function Sidebar({
           <button className={`nav-item${page === 'leads' ? ' active' : ''}`} onClick={() => navigate('leads')}>
             <span className="nav-icon">📍</span>
             <span className="nav-label">Leads</span>
+            {leadsToCallCount > 0 && <span className="nav-badge" title="Assigned to you, not yet called">📞 {leadsToCallCount}</span>}
           </button>
           <button className={`nav-item${page === 'reminders' ? ' active' : ''}`} onClick={() => navigate('reminders')}>
             <span className="nav-icon">⏰</span>

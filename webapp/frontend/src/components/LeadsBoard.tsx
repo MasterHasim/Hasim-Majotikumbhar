@@ -29,15 +29,19 @@ function LeadCard({ lead, users, currentUserId, isManager, busy, dragging, onOpe
     ? (users.find((u) => u.id === lead.assignedUserId)?.displayName ?? (lead.assignedUserId === currentUserId ? 'You' : lead.assignedUserId))
     : null;
   const canTouch = isManager || lead.assignedUserId === currentUserId;
+  // "Prompt, don't auto-ring" — flags a lead assigned to ME that hasn't been called yet, so it
+  // stands out on the board instead of looking like any other card (see PROGRESS.md's Auto Dialer note).
+  const needsMyCall = lead.status === 'ASSIGNED' && lead.assignedUserId === currentUserId;
   return (
     <div
-      className="kanban-card"
+      className={`kanban-card${needsMyCall ? ' needs-call' : ''}`}
       draggable
       style={{ opacity: dragging ? 0.4 : 1 }}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       onClick={onOpen}
     >
+      {needsMyCall && <div className="kanban-card-flag">📞 Call now</div>}
       <div className="kanban-card-name">{lead.name}</div>
       <div className="kanban-card-phone">{lead.phone}</div>
       <div className="kanban-card-meta">

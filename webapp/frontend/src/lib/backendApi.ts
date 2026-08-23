@@ -163,10 +163,11 @@ export const backendApi = {
   createLead: (lead: { name: string; phone: string; location: string }) =>
     apiFetch<Lead>('/api/leads', { method: 'POST', body: JSON.stringify(lead) }),
 
-  listLeads: (filters: { location?: string; status?: string } = {}) => {
+  listLeads: (filters: { location?: string; status?: string; assignedUserId?: string } = {}) => {
     const params = new URLSearchParams();
     if (filters.location) params.set('location', filters.location);
     if (filters.status) params.set('status', filters.status);
+    if (filters.assignedUserId) params.set('assignedUserId', filters.assignedUserId);
     const qs = params.toString();
     return apiFetch<Lead[]>(`/api/leads${qs ? `?${qs}` : ''}`);
   },
