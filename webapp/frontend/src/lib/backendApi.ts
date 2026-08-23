@@ -2,7 +2,7 @@
 import { apiFetch } from './api';
 import type {
   AdAccount, AdInsights, AssignableUser, AssignmentEligibility, AssignmentEligibilityStatus, AuditEntry, AuditEntryWithActor, Availability,
-  AvailabilityStatus, CallLog,
+  AutoDialerSettings, AvailabilityStatus, CallLog,
   CallLogWithContext, Conversation, ConversationListItem, Customer, CustomerStage, CustomFieldDefinition, CustomFieldEntityType, CustomFieldType,
   DashboardMetrics, Lead, LeadFunnel, LeadRemark, LeadStageAssignment,
   LocationAssignmentConfig, LocationAssignmentUser, NumberAccess, NumberAssignmentConfig, NumberAssignmentUser, Product, PublicQuotationView,
@@ -93,6 +93,17 @@ export const backendApi = {
 
   listMyReminders: (numberId?: string) =>
     apiFetch<ReminderWithContext[]>(`/api/my-reminders${numberId ? `?numberId=${encodeURIComponent(numberId)}` : ''}`),
+
+  addLeadReminder: (leadId: string, text: string, dueAt: string) =>
+    apiFetch<Reminder>(`/api/leads/${encodeURIComponent(leadId)}/reminders`, { method: 'POST', body: JSON.stringify({ text, dueAt }) }),
+
+  listLeadReminders: (leadId: string) =>
+    apiFetch<Reminder[]>(`/api/leads/${encodeURIComponent(leadId)}/reminders`),
+
+  getAutoDialerSettings: () => apiFetch<AutoDialerSettings>('/api/auto-dialer-settings'),
+
+  updateAutoDialerSettings: (patch: Partial<AutoDialerSettings>) =>
+    apiFetch<AutoDialerSettings>('/api/auto-dialer-settings', { method: 'PATCH', body: JSON.stringify(patch) }),
 
   listCustomers: (numberId?: string) =>
     apiFetch<Customer[]>(`/api/customers${numberId ? `?numberId=${encodeURIComponent(numberId)}` : ''}`),

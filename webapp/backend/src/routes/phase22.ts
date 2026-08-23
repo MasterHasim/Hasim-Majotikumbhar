@@ -104,6 +104,25 @@ export function registerPhase22Routes(router: RouterType) {
     return Response.json(await new Phase22Api(ctx.db, ctx.identityEmail, env).refreshCallStatus(param(request, 'id')));
   });
 
+  router.post('/api/leads/:id/reminders', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    const body = (await json(request)) as { text: string; dueAt: string };
+    return Response.json(await new Phase22Api(ctx.db, ctx.identityEmail).createLeadReminder(param(request, 'id'), body.text, body.dueAt));
+  });
+  router.get('/api/leads/:id/reminders', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    return Response.json(await new Phase22Api(ctx.db, ctx.identityEmail).listLeadReminders(param(request, 'id')));
+  });
+
+  router.get('/api/auto-dialer-settings', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    return Response.json(await new Phase22Api(ctx.db, ctx.identityEmail).getAutoDialerSettings());
+  });
+  router.patch('/api/auto-dialer-settings', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    return Response.json(await new Phase22Api(ctx.db, ctx.identityEmail).updateAutoDialerSettings(await json(request)));
+  });
+
   router.post('/api/leads/:id/stage', async (request: IRequest, env: Env) => {
     const ctx = await buildContext(request, env);
     const body = (await json(request)) as { stageId: string };

@@ -161,7 +161,15 @@ function AddLeadForm({ onDone, onConfigureLocation }: { onDone: () => void; onCo
   );
 }
 
-export function Leads({ whoAmI, onOpenConversation }: { whoAmI: WhoAmI; onOpenConversation: (conversationId: string, numberId: string) => void }) {
+export function Leads({ whoAmI, onOpenConversation, initialLeadId, onInitialLeadConsumed, callPromptEnabled }: {
+  whoAmI: WhoAmI;
+  onOpenConversation: (conversationId: string, numberId: string) => void;
+  /** Set by Reminders' "Open lead" — deep-links straight to that lead's detail modal. */
+  initialLeadId?: string | null;
+  onInitialLeadConsumed?: () => void;
+  /** Admin → Auto Dialer's "Call now" prompts toggle — hides the board's per-card highlight when off. */
+  callPromptEnabled: boolean;
+}) {
   const isManager = whoAmI.roleKeys.includes('ADMIN') || whoAmI.roleKeys.includes('SITE_MANAGER');
   const [leads, setLeads] = useState<Lead[] | null>(null);
   const [stages, setStages] = useState<Stage[] | null>(null);
@@ -189,6 +197,19 @@ export function Leads({ whoAmI, onOpenConversation }: { whoAmI: WhoAmI; onOpenCo
 
   useEffect(loadLeads, [locationFilter, statusFilter]);
   useEffect(() => setSelectedIds(new Set()), [locationFilter, statusFilter, view]);
+
+  // Deep-link from Reminders' "Open lead" — clear filters so the target lead can't be hidden
+  // by whatever location/status happened to be selected, then open it once it's loaded.
+  useEffect(() => {
+    if (!initialLeadId) return;
+    setLocationFilter('');
+    setStatusFilter('');
+  }, [initialLeadId]);
+  useEffect(() => {
+    if (!initialLeadId || !leads) return;
+    const lead = leads.find((l) => l.id === initialLeadId);
+    if (lead) { setSelectedLead(lead); onInitialLeadConsumed?.(); }
+  }, [initialLeadId, leads, onInitialLeadConsumed]);
   useEffect(() => {
     backendApi.listStages().then(setStages).catch(() => setStages([]));
     backendApi.listCustomFieldDefinitions('lead').then(setCustomFieldDefs).catch(() => setCustomFieldDefs([]));
@@ -335,6 +356,7 @@ export function Leads({ whoAmI, onOpenConversation }: { whoAmI: WhoAmI; onOpenCo
             currentUserId={whoAmI.id}
             isManager={isManager}
             actionBusyId={actionBusyId}
+            callPromptEnabled={callPromptEnabled}
             onOpenLead={setSelectedLead}
             onChanged={loadLeads}
             onCall={callLead}

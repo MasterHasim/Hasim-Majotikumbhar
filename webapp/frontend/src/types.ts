@@ -118,9 +118,12 @@ export interface Remark {
 
 export type ReminderStatus = 'PENDING' | 'COMPLETED' | 'CANCELLED';
 
+/** Attaches to exactly one of conversationId/leadId (never both) — extended 2026-08-24 so a
+ * sales follow-up can be set on a Lead directly, before any WhatsApp conversation exists. */
 export interface Reminder {
   id: string;
-  conversationId: string;
+  conversationId?: string;
+  leadId?: string;
   ownerUserId: string;
   text: string;
   dueAt: string;
@@ -132,19 +135,23 @@ export interface SnoozeStatus {
   snoozedUntil?: string;
 }
 
-/** listMyReminders' return shape — a Reminder enriched with who it's for and which
- * conversation/number to jump into, computed server-side in one bulk read. */
-export interface ReminderWithContext {
-  id: string;
-  conversationId: string;
-  ownerUserId: string;
-  text: string;
-  dueAt: string;
-  status: ReminderStatus;
-  numberId: string;
-  customerId: string;
-  customerName: string;
-  customerPhone: string;
+/** listMyReminders' return shape — a Reminder enriched with who it's for and where to jump
+ * to, computed server-side in one bulk read. Conversation-context fields are set for a
+ * conversation-attached reminder, lead-context fields for a lead-attached one — never both. */
+export interface ReminderWithContext extends Reminder {
+  numberId?: string;
+  customerId?: string;
+  customerName?: string;
+  customerPhone?: string;
+  leadName?: string;
+  leadPhone?: string;
+  leadLocation?: string;
+}
+
+/** Account-wide Auto Dialer on/off switches (Admin → Auto Dialer). */
+export interface AutoDialerSettings {
+  missedCallReminderEnabled: boolean;
+  callPromptEnabled: boolean;
 }
 
 export interface AssignableUser {

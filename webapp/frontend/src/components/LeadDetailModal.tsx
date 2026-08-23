@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { AuditEntryWithActor, Lead, Stage, User } from '../types';
+import type { AuditEntryWithActor, Lead, Reminder, Stage, User } from '../types';
 import { backendApi } from '../lib/backendApi';
 import { ApiClientError } from '../lib/api';
 import { ActivityFeed } from './ActivityFeed';
@@ -28,6 +28,9 @@ export function LeadDetailModal({
   const [stageId, setStageId] = useState('');
   const [remarks, setRemarks] = useState<{ id: string; text: string; createdAt: string }[]>([]);
   const [remarkText, setRemarkText] = useState('');
+  const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [reminderText, setReminderText] = useState('');
+  const [reminderDue, setReminderDue] = useState('');
   const [tags, setTags] = useState<string[]>(lead.tags ?? []);
   const [tagInput, setTagInput] = useState('');
   const [activity, setActivity] = useState<AuditEntryWithActor[] | null>(null);
@@ -39,6 +42,7 @@ export function LeadDetailModal({
   useEffect(() => {
     backendApi.getLeadStage(lead.id).then((s) => setStageId(s?.stageId ?? '')).catch(() => setStageId(''));
     backendApi.listLeadRemarks(lead.id).then(setRemarks).catch(() => setRemarks([]));
+    backendApi.listLeadReminders(lead.id).then((r) => setReminders(r.filter((x) => x.status === 'PENDING'))).catch(() => setReminders([]));
     setActivity(null);
     backendApi.listLeadActivity(lead.id).then(setActivity).catch(() => setActivity([]));
     setTags(lead.tags ?? []);
@@ -209,6 +213,49 @@ export function LeadDetailModal({
               </button>
               <button className="btn" onClick={onClose}>Close</button>
             </div>
+
+            <details className="detail-section">
+              <summary>Reminders ({reminders.length})</summary>
+              <div className="detail-section-body">
+                {reminders.length === 0 && <div className="empty">No pending reminders on this lead.</div>}
+                {reminders.map((r) => (
+                  <div key={r.id} className="reminder-item">
+                    <div>{r.text}</div>
+                    <div className="reminder-meta">Due {fmt(r.dueAt)}</div>
+                    <button
+                      className="btn"
+                      style={{ marginTop: 4 }}
+                      disabled={busy}
+                      onClick={() => void guard(async () => {
+                        await backendApi.updateReminderStatus(r.id, 'COMPLETED');
+                        setReminders((prev) => prev.filter((x) => x.id !== r.id));
+                      })}
+                    >
+                      Mark done
+                    </button>
+                  </div>
+                ))}
+                <div className="mini-add" style={{ flexDirection: 'column', gap: 6 }}>
+                  <input placeholder="Reminder text…" value={reminderText} onChange={(e) => setReminderText(e.target.value)} />
+                  <input type="datetime-local" value={reminderDue} onChange={(e) => setReminderDue(e.target.value)} />
+                  <button
+                    disabled={busy || !reminderText.trim() || !reminderDue}
+                    onClick={() => {
+                      const text = reminderText.trim();
+                      const dueAt = new Date(reminderDue).toISOString();
+                      setReminderText('');
+                      setReminderDue('');
+                      void guard(async () => {
+                        const r = await backendApi.addLeadReminder(lead.id, text, dueAt);
+                        setReminders((prev) => [...prev, r]);
+                      });
+                    }}
+                  >
+                    Add reminder
+                  </button>
+                </div>
+              </div>
+            </details>
 
             <details className="detail-section">
               <summary>Quotations</summary>

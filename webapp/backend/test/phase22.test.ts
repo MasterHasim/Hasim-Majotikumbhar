@@ -348,7 +348,7 @@ describe('Phase22Api (ported from Phase22Domain.gs + Phase22Services.gs)', () =>
       expect(log[0]!.endedAt).toBeTruthy();
     });
 
-    it('auto-creates a PENDING reminder on the conversation when a conversation-initiated call is missed, but not for a lead-initiated call (no conversation to attach one to)', async () => {
+    it('auto-creates a PENDING reminder attached to whichever target the missed call actually has — the conversation for a conversation-initiated call, the lead itself for a lead-initiated one (2026-08-24: Reminders now support leads directly)', async () => {
       const number = await new Phase3Api(db, ADMIN_EMAIL).createNumber({ displayName: 'Entartica - Raipur', phoneNumber: '079-485-02801', provider: 'exotel' });
       await new Phase22Api(db, ADMIN_EMAIL).uploadLeads([{ name: 'Priya', phone: '+919876543210', location: 'Raipur' }]);
       const leadId = (await new Phase22Api(db, ADMIN_EMAIL).listLeads())[0]!.id;
@@ -358,7 +358,12 @@ describe('Phase22Api (ported from Phase22Domain.gs + Phase22Services.gs)', () =>
 
       const leadCall = await new Phase22Api(db, AGENT_EMAIL, mock.exotelVoiceConfig as never).initiateCall(leadId);
       await new Phase22Api(db, ADMIN_EMAIL).applyCallStatusEvent({ callSid: leadCall.exotelCallSid, status: 'NO-ANSWER', duration: null, recordingUrl: null, raw: {} });
-      expect(await new Phase9Api(db, AGENT_EMAIL).listReminders(conversationId)).toHaveLength(0);
+      expect(await new Phase9Api(db, AGENT_EMAIL).listReminders(conversationId)).toHaveLength(0); // not attached to the conversation
+      const leadReminders = await new Phase22Api(db, AGENT_EMAIL).listLeadReminders(leadId);
+      expect(leadReminders).toHaveLength(1);
+      expect(leadReminders[0]!.status).toBe('PENDING');
+      expect(leadReminders[0]!.ownerUserId).toBe(agentId);
+      expect(leadReminders[0]!.text).toContain('missed call');
 
       const convCall = await new Phase22Api(db, AGENT_EMAIL, mock.exotelVoiceConfig as never).initiateConversationCall(conversationId);
       await new Phase22Api(db, ADMIN_EMAIL).applyCallStatusEvent({ callSid: convCall.exotelCallSid, status: 'NO-ANSWER', duration: null, recordingUrl: null, raw: {} });
@@ -367,6 +372,16 @@ describe('Phase22Api (ported from Phase22Domain.gs + Phase22Services.gs)', () =>
       expect(reminders[0]!.status).toBe('PENDING');
       expect(reminders[0]!.ownerUserId).toBe(agentId);
       expect(reminders[0]!.text).toContain('missed call');
+    });
+
+    it('respects Auto Dialer settings — no missed-call reminder is created when missedCallReminderEnabled is false', async () => {
+      await new Phase22Api(db, ADMIN_EMAIL).updateAutoDialerSettings({ missedCallReminderEnabled: false });
+      await new Phase22Api(db, ADMIN_EMAIL).uploadLeads([{ name: 'Priya', phone: '+919876543210', location: 'Raipur' }]);
+      const leadId = (await new Phase22Api(db, ADMIN_EMAIL).listLeads())[0]!.id;
+      await new Phase22Api(db, ADMIN_EMAIL).reassignLead(leadId, agentId);
+      const call = await new Phase22Api(db, AGENT_EMAIL, mock.exotelVoiceConfig as never).initiateCall(leadId);
+      await new Phase22Api(db, ADMIN_EMAIL).applyCallStatusEvent({ callSid: call.exotelCallSid, status: 'NO-ANSWER', duration: null, recordingUrl: null, raw: {} });
+      expect(await new Phase22Api(db, AGENT_EMAIL).listLeadReminders(leadId)).toHaveLength(0);
     });
 
     it('does not create a reminder for a completed (answered) call', async () => {
@@ -379,6 +394,97 @@ describe('Phase22Api (ported from Phase22Domain.gs + Phase22Services.gs)', () =>
       const call = await new Phase22Api(db, AGENT_EMAIL, mock.exotelVoiceConfig as never).initiateConversationCall(conversationId);
       await new Phase22Api(db, ADMIN_EMAIL).applyCallStatusEvent({ callSid: call.exotelCallSid, status: 'COMPLETED', duration: 60, recordingUrl: null, raw: {} });
       expect(await new Phase9Api(db, AGENT_EMAIL).listReminders(conversationId)).toHaveLength(0);
+    });
+  });
+
+  describe('Lead reminders (createLeadReminder / listLeadReminders / updateLeadReminderStatus, 2026-08-24)', () => {
+    let leadId: string;
+    beforeEach(async () => {
+      await new Phase22Api(db, ADMIN_EMAIL).uploadLeads([{ name: 'Priya', phone: '+919876543210', location: 'Raipur' }]);
+      leadId = (await new Phase22Api(db, ADMIN_EMAIL).listLeads())[0]!.id;
+      await new Phase22Api(db, ADMIN_EMAIL).reassignLead(leadId, agentId);
+    });
+
+    it('lets the assigned agent create, list, and complete a reminder on a lead with no conversation', async () => {
+      const dueAt = new Date(Date.now() + 86400000).toISOString();
+      const reminder = await new Phase22Api(db, AGENT_EMAIL).createLeadReminder(leadId, 'Follow up after budget approval', dueAt);
+      expect(reminder.leadId).toBe(leadId);
+      expect(reminder.conversationId).toBeUndefined();
+      expect(reminder.status).toBe('PENDING');
+      expect(reminder.ownerUserId).toBe(agentId);
+
+      const list = await new Phase22Api(db, AGENT_EMAIL).listLeadReminders(leadId);
+      expect(list).toHaveLength(1);
+      expect(list[0]!.id).toBe(reminder.id);
+
+      const updated = await new Phase22Api(db, AGENT_EMAIL).updateLeadReminderStatus(reminder.id, 'COMPLETED');
+      expect(updated.status).toBe('COMPLETED');
+    });
+
+    it('denies an unrelated agent, but allows a lead manager', async () => {
+      await expect(new Phase22Api(db, AGENT2_EMAIL).createLeadReminder(leadId, 'X', new Date().toISOString())).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      const reminder = await new Phase22Api(db, ADMIN_EMAIL).createLeadReminder(leadId, 'Manager-set follow-up', new Date().toISOString());
+      expect(reminder.leadId).toBe(leadId);
+    });
+
+    it('rejects updating a reminder that is not lead-attached, and rejects an invalid status', async () => {
+      const { conversationId } = await (async () => {
+        const number = await new Phase3Api(db, ADMIN_EMAIL).createNumber({ displayName: 'Entartica - Raipur', phoneNumber: '079-485-02801', provider: 'exotel' });
+        await new Phase1Api(db, ADMIN_EMAIL).grantNumberAccess({ userId: agentId, numberId: number.id });
+        return new Phase22Api(db, AGENT_EMAIL).startWhatsAppFromLead(leadId);
+      })();
+      const conversationReminder = await new Phase9Api(db, AGENT_EMAIL).createReminder(conversationId, 'X', new Date().toISOString());
+      await expect(new Phase22Api(db, AGENT_EMAIL).updateLeadReminderStatus(conversationReminder.id, 'COMPLETED')).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+
+      const leadReminder = await new Phase22Api(db, AGENT_EMAIL).createLeadReminder(leadId, 'X', new Date().toISOString());
+      await expect(new Phase22Api(db, AGENT_EMAIL).updateLeadReminderStatus(leadReminder.id, 'BOGUS')).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    });
+
+    it('shows up in the unified listMyReminders alongside conversation-attached ones, with lead context instead of customer context, and ignores the numberId filter (leads have no number)', async () => {
+      const number = await new Phase3Api(db, ADMIN_EMAIL).createNumber({ displayName: 'Entartica - Raipur', phoneNumber: '079-485-02801', provider: 'exotel' });
+      await new Phase1Api(db, ADMIN_EMAIL).grantNumberAccess({ userId: agentId, numberId: number.id });
+      const { conversationId } = await new Phase22Api(db, AGENT_EMAIL).startWhatsAppFromLead(leadId);
+      await new Phase9Api(db, AGENT_EMAIL).createReminder(conversationId, 'Conversation follow-up', new Date().toISOString());
+      await new Phase22Api(db, AGENT_EMAIL).createLeadReminder(leadId, 'Lead follow-up', new Date().toISOString());
+
+      const mine = await new Phase9Api(db, AGENT_EMAIL).listMyReminders();
+      expect(mine).toHaveLength(2);
+      const leadRow = mine.find((r) => r.leadId === leadId)!;
+      expect(leadRow.leadName).toBe('Priya');
+      expect(leadRow.leadPhone).toBe('+919876543210');
+      expect(leadRow.leadLocation).toBe('Raipur');
+      const convRow = mine.find((r) => r.conversationId === conversationId)!;
+      expect(convRow.customerPhone).toBe('+919876543210');
+
+      // A completely unrelated number's filter still shows the lead reminder — leads aren't
+      // number-scoped, so there's nothing sensible to filter them out by.
+      const otherNumber = await new Phase3Api(db, ADMIN_EMAIL).createNumber({ displayName: 'Other', phoneNumber: '079-485-02802', provider: 'exotel' });
+      const filtered = await new Phase9Api(db, AGENT_EMAIL).listMyReminders(otherNumber.id);
+      expect(filtered.map((r) => r.leadId)).toContain(leadId);
+      expect(filtered.map((r) => r.conversationId)).not.toContain(conversationId);
+    });
+  });
+
+  describe('Auto Dialer settings (getAutoDialerSettings / updateAutoDialerSettings, 2026-08-24)', () => {
+    it('defaults every flag to true when no record has been saved yet', async () => {
+      const settings = await new Phase22Api(db, AGENT_EMAIL).getAutoDialerSettings();
+      expect(settings).toMatchObject({ missedCallReminderEnabled: true, callPromptEnabled: true });
+    });
+
+    it('is readable by any signed-in user but writable only by SETTINGS_MANAGE (ADMIN)', async () => {
+      await expect(new Phase22Api(db, AGENT_EMAIL).updateAutoDialerSettings({ callPromptEnabled: false })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      const updated = await new Phase22Api(db, ADMIN_EMAIL).updateAutoDialerSettings({ callPromptEnabled: false });
+      expect(updated.callPromptEnabled).toBe(false);
+      expect(updated.missedCallReminderEnabled).toBe(true); // untouched field stays as-is
+      const readBack = await new Phase22Api(db, AGENT_EMAIL).getAutoDialerSettings();
+      expect(readBack.callPromptEnabled).toBe(false);
+    });
+
+    it('persists a partial update without clobbering the other flag', async () => {
+      await new Phase22Api(db, ADMIN_EMAIL).updateAutoDialerSettings({ missedCallReminderEnabled: false });
+      await new Phase22Api(db, ADMIN_EMAIL).updateAutoDialerSettings({ callPromptEnabled: false });
+      const settings = await new Phase22Api(db, ADMIN_EMAIL).getAutoDialerSettings();
+      expect(settings).toMatchObject({ missedCallReminderEnabled: false, callPromptEnabled: false });
     });
   });
 

@@ -41,6 +41,7 @@ export default function App() {
   const [activeNumber, setActiveNumber] = useState<WhatsAppNumber | null>(null);
   const [page, setPage] = useState<Page>('dashboard');
   const [pendingConversationId, setPendingConversationId] = useState<string | null>(null);
+  const [pendingLeadId, setPendingLeadId] = useState<string | null>(null);
   const [needsResponseCounts, setNeedsResponseCounts] = useState<Record<string, number>>({});
   const [leadsToCallCount, setLeadsToCallCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +54,13 @@ export default function App() {
     if (target && target.id !== activeNumber?.id) setActiveNumber(target);
     setPendingConversationId(conversationId);
     setPage('inbox');
+  }
+
+  /** Same bridging idea as openConversation, for Reminders' "Open lead" — Leads isn't
+   * number-scoped, so this is simpler: just switch page and let Leads.tsx pick up the id. */
+  function openLead(leadId: string) {
+    setPendingLeadId(leadId);
+    setPage('leads');
   }
 
   useEffect(() => {
@@ -100,16 +108,31 @@ export default function App() {
 
   // "Prompt, don't auto-ring" side of Auto Dialer (see PROGRESS.md) — leads assigned to me
   // that haven't been called yet, surfaced as a sidebar badge regardless of which page is
-  // open, without ever placing a call automatically.
+  // open, without ever placing a call automatically. Admin-toggleable (Admin → Auto Dialer);
+  // checked once per sign-in rather than every poll tick, since it rarely changes.
+  const [callPromptEnabled, setCallPromptEnabled] = useState(true);
   useEffect(() => {
-    if (!whoAmI) { setLeadsToCallCount(0); return; }
+    if (!whoAmI) return;
+    backendApi.getAutoDialerSettings().then((s) => setCallPromptEnabled(s.callPromptEnabled)).catch(() => {});
+  }, [whoAmI]);
+  useEffect(() => {
+    if (!whoAmI || !callPromptEnabled) { setLeadsToCallCount(0); return; }
+    // Real bug, confirmed live 2026-08-24: callPromptEnabled defaults to true before the
+    // settings fetch above resolves, so this effect's first run (still on the stale default)
+    // fires a leads request immediately. If the real setting turns out to be false, THIS effect
+    // re-runs and correctly zeroes the count — but the earlier request was already in flight,
+    // and its response arrived afterward and overwrote the zero back to a stale non-zero
+    // count. `cancelled` discards that stale response instead of applying it.
+    let cancelled = false;
     function load() {
-      backendApi.listLeads({ assignedUserId: whoAmI!.id, status: 'ASSIGNED' }).then((leads) => setLeadsToCallCount(leads.length)).catch(() => {});
+      backendApi.listLeads({ assignedUserId: whoAmI!.id, status: 'ASSIGNED' })
+        .then((leads) => { if (!cancelled) setLeadsToCallCount(leads.length); })
+        .catch(() => {});
     }
     load();
     const interval = setInterval(load, 20000);
-    return () => clearInterval(interval);
-  }, [whoAmI]);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [whoAmI, callPromptEnabled]);
 
   async function completeBootstrap() {
     if (!user?.email) return;
@@ -189,8 +212,10 @@ export default function App() {
           {page === 'inbox' && (
             <Inbox number={activeNumber} initialConversationId={pendingConversationId} onInitialConversationConsumed={() => setPendingConversationId(null)} />
           )}
-          {page === 'leads' && <Leads whoAmI={whoAmI} onOpenConversation={openConversation} />}
-          {page === 'reminders' && <Reminders number={activeNumber} onOpenConversation={openConversation} />}
+          {page === 'leads' && (
+            <Leads whoAmI={whoAmI} onOpenConversation={openConversation} initialLeadId={pendingLeadId} onInitialLeadConsumed={() => setPendingLeadId(null)} callPromptEnabled={callPromptEnabled} />
+          )}
+          {page === 'reminders' && <Reminders number={activeNumber} onOpenConversation={openConversation} onOpenLead={openLead} />}
           {page === 'callHistory' && <CallHistory isManager={whoAmI.roleKeys.includes('ADMIN') || whoAmI.roleKeys.includes('SITE_MANAGER')} onOpenConversation={openConversation} />}
           {page === 'customers' && <Customers number={activeNumber} onOpenConversation={openConversation} />}
           {page === 'dashboard' && <Dashboard number={activeNumber} />}

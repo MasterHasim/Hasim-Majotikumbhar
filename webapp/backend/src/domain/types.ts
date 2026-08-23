@@ -201,8 +201,14 @@ export interface Remark extends Record_ {
 
 export type ReminderStatus = 'PENDING' | 'COMPLETED' | 'CANCELLED';
 
+/** Extended 2026-08-24 to also attach directly to a Lead — a Lead has no WhatsApp
+ * conversation until someone starts one, so a sales follow-up reminder set on a fresh
+ * Lead had nowhere to live before this. Exactly one of conversationId/leadId is set,
+ * never both, never neither — enforced by the two creation paths (Phase9Api.createReminder,
+ * Phase22Api.createLeadReminder), not by the type itself. */
 export interface Reminder extends Record_ {
-  conversationId: string;
+  conversationId?: string;
+  leadId?: string;
   ownerUserId: string;
   text: string;
   dueAt: string;
@@ -211,14 +217,18 @@ export interface Reminder extends Record_ {
   updatedAt: string;
 }
 
-/** listMyReminders' return shape — a Reminder enriched with just enough conversation/customer
- * context (in one bulk read, not per-reminder) for a cross-conversation "My Reminders" list to
- * be useful: who it's for, and which number/conversation to jump into. */
+/** listMyReminders' return shape — a Reminder enriched with just enough context (in one bulk
+ * read, not per-reminder) for a cross-conversation, cross-lead "My Reminders" list to be
+ * useful: who it's for, and where to jump to. The conversation-context fields are set for a
+ * conversation-attached reminder, the lead-context fields for a lead-attached one — never both. */
 export interface ReminderWithContext extends Reminder {
-  numberId: string;
-  customerId: string;
-  customerName: string;
-  customerPhone: string;
+  numberId?: string;
+  customerId?: string;
+  customerName?: string;
+  customerPhone?: string;
+  leadName?: string;
+  leadPhone?: string;
+  leadLocation?: string;
 }
 
 export interface ConversationSnooze extends Record_ {
@@ -389,6 +399,21 @@ export interface CallLogWithContext extends CallLog {
   agentName: string;
   subjectName: string;
   subjectLocation?: string;
+}
+
+/** Account-wide on/off switches for the Auto Dialer feature set (Admin → Auto Dialer),
+ * added 2026-08-24 per an explicit request to make each piece independently toggleable
+ * rather than all-or-nothing. Singleton row, id fixed as 'default' — no per-number/per-location
+ * granularity yet; add it later if a real need for finer scoping shows up. A missing record
+ * (first run, before any admin has touched this) means every flag defaults to true — see
+ * Phase22Api.getAutoDialerSettings. */
+export interface AutoDialerSettings extends Record_ {
+  /** applyCallStatusEvent's missed/no-answer/busy/failed auto-reminder. */
+  missedCallReminderEnabled: boolean;
+  /** The Leads sidebar badge + "Call now" board highlight for freshly-assigned, not-yet-called leads. */
+  callPromptEnabled: boolean;
+  updatedAt: string;
+  updatedBy: string;
 }
 
 export interface LeadStageAssignment extends Record_ {

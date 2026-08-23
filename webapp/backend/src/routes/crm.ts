@@ -1,10 +1,13 @@
 import type { IRequest, RouterType } from 'itty-router';
 import type { Env } from '../types';
+import type { Reminder } from '../domain/types';
 import { ApiError } from '../types';
 import { buildContext } from '../lib/requestContext';
+import { Repository } from '../lib/repository';
 import { Phase7Api, NumberAssignmentConfigApi } from '../services/phase7Api';
 import { Phase8Api } from '../services/phase8Api';
 import { Phase9Api } from '../services/phase9Api';
+import { Phase22Api } from '../services/phase22Api';
 
 async function json(request: IRequest): Promise<Record<string, unknown>> {
   return (await request.json().catch(() => ({}))) as Record<string, unknown>;
@@ -116,10 +119,20 @@ export function registerCrmRoutes(router: RouterType) {
     const body = (await json(request)) as { text: string; dueAt: string };
     return Response.json(await new Phase9Api(ctx.db, ctx.identityEmail).createReminder(param(request, 'id'), body.text, body.dueAt));
   });
+  // A reminder is either conversation-attached or lead-attached (never both, see Reminder's
+  // domain-type doc comment) — this checks which, then delegates to whichever service owns
+  // that target's authorization rules (Phase9Api for conversations, Phase22Api for leads), so
+  // "mark done" works identically for both from the one shared endpoint the frontend calls.
   router.patch('/api/reminders/:id', async (request: IRequest, env: Env) => {
     const ctx = await buildContext(request, env);
     const body = (await json(request)) as { status: string };
-    return Response.json(await new Phase9Api(ctx.db, ctx.identityEmail).updateReminderStatus(param(request, 'id'), body.status));
+    const reminderId = param(request, 'id');
+    const raw = await new Repository<Reminder>(ctx.db, 'reminders').get(reminderId);
+    if (!raw) throw new ApiError(404, 'NOT_FOUND', 'Reminder was not found.');
+    if (raw.leadId) {
+      return Response.json(await new Phase22Api(ctx.db, ctx.identityEmail).updateLeadReminderStatus(reminderId, body.status));
+    }
+    return Response.json(await new Phase9Api(ctx.db, ctx.identityEmail).updateReminderStatus(reminderId, body.status));
   });
   router.get('/api/conversations/:id/reminders', async (request: IRequest, env: Env) => {
     const ctx = await buildContext(request, env);

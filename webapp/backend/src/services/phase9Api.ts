@@ -6,7 +6,7 @@
  */
 import { ApiError } from '../types';
 import { Ids, Permissions, Validation } from '../domain/phase1';
-import type { Conversation, ConversationSnooze, Customer, Reminder, ReminderStatus, ReminderWithContext, User } from '../domain/types';
+import type { Conversation, ConversationSnooze, Customer, Lead, Reminder, ReminderStatus, ReminderWithContext, User } from '../domain/types';
 import { Repository } from '../lib/repository';
 import { AccessControl, type Phase1Repositories } from '../lib/accessControl';
 import { AuditLogService } from '../lib/auditLog';
@@ -21,6 +21,7 @@ export class Phase9Api {
   private snoozes: Repository<ConversationSnooze>;
   private conversations: Repository<Conversation>;
   private customers: Repository<Customer>;
+  private leads: Repository<Lead>;
 
   constructor(db: FirebaseDb, identityEmail: string) {
     this.phase1Repos = buildPhase1Repositories(db);
@@ -30,6 +31,9 @@ export class Phase9Api {
     this.snoozes = new Repository<ConversationSnooze>(db, 'conversationSnoozes');
     this.conversations = new Repository<Conversation>(db, 'webapp_conversations');
     this.customers = new Repository<Customer>(db, 'customers');
+    // Read-only here — listMyReminders enriches a lead-attached reminder with the lead's own
+    // name/phone/location, but creating/updating one is Phase22Api's job (it owns canTouchLead).
+    this.leads = new Repository<Lead>(db, 'leads');
   }
 
   async createReminder(conversationId: string, text: string, dueAt: string): Promise<Reminder> {
@@ -43,9 +47,13 @@ export class Phase9Api {
     return reminder;
   }
 
+  /** Conversation-attached reminders only — the shared PATCH /api/reminders/:id route checks
+   * which of conversationId/leadId a reminder has before delegating here vs.
+   * Phase22Api.updateLeadReminderStatus, so this never sees a lead-attached one in practice. */
   async updateReminderStatus(reminderId: string, status: string): Promise<Reminder> {
     const reminder = await this.reminders.get(reminderId);
     if (!reminder) throw new ApiError(404, 'NOT_FOUND', 'Reminder was not found.');
+    if (!reminder.conversationId) throw new ApiError(400, 'VALIDATION_ERROR', 'This reminder is not attached to a conversation.');
     const actor = await this.requireReminderAccess(reminder.conversationId);
     const validStatus = Validation.enumValue<ReminderStatus>(status, ['PENDING', 'COMPLETED', 'CANCELLED'], 'status');
     const record = await this.reminders.update(reminderId, { status: validStatus });
@@ -60,20 +68,31 @@ export class Phase9Api {
 
   /**
    * Pending reminders owned by the signed-in user, enriched with who each one is for and
-   * which conversation/number to jump into — one bulk read of conversations/customers each,
-   * not a per-reminder fetch (the previous version called this.conversations.get() inside a
-   * loop when numberId was set; N+1 network round trips for what should be one read).
-   * numberId is optional — narrows to reminders on conversations for that number.
+   * where to jump to — one bulk read of conversations/customers/leads each, not a per-reminder
+   * fetch (the previous version called this.conversations.get() inside a loop when numberId
+   * was set; N+1 network round trips for what should be one read).
+   * numberId is optional — narrows conversation-attached reminders to that number. A
+   * lead-attached reminder has no number of its own (Leads are location-scoped, not
+   * number-scoped — see workspaceApi.ts's matchingLead note), so numberId never filters those
+   * out; hiding someone's own follow-up task because a specific WhatsApp number happens to be
+   * open would be a worse surprise than showing one extra row.
    */
   async listMyReminders(numberId?: string): Promise<ReminderWithContext[]> {
     const actor = await this.access.currentUser();
     const pending = (await this.reminders.list()).filter((r) => r.ownerUserId === actor.id && r.status === 'PENDING');
     const conversationById = new Map((await this.conversations.list()).map((c) => [c.id, c]));
     const customerById = new Map((await this.customers.list()).map((c) => [c.id, c]));
+    const leadById = new Map((await this.leads.list()).map((l) => [l.id, l]));
 
     const enriched: ReminderWithContext[] = [];
     for (const reminder of pending) {
-      const conversation = conversationById.get(reminder.conversationId);
+      if (reminder.leadId) {
+        const lead = leadById.get(reminder.leadId);
+        if (!lead) continue; // orphaned reminder (lead since deleted) — skip rather than error
+        enriched.push({ ...reminder, leadName: lead.name, leadPhone: lead.phone, leadLocation: lead.location });
+        continue;
+      }
+      const conversation = reminder.conversationId ? conversationById.get(reminder.conversationId) : undefined;
       if (!conversation) continue; // orphaned reminder (conversation since deleted) — skip rather than error
       if (numberId && conversation.numberId !== numberId) continue;
       const customer = customerById.get(conversation.customerId);

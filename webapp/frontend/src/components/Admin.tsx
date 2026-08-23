@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState } from 'react';
-import type { AdAccount, AssignmentEligibilityStatus, AuditEntry, CustomFieldDefinition, CustomFieldEntityType, CustomFieldType, NumberAccess, NumberAssignmentConfig, NumberAssignmentUser, Product, QuickReply, Role, Stage, Team, TeamMember, Template, User, WhatsAppNumber, WhoAmI } from '../types';
+import type { AdAccount, AssignmentEligibilityStatus, AuditEntry, AutoDialerSettings, CustomFieldDefinition, CustomFieldEntityType, CustomFieldType, NumberAccess, NumberAssignmentConfig, NumberAssignmentUser, Product, QuickReply, Role, Stage, Team, TeamMember, Template, User, WhatsAppNumber, WhoAmI } from '../types';
 import { backendApi } from '../lib/backendApi';
 import { ApiClientError } from '../lib/api';
 
@@ -623,6 +623,63 @@ function BackupTab() {
 
 // ---------------------------------------------------------------------------
 
+function AutoDialerTab() {
+  const [settings, setSettings] = useState<AutoDialerSettings | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function reload() {
+    backendApi.getAutoDialerSettings().then(setSettings).catch((err) => setError(errMsg(err)));
+  }
+  useEffect(reload, []);
+
+  function toggle(key: keyof AutoDialerSettings, value: boolean) {
+    setBusy(true);
+    setError(null);
+    backendApi.updateAutoDialerSettings({ [key]: value })
+      .then(setSettings)
+      .catch((err) => setError(errMsg(err)))
+      .finally(() => setBusy(false));
+  }
+
+  return (
+    <div className="card">
+      <h2 className="section-title" style={{ marginTop: 0 }}>Auto Dialer</h2>
+      <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+        Each piece of the Auto Dialer effort can be switched off independently — nothing here ever dials a phone
+        automatically, these only control the prompts and auto-created reminders.
+      </p>
+      {error && <div className="form-error">{error}</div>}
+      {!settings ? (
+        <div className="empty">Loading…</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <label className="inline">
+            <input
+              type="checkbox"
+              checked={settings.callPromptEnabled}
+              disabled={busy}
+              onChange={(e) => toggle('callPromptEnabled', e.target.checked)}
+            />
+            "Call now" prompts — the 📞 badge on Leads and the highlighted card for a freshly-assigned, not-yet-called lead.
+          </label>
+          <label className="inline">
+            <input
+              type="checkbox"
+              checked={settings.missedCallReminderEnabled}
+              disabled={busy}
+              onChange={(e) => toggle('missedCallReminderEnabled', e.target.checked)}
+            />
+            Missed-call auto-reminder — automatically creates a "Call back" reminder when a placed call goes unanswered.
+          </label>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
 function QuickRepliesSection() {
   const [items, setItems] = useState<QuickReply[] | null>(null);
   const [shortcut, setShortcut] = useState('');
@@ -1189,7 +1246,7 @@ function AdAccountsTab() {
 
 // ---------------------------------------------------------------------------
 
-type AdminTab = 'users' | 'teams' | 'numbers' | 'access' | 'assignment' | 'quickReplies' | 'templates' | 'leadStages' | 'customFields' | 'products' | 'adAccounts' | 'audit' | 'backup';
+type AdminTab = 'users' | 'teams' | 'numbers' | 'access' | 'assignment' | 'quickReplies' | 'templates' | 'leadStages' | 'customFields' | 'products' | 'adAccounts' | 'autoDialer' | 'audit' | 'backup';
 
 export function Admin({ whoAmI }: { whoAmI: WhoAmI }) {
   const isFullAdmin = whoAmI.roleKeys.includes('ADMIN');
@@ -1209,7 +1266,8 @@ export function Admin({ whoAmI }: { whoAmI: WhoAmI }) {
     ? [
         ['users', 'Users'], ['teams', 'Teams'], ['numbers', 'Numbers'], ['access', 'Number Access'],
         ['assignment', 'Assignment Rules'], ['quickReplies', 'Quick Replies'], ['templates', 'Templates'],
-        ['leadStages', 'Lead Stages'], ['customFields', 'Custom Fields'], ['products', 'Products'], ['adAccounts', 'Ad Accounts'], ['audit', 'Audit Log'], ['backup', 'Backup'],
+        ['leadStages', 'Lead Stages'], ['customFields', 'Custom Fields'], ['products', 'Products'], ['adAccounts', 'Ad Accounts'],
+        ['autoDialer', 'Auto Dialer'], ['audit', 'Audit Log'], ['backup', 'Backup'],
       ]
     : [['customFields', 'Custom Fields'], ['products', 'Products']];
 
@@ -1233,6 +1291,7 @@ export function Admin({ whoAmI }: { whoAmI: WhoAmI }) {
       {tab === 'customFields' && <CustomFieldsTab />}
       {tab === 'products' && <ProductsTab />}
       {tab === 'adAccounts' && <AdAccountsTab />}
+      {tab === 'autoDialer' && <AutoDialerTab />}
       {tab === 'audit' && <AuditLogTab users={users} />}
       {tab === 'backup' && <BackupTab />}
     </>

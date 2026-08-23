@@ -17,8 +17,8 @@ import { ApiError } from '../types';
 import { Ids, Permissions, Roles, Status, Validation } from '../domain/phase1';
 import { Phase22AssignmentModes, Phase22LeadStatus, Phase22Locations, Phase22Validation, type Phase22Location } from '../domain/phase22';
 import type {
-  CallLog, CallLogWithContext, Conversation, Customer, CustomFieldDefinition, Lead, LeadRemark, LeadStageAssignment,
-  LocationAssignmentConfig, LocationAssignmentUser, Product, Quotation, QuotationLineItem, Reminder, Stage, User, WhatsAppNumber,
+  AutoDialerSettings, CallLog, CallLogWithContext, Conversation, Customer, CustomFieldDefinition, Lead, LeadRemark, LeadStageAssignment,
+  LocationAssignmentConfig, LocationAssignmentUser, Product, Quotation, QuotationLineItem, Reminder, ReminderStatus, Stage, User, WhatsAppNumber,
 } from '../domain/types';
 import { Repository } from '../lib/repository';
 import { AccessControl, type Phase1Repositories } from '../lib/accessControl';
@@ -97,6 +97,7 @@ export class Phase22Api {
   private locationUsers: Repository<LocationAssignmentUser>;
   private callLog: Repository<CallLog>;
   private reminders: Repository<Reminder>;
+  private autoDialerSettings: Repository<AutoDialerSettings>;
   private stages: Repository<Stage>;
   private leadStages: Repository<LeadStageAssignment>;
   private leadRemarks: Repository<LeadRemark>;
@@ -117,6 +118,7 @@ export class Phase22Api {
     this.locationUsers = new Repository<LocationAssignmentUser>(db, 'locationAssignmentUsers');
     this.callLog = new Repository<CallLog>(db, 'callLog');
     this.reminders = new Repository<Reminder>(db, 'reminders');
+    this.autoDialerSettings = new Repository<AutoDialerSettings>(db, 'autoDialerSettings');
     this.stages = new Repository<Stage>(db, 'stages');
     this.leadStages = new Repository<LeadStageAssignment>(db, 'leadStageAssignments');
     this.leadRemarks = new Repository<LeadRemark>(db, 'leadRemarks');
@@ -382,22 +384,90 @@ export class Phase22Api {
     await this.callLog.update(call.id, patch);
     await this.audit.write(null, 'call.statusUpdated', 'call', call.id, { status: event.status, callSid: event.callSid });
 
-    // Missed-call auto-task — only for a conversation-initiated call today. A lead-initiated
-    // call (initiateCall) has no conversationId, and Reminders are conversation-scoped, so
-    // there's nowhere to attach one yet for a bare Lead — see PROGRESS.md's Auto Dialer note.
-    if (isMissed && call.conversationId) {
+    // Missed-call auto-task — attaches to whichever target the call actually has (a
+    // conversation-initiated call has conversationId, a lead-initiated one has leadId; Reminders
+    // support both since 2026-08-24). Admin-toggleable (Admin → Auto Dialer) since not every team
+    // wants an automatic reminder for every missed call.
+    if (isMissed && (call.conversationId || call.leadId) && (await this.getAutoDialerSettings()).missedCallReminderEnabled) {
       try {
         const reminder: Reminder = {
-          id: Ids.create('reminder'), conversationId: call.conversationId, ownerUserId: call.agentUserId,
+          id: Ids.create('reminder'), ownerUserId: call.agentUserId,
+          ...(call.conversationId ? { conversationId: call.conversationId } : { leadId: call.leadId }),
           text: `Call back — missed call (${event.status.toLowerCase().replace('_', '-')})`, dueAt: now, status: 'PENDING', createdAt: now, updatedAt: now,
         };
         await this.reminders.create(reminder);
-        await this.audit.write(null, 'reminder.created', 'reminder', reminder.id, { conversationId: call.conversationId, source: 'missedCall', callId: call.id });
+        await this.audit.write(null, 'reminder.created', 'reminder', reminder.id, { conversationId: call.conversationId, leadId: call.leadId, source: 'missedCall', callId: call.id });
       } catch (e) {
         console.error('applyCallStatusEvent: failed to auto-create missed-call reminder', e);
       }
     }
     return { applied: true, callId: call.id, status: event.status };
+  }
+
+  /** Account-wide Auto Dialer on/off switches (Admin → Auto Dialer) — see AutoDialerSettings'
+   * own doc comment. No record yet (first run) means every flag defaults to true, so a fresh
+   * install behaves the same as before these toggles existed rather than silently going quiet. */
+  async getAutoDialerSettings(): Promise<AutoDialerSettings> {
+    const record = await this.autoDialerSettings.get('default');
+    return record ?? { id: 'default', missedCallReminderEnabled: true, callPromptEnabled: true, updatedAt: '', updatedBy: '' };
+  }
+
+  async updateAutoDialerSettings(patch: { missedCallReminderEnabled?: unknown; callPromptEnabled?: unknown }): Promise<AutoDialerSettings> {
+    const actor = await this.access.require(Permissions.SETTINGS_MANAGE);
+    const current = await this.getAutoDialerSettings();
+    const next: AutoDialerSettings = {
+      id: 'default',
+      missedCallReminderEnabled: patch.missedCallReminderEnabled !== undefined ? Boolean(patch.missedCallReminderEnabled) : current.missedCallReminderEnabled,
+      callPromptEnabled: patch.callPromptEnabled !== undefined ? Boolean(patch.callPromptEnabled) : current.callPromptEnabled,
+      updatedAt: Ids.now(), updatedBy: actor.id,
+    };
+    await this.autoDialerSettings.replace('default', next);
+    await this.audit.write(actor.id, 'autoDialerSettings.updated', 'autoDialerSettings', 'default', { patch: next });
+    return next;
+  }
+
+  /** Sales follow-up reminder attached directly to a Lead — for a Lead with no WhatsApp
+   * conversation started yet (see Reminder's 2026-08-24 doc comment). Same authorization shape
+   * as addLeadRemark: the lead's assigned agent, or a lead manager. */
+  async createLeadReminder(leadId: string, text: string, dueAt: string): Promise<Reminder> {
+    const lead = await this.leads.get(leadId);
+    if (!lead) throw new ApiError(404, 'NOT_FOUND', 'Lead was not found.');
+    const actor = await this.access.currentUser();
+    if (!(await this.canTouchLead(actor, lead))) await this.denied(actor, leadId);
+    await this.access.require(Permissions.REMINDERS_MANAGE);
+    const validText = Validation.requiredString(text, 'text');
+    const validDueAt = Validation.requiredString(dueAt, 'dueAt');
+    const now = Ids.now();
+    const reminder: Reminder = { id: Ids.create('reminder'), leadId, ownerUserId: actor.id, text: validText, dueAt: validDueAt, status: 'PENDING', createdAt: now, updatedAt: now };
+    await this.reminders.create(reminder);
+    await this.audit.write(actor.id, 'reminder.created', 'reminder', reminder.id, { leadId });
+    return reminder;
+  }
+
+  async listLeadReminders(leadId: string): Promise<Reminder[]> {
+    const lead = await this.leads.get(leadId);
+    if (!lead) throw new ApiError(404, 'NOT_FOUND', 'Lead was not found.');
+    const actor = await this.access.currentUser();
+    if (!(await this.canTouchLead(actor, lead))) await this.denied(actor, leadId);
+    return (await this.reminders.list()).filter((r) => r.leadId === leadId).sort((a, b) => (a.dueAt || '').localeCompare(b.dueAt || ''));
+  }
+
+  /** Same authorization shape as createLeadReminder — used by the shared PATCH /api/reminders/:id
+   * route once it's determined (by checking which of conversationId/leadId is set) that a given
+   * reminder is lead-attached, so "mark done" works identically regardless of which kind it is. */
+  async updateLeadReminderStatus(reminderId: string, status: string): Promise<Reminder> {
+    const reminder = await this.reminders.get(reminderId);
+    if (!reminder) throw new ApiError(404, 'NOT_FOUND', 'Reminder was not found.');
+    if (!reminder.leadId) throw new ApiError(400, 'VALIDATION_ERROR', 'This reminder is not attached to a lead.');
+    const lead = await this.leads.get(reminder.leadId);
+    if (!lead) throw new ApiError(404, 'NOT_FOUND', 'Lead was not found.');
+    const actor = await this.access.currentUser();
+    if (!(await this.canTouchLead(actor, lead))) await this.denied(actor, reminder.leadId);
+    await this.access.require(Permissions.REMINDERS_MANAGE);
+    const validStatus = Validation.enumValue<ReminderStatus>(status, ['PENDING', 'COMPLETED', 'CANCELLED'], 'status');
+    const record = await this.reminders.update(reminderId, { status: validStatus });
+    await this.audit.write(actor.id, 'reminder.statusChanged', 'reminder', reminderId, { status: validStatus, leadId: reminder.leadId });
+    return record;
   }
 
   /**

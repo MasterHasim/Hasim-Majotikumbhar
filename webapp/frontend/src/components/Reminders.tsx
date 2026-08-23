@@ -8,9 +8,10 @@ function fmtDue(iso: string): string {
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
 }
 
-export function Reminders({ number, onOpenConversation }: {
+export function Reminders({ number, onOpenConversation, onOpenLead }: {
   number: WhatsAppNumber;
   onOpenConversation: (conversationId: string, numberId: string) => void;
+  onOpenLead: (leadId: string) => void;
 }) {
   const [reminders, setReminders] = useState<ReminderWithContext[] | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -48,20 +49,23 @@ export function Reminders({ number, onOpenConversation }: {
       ) : (
         <div className="table-scroll">
           <table className="data-table">
-            <thead><tr><th>Customer</th><th>Phone</th><th>Reminder</th><th>Due</th><th></th></tr></thead>
+            <thead><tr><th>For</th><th>Phone</th><th>Reminder</th><th>Due</th><th></th></tr></thead>
             <tbody>
               {reminders.map((r) => {
                 const overdue = new Date(r.dueAt).getTime() < now;
+                const isLead = !!r.leadId;
                 return (
                   <tr key={r.id}>
-                    <td>{r.customerName}</td>
-                    <td style={{ fontFamily: 'var(--font-mono)' }}>{r.customerPhone}</td>
+                    <td>{isLead ? `📍 ${r.leadName}` : r.customerName}</td>
+                    <td style={{ fontFamily: 'var(--font-mono)' }}>{isLead ? r.leadPhone : r.customerPhone}</td>
                     <td>{r.text}</td>
                     <td style={{ color: overdue ? 'var(--danger)' : undefined, fontWeight: overdue ? 700 : undefined }}>
                       {overdue ? 'Overdue · ' : ''}{fmtDue(r.dueAt)}
                     </td>
                     <td style={{ display: 'flex', gap: 6 }}>
-                      <button className="btn" onClick={() => onOpenConversation(r.conversationId, r.numberId)}>Open chat</button>
+                      {isLead
+                        ? <button className="btn" onClick={() => onOpenLead(r.leadId!)}>Open lead</button>
+                        : <button className="btn" onClick={() => onOpenConversation(r.conversationId!, r.numberId!)}>Open chat</button>}
                       <button className="btn primary" disabled={busyId === r.id} onClick={() => void markDone(r.id)}>
                         {busyId === r.id ? '…' : 'Mark done'}
                       </button>
@@ -69,7 +73,7 @@ export function Reminders({ number, onOpenConversation }: {
                   </tr>
                 );
               })}
-              {reminders.length === 0 && <tr><td colSpan={5} className="empty">No pending reminders on this number — you're all caught up.</td></tr>}
+              {reminders.length === 0 && <tr><td colSpan={5} className="empty">No pending reminders — you're all caught up.</td></tr>}
             </tbody>
           </table>
         </div>

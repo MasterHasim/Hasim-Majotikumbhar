@@ -12,11 +12,12 @@ function accentForStage(key: string): string {
   return 'var(--call)';
 }
 
-function LeadCard({ lead, users, currentUserId, isManager, busy, dragging, onOpen, onDragStart, onDragEnd, onCall, onWhatsApp }: {
+function LeadCard({ lead, users, currentUserId, isManager, callPromptEnabled, busy, dragging, onOpen, onDragStart, onDragEnd, onCall, onWhatsApp }: {
   lead: Lead;
   users: User[];
   currentUserId: string;
   isManager: boolean;
+  callPromptEnabled: boolean;
   busy: boolean;
   dragging: boolean;
   onOpen: () => void;
@@ -30,8 +31,9 @@ function LeadCard({ lead, users, currentUserId, isManager, busy, dragging, onOpe
     : null;
   const canTouch = isManager || lead.assignedUserId === currentUserId;
   // "Prompt, don't auto-ring" — flags a lead assigned to ME that hasn't been called yet, so it
-  // stands out on the board instead of looking like any other card (see PROGRESS.md's Auto Dialer note).
-  const needsMyCall = lead.status === 'ASSIGNED' && lead.assignedUserId === currentUserId;
+  // stands out on the board instead of looking like any other card (see PROGRESS.md's Auto Dialer
+  // note). Admin-toggleable (Admin → Auto Dialer → "Call now" prompts).
+  const needsMyCall = callPromptEnabled && lead.status === 'ASSIGNED' && lead.assignedUserId === currentUserId;
   return (
     <div
       className={`kanban-card${needsMyCall ? ' needs-call' : ''}`}
@@ -64,7 +66,7 @@ function LeadCard({ lead, users, currentUserId, isManager, busy, dragging, onOpe
   );
 }
 
-export function LeadsBoard({ leads, stages, users, currentUserId, isManager, actionBusyId, onOpenLead, onChanged, onCall, onWhatsApp }: {
+export function LeadsBoard({ leads, stages, users, currentUserId, isManager, callPromptEnabled, actionBusyId, onOpenLead, onChanged, onCall, onWhatsApp }: {
   leads: Lead[];
   /** null = stages haven't loaded yet — kept distinct from [] so the board doesn't
    * flash "no stages configured" while the (separate, parallel) stages fetch is still in flight. */
@@ -72,6 +74,7 @@ export function LeadsBoard({ leads, stages, users, currentUserId, isManager, act
   users: User[];
   currentUserId: string;
   isManager: boolean;
+  callPromptEnabled: boolean;
   actionBusyId: string | null;
   onOpenLead: (lead: Lead) => void;
   onChanged: () => void;
@@ -115,6 +118,7 @@ export function LeadsBoard({ leads, stages, users, currentUserId, isManager, act
                   users={users}
                   currentUserId={currentUserId}
                   isManager={isManager}
+                  callPromptEnabled={callPromptEnabled}
                   busy={actionBusyId === lead.id}
                   dragging={draggingId === lead.id}
                   onOpen={() => onOpenLead(lead)}
@@ -156,6 +160,7 @@ export function LeadsBoard({ leads, stages, users, currentUserId, isManager, act
                     users={users}
                     currentUserId={currentUserId}
                     isManager={isManager}
+                    callPromptEnabled={callPromptEnabled}
                     busy={actionBusyId === lead.id}
                     dragging={draggingId === lead.id}
                     onOpen={() => onOpenLead(lead)}
