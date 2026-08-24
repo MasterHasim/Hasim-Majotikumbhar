@@ -14,7 +14,7 @@
  */
 import type { CustomerStage, WhatsAppNumber, Message } from '../domain/types';
 import { Repository } from '../lib/repository';
-import { FirebaseDb } from '../lib/firebaseAdmin';
+import { AppDb } from '../lib/appDb';
 import { Phase5Api, type ConversationListItem } from './phase5Api';
 
 export interface SearchFilters {
@@ -40,7 +40,7 @@ export class Phase13Api {
   private numbers: Repository<WhatsAppNumber>;
   private customerStages: Repository<CustomerStage>;
 
-  constructor(db: FirebaseDb, identityEmail: string) {
+  constructor(db: AppDb, identityEmail: string) {
     this.phase5 = new Phase5Api(db, identityEmail);
     this.messages = new Repository<Message>(db, 'webapp_messages');
     this.numbers = new Repository<WhatsAppNumber>(db, 'numbers');

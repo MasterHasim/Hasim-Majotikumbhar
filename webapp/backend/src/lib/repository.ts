@@ -16,7 +16,7 @@
  * conditional-write (ETag) support if write volume ever grows enough to matter.
  */
 import { ApiError } from '../types';
-import { FirebaseDb } from './firebaseAdmin';
+import { AppDb } from './appDb';
 
 export interface Record_ {
   id: string;
@@ -24,7 +24,7 @@ export interface Record_ {
 }
 
 export class Repository<T extends Record_> {
-  constructor(private db: FirebaseDb, private collection: string) {}
+  constructor(private db: AppDb, private collection: string) {}
 
   async list(): Promise<T[]> {
     return this.db.list<T>(this.collection);

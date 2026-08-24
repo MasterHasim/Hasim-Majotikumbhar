@@ -23,7 +23,7 @@ import type {
 import { Repository } from '../lib/repository';
 import { AccessControl, type Phase1Repositories } from '../lib/accessControl';
 import { AuditLogService, type AuditEntryWithActor } from '../lib/auditLog';
-import { FirebaseDb } from '../lib/firebaseAdmin';
+import { AppDb } from '../lib/appDb';
 import { buildPhase1Repositories } from '../lib/phase1Repositories';
 import { ExotelVoiceProvider, requireExotelVoiceConfig, type ExotelVoiceConfig, type CallStatusEvent } from './exotelVoiceProvider';
 import { validateCustomFieldValues } from './customFieldsApi';
@@ -69,7 +69,7 @@ export interface PublicQuotationView {
  * Used by the customer-facing quotation link shared over WhatsApp, which by definition can't
  * carry a Firebase sign-in.
  */
-export async function getPublicQuotationView(db: FirebaseDb, quotationId: string): Promise<PublicQuotationView> {
+export async function getPublicQuotationView(db: AppDb, quotationId: string): Promise<PublicQuotationView> {
   const quotations = new Repository<Quotation>(db, 'quotations');
   const leads = new Repository<Lead>(db, 'leads');
   const numbers = new Repository<WhatsAppNumber>(db, 'numbers');
@@ -109,7 +109,7 @@ export class Phase22Api {
   private quotations: Repository<Quotation>;
   private exotelVoiceConfig?: ExotelVoiceConfig;
 
-  constructor(private db: FirebaseDb, identityEmail: string, env?: { EXOTEL_VOICE_ACCOUNT_SID?: string; EXOTEL_VOICE_API_KEY?: string; EXOTEL_VOICE_API_TOKEN?: string; EXOTEL_VOICE_CALLER_ID?: string }) {
+  constructor(private db: AppDb, identityEmail: string, env?: { EXOTEL_VOICE_ACCOUNT_SID?: string; EXOTEL_VOICE_API_KEY?: string; EXOTEL_VOICE_API_TOKEN?: string; EXOTEL_VOICE_CALLER_ID?: string }) {
     this.phase1Repos = buildPhase1Repositories(db);
     this.audit = new AuditLogService(db);
     this.access = new AccessControl(this.phase1Repos, this.audit, identityEmail);

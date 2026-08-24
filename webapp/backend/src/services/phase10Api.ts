@@ -15,7 +15,7 @@ import type { Template } from '../domain/types';
 import { Repository } from '../lib/repository';
 import { AccessControl, type Phase1Repositories } from '../lib/accessControl';
 import { AuditLogService } from '../lib/auditLog';
-import { FirebaseDb } from '../lib/firebaseAdmin';
+import { AppDb } from '../lib/appDb';
 import { buildPhase1Repositories } from '../lib/phase1Repositories';
 import { ExotelProvider, requireExotelConfig, type ExotelConfig } from './exotelProvider';
 
@@ -62,7 +62,7 @@ export class Phase10Api {
   private templates: Repository<Template>;
   private exotelConfig?: ExotelConfig;
 
-  constructor(db: FirebaseDb, identityEmail: string, env?: { EXOTEL_API_KEY?: string; EXOTEL_API_TOKEN?: string; EXOTEL_ACCOUNT_SID?: string; EXOTEL_SUBDOMAIN?: string }) {
+  constructor(db: AppDb, identityEmail: string, env?: { EXOTEL_API_KEY?: string; EXOTEL_API_TOKEN?: string; EXOTEL_ACCOUNT_SID?: string; EXOTEL_SUBDOMAIN?: string }) {
     this.phase1Repos = buildPhase1Repositories(db);
     this.audit = new AuditLogService(db);
     this.access = new AccessControl(this.phase1Repos, this.audit, identityEmail);

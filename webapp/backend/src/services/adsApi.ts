@@ -9,7 +9,7 @@ import type { AdAccount, AdInsightRow } from '../domain/types';
 import { Repository } from '../lib/repository';
 import { AccessControl, type Phase1Repositories } from '../lib/accessControl';
 import { AuditLogService } from '../lib/auditLog';
-import { FirebaseDb } from '../lib/firebaseAdmin';
+import { AppDb } from '../lib/appDb';
 import { buildPhase1Repositories } from '../lib/phase1Repositories';
 import { MetaAdsProvider, requireMetaAdsConfig } from './metaAdsProvider';
 
@@ -20,7 +20,7 @@ export class AdsApi {
   private audit: AuditLogService;
   private accounts: Repository<AdAccount>;
 
-  constructor(private db: FirebaseDb, identityEmail: string, private env: { META_ACCESS_TOKEN?: string }) {
+  constructor(private db: AppDb, identityEmail: string, private env: { META_ACCESS_TOKEN?: string }) {
     const repos: Phase1Repositories = buildPhase1Repositories(db);
     this.audit = new AuditLogService(db);
     this.access = new AccessControl(repos, this.audit, identityEmail);

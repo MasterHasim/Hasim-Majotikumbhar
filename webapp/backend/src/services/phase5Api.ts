@@ -12,7 +12,7 @@ import type { Conversation, Customer, Message, WhatsAppNumber } from '../domain/
 import { Repository } from '../lib/repository';
 import { AccessControl } from '../lib/accessControl';
 import { AuditLogService } from '../lib/auditLog';
-import { FirebaseDb } from '../lib/firebaseAdmin';
+import { AppDb } from '../lib/appDb';
 import { buildPhase1Repositories } from '../lib/phase1Repositories';
 import type { NumberAccess } from '../domain/types';
 import { listSnoozedConversationIds } from './phase9Api';
@@ -37,7 +37,7 @@ export class Phase5Api {
   conversations: Repository<Conversation>;
   messages: Repository<Message>;
 
-  constructor(private db: FirebaseDb, identityEmail: string) {
+  constructor(private db: AppDb, identityEmail: string) {
     const repos = buildPhase1Repositories(db);
     const audit = new AuditLogService(db);
     this.access = new AccessControl(repos, audit, identityEmail);

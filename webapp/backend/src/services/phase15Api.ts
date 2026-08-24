@@ -21,7 +21,7 @@
 import { Ids, Permissions } from '../domain/phase1';
 import { AccessControl, type Phase1Repositories } from '../lib/accessControl';
 import { AuditLogService } from '../lib/auditLog';
-import { FirebaseDb } from '../lib/firebaseAdmin';
+import { AppDb } from '../lib/appDb';
 import { buildPhase1Repositories } from '../lib/phase1Repositories';
 
 export interface BackupResult {
@@ -35,7 +35,7 @@ export class Phase15Api {
   private audit: AuditLogService;
   private phase1Repos: Phase1Repositories;
 
-  constructor(private db: FirebaseDb, identityEmail: string) {
+  constructor(private db: AppDb, identityEmail: string) {
     this.phase1Repos = buildPhase1Repositories(this.db);
     this.audit = new AuditLogService(this.db);
     this.access = new AccessControl(this.phase1Repos, this.audit, identityEmail);

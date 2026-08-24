@@ -15,7 +15,7 @@ import { Ids } from '../domain/phase1';
 import type { Conversation, Customer, Message, MessageMedia, WhatsAppNumber } from '../domain/types';
 import { Repository } from '../lib/repository';
 import { AuditLogService } from '../lib/auditLog';
-import { FirebaseDb } from '../lib/firebaseAdmin';
+import { AppDb } from '../lib/appDb';
 import { normalizePhoneTail, type NormalizedWebhookMessage } from './exotelProvider';
 import { Phase7Api } from './phase7Api';
 
@@ -38,7 +38,7 @@ export class Phase4Api {
   private messages: Repository<Message>;
   private messageMedia: Repository<MessageMedia>;
 
-  constructor(private db: FirebaseDb) {
+  constructor(private db: AppDb) {
     this.audit = new AuditLogService(db);
     this.numbers = new Repository<WhatsAppNumber>(db, 'numbers');
     this.customers = new Repository<Customer>(db, 'customers');

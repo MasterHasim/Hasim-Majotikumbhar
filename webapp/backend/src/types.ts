@@ -33,6 +33,14 @@ export interface Env {
    * added under Admin -> Ad Accounts (`wrangler secret put META_ACCESS_TOKEN`). One token can
    * cover multiple ad accounts, so this isn't per-account. */
   META_ACCESS_TOKEN?: string;
+  /** D1 binding for the Firebase RTDB -> D1 migration (see the migration plan / PROGRESS.md).
+   * Optional: absent (or every collection defaulting/unset in DATA_BACKEND_MODES) means every
+   * read/write goes to Firebase exactly as before -- this binding only matters for collections
+   * explicitly put in 'dual' or 'd1' mode. */
+  DB?: D1Database;
+  /** Per-collection data-backend override, JSON: {"leads": "dual", "adAccounts": "d1", ...}.
+   * A collection absent from this map defaults to 'firebase'. See lib/appDb.ts. */
+  DATA_BACKEND_MODES?: string;
 }
 
 export function parseServiceAccount(env: Env): FirebaseServiceAccount {

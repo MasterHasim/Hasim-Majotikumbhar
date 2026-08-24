@@ -9,7 +9,7 @@ import type { AssignmentEligibility, Availability, NumberAccess, Role, Team, Tea
 import { Repository } from '../lib/repository';
 import { AccessControl, type Phase1Repositories } from '../lib/accessControl';
 import { AuditLogService } from '../lib/auditLog';
-import { FirebaseDb } from '../lib/firebaseAdmin';
+import { AppDb } from '../lib/appDb';
 import { buildPhase1Repositories } from '../lib/phase1Repositories';
 import { getEmailConfig, sendEmail, welcomeEmailHtml, type EmailConfig } from '../lib/email';
 import { buildTemplateSendComponents, toE164 } from './phase6Api';
@@ -83,7 +83,7 @@ export class Phase1Api {
   private numbers: Repository<WhatsAppNumber>;
   private frontendUrl: string;
 
-  constructor(db: FirebaseDb, identityEmail: string, env?: Env) {
+  constructor(db: AppDb, identityEmail: string, env?: Env) {
     this.repos = buildPhase1Repositories(db);
     this.audit = new AuditLogService(db);
     this.access = new AccessControl(this.repos, this.audit, identityEmail);

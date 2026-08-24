@@ -11,7 +11,7 @@ import type { Product } from '../domain/types';
 import { Repository } from '../lib/repository';
 import { AccessControl, type Phase1Repositories } from '../lib/accessControl';
 import { AuditLogService } from '../lib/auditLog';
-import { FirebaseDb } from '../lib/firebaseAdmin';
+import { AppDb } from '../lib/appDb';
 import { buildPhase1Repositories } from '../lib/phase1Repositories';
 
 export class ProductsApi {
@@ -19,7 +19,7 @@ export class ProductsApi {
   private audit: AuditLogService;
   private products: Repository<Product>;
 
-  constructor(db: FirebaseDb, identityEmail: string) {
+  constructor(db: AppDb, identityEmail: string) {
     const repos: Phase1Repositories = buildPhase1Repositories(db);
     this.audit = new AuditLogService(db);
     this.access = new AccessControl(repos, this.audit, identityEmail);

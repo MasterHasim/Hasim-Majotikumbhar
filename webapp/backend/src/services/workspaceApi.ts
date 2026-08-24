@@ -12,7 +12,7 @@
  */
 import type { CallLog, CustomerStage, Lead, Message, MessageMedia, Reminder, Stage, User } from '../domain/types';
 import { Repository } from '../lib/repository';
-import { FirebaseDb } from '../lib/firebaseAdmin';
+import { AppDb } from '../lib/appDb';
 import { normalizePhoneTail } from './exotelProvider';
 import { Phase5Api, type ConversationDetail } from './phase5Api';
 import { Phase7Api } from './phase7Api';
@@ -54,7 +54,7 @@ export class WorkspaceApi {
   private messageMedia: Repository<MessageMedia>;
   private leads: Repository<Lead>;
 
-  constructor(db: FirebaseDb, identityEmail: string, env: { FIREBASE_WEB_API_KEY: string }) {
+  constructor(db: AppDb, identityEmail: string, env: { FIREBASE_WEB_API_KEY: string }) {
     this.phase5 = new Phase5Api(db, identityEmail);
     this.phase7 = new Phase7Api(db, identityEmail);
     this.phase8 = new Phase8Api(db, identityEmail);

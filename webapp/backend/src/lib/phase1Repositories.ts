@@ -1,10 +1,10 @@
 import type { NumberAccess, Role, Team, TeamMember, User } from '../domain/types';
 import { Repository } from './repository';
 import type { Phase1Repositories } from './accessControl';
-import type { FirebaseDb } from './firebaseAdmin';
+import type { AppDb } from './appDb';
 
 /** Every service that needs an AccessControl (Phase3Api, Phase5Api, Phase6Api, ...) builds one from this same bundle of repositories — mirrors how every Apps Script PhaseNApi class constructs its own AccessControl against the same underlying PropertiesRepository. */
-export function buildPhase1Repositories(db: FirebaseDb): Phase1Repositories {
+export function buildPhase1Repositories(db: AppDb): Phase1Repositories {
   return {
     users: new Repository<User>(db, 'users'),
     roles: new Repository<Role>(db, 'roles'),

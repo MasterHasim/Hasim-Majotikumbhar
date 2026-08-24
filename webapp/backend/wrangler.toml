@@ -30,3 +30,14 @@ FRONTEND_URL = "https://whatsapp-panel-frontend.hasim-c9e.workers.dev"
 [[r2_buckets]]
 binding = "MEDIA_BUCKET"
 bucket_name = "whatsapp-panel-media"
+
+# Firebase RTDB -> D1 migration (see the migration plan / PROGRESS.md). This is the STAGING
+# database — used for backfill/parity-script testing (Phase 3 of the rollout) before any real
+# production data ever touches D1. A separate production D1 database + binding gets added only
+# once staging validates cleanly (decision: staging first, per the approved migration plan).
+# Binding this alone changes nothing: every collection defaults to 'firebase' mode unless
+# explicitly listed in the DATA_BACKEND_MODES var, which is deliberately unset here.
+[[d1_databases]]
+binding = "DB"
+database_name = "whatsapp-panel-db-staging"
+database_id = "e2ba6025-625c-4496-b09b-8702afa6f99e"

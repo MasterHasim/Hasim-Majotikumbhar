@@ -20,7 +20,7 @@ import type { AssignmentRecord, Conversation, NumberAssignmentConfig, NumberAssi
 import { Repository } from '../lib/repository';
 import { AccessControl, type Phase1Repositories } from '../lib/accessControl';
 import { AuditLogService } from '../lib/auditLog';
-import { FirebaseDb } from '../lib/firebaseAdmin';
+import { AppDb } from '../lib/appDb';
 import { buildPhase1Repositories } from '../lib/phase1Repositories';
 
 export class NumberAssignmentConfigApi {
@@ -31,7 +31,7 @@ export class NumberAssignmentConfigApi {
   config: Repository<NumberAssignmentConfig>;
   users: Repository<NumberAssignmentUser>;
 
-  constructor(db: FirebaseDb, identityEmail: string) {
+  constructor(db: AppDb, identityEmail: string) {
     this.phase1Repos = buildPhase1Repositories(db);
     this.audit = new AuditLogService(db);
     this.access = new AccessControl(this.phase1Repos, this.audit, identityEmail);
@@ -108,7 +108,7 @@ export class Phase7Api {
   private assignConfig: Repository<NumberAssignmentConfig>;
   private assignUsers: Repository<NumberAssignmentUser>;
 
-  constructor(private db: FirebaseDb, identityEmail: string) {
+  constructor(private db: AppDb, identityEmail: string) {
     this.phase1Repos = buildPhase1Repositories(db);
     this.audit = new AuditLogService(db);
     this.access = new AccessControl(this.phase1Repos, this.audit, identityEmail);

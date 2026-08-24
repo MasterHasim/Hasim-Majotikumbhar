@@ -9,7 +9,8 @@
  * FirebaseConfig_.mintCustomToken_().
  */
 import { ApiError } from '../types';
-import { FirebaseDb, mintCustomToken } from '../lib/firebaseAdmin';
+import { mintCustomToken } from '../lib/firebaseAdmin';
+import { AppDb } from '../lib/appDb';
 import { Phase5Api } from './phase5Api';
 
 export interface RealtimeListenToken {
@@ -21,7 +22,7 @@ export interface RealtimeListenToken {
 export class RealtimeListenApi {
   private phase5: Phase5Api;
 
-  constructor(private db: FirebaseDb, private identityEmail: string, private env: { FIREBASE_WEB_API_KEY: string }) {
+  constructor(private db: AppDb, private identityEmail: string, private env: { FIREBASE_WEB_API_KEY: string }) {
     this.phase5 = new Phase5Api(db, identityEmail);
   }
 

@@ -3,7 +3,7 @@ import type { Env } from '../types';
 import { ApiError, parseServiceAccount } from '../types';
 import { buildContext } from '../lib/requestContext';
 import { timingSafeEqual } from '../lib/auth';
-import { FirebaseDb } from '../lib/firebaseAdmin';
+import { buildAppDb } from '../lib/appDb';
 import { Phase22Api, getPublicQuotationView } from '../services/phase22Api';
 import { CustomFieldsApi } from '../services/customFieldsApi';
 import { ProductsApi } from '../services/productsApi';
@@ -229,7 +229,7 @@ export function registerPhase22Routes(router: RouterType) {
   // model routes/messaging.ts's public media serving already uses. ---
   router.get('/api/public/quotations/:id', async (request: IRequest, env: Env) => {
     const serviceAccount = parseServiceAccount(env);
-    const db = new FirebaseDb(serviceAccount, env.FIREBASE_DATABASE_URL);
+    const db = buildAppDb(serviceAccount, env.FIREBASE_DATABASE_URL, env);
     return Response.json(await getPublicQuotationView(db, param(request, 'id')));
   });
 
@@ -254,7 +254,7 @@ export function registerPhase22Routes(router: RouterType) {
         for (const [key, value] of form.entries()) payload[key] = String(value);
       }
       const serviceAccount = parseServiceAccount(env);
-      const db = new FirebaseDb(serviceAccount, env.FIREBASE_DATABASE_URL);
+      const db = buildAppDb(serviceAccount, env.FIREBASE_DATABASE_URL, env);
       const event = parseCallStatusCallback(payload);
       const result = await new Phase22Api(db, 'system@internal').applyCallStatusEvent(event);
       outcome = { status: 'ok', result };

@@ -19,7 +19,7 @@ import type { Conversation, Customer, Message, MessageMedia, Product, Template, 
 import { Repository } from '../lib/repository';
 import { AccessControl } from '../lib/accessControl';
 import { AuditLogService } from '../lib/auditLog';
-import { FirebaseDb } from '../lib/firebaseAdmin';
+import { AppDb } from '../lib/appDb';
 import { buildPhase1Repositories } from '../lib/phase1Repositories';
 import { ExotelProvider, requireExotelConfig, type ExotelConfig } from './exotelProvider';
 
@@ -130,7 +130,7 @@ export class Phase6Api {
   private exotelConfig: ExotelConfig;
   private mediaBucket?: R2Bucket;
 
-  constructor(db: FirebaseDb, identityEmail: string, env: { EXOTEL_API_KEY?: string; EXOTEL_API_TOKEN?: string; EXOTEL_ACCOUNT_SID?: string; EXOTEL_SUBDOMAIN?: string; MEDIA_BUCKET?: R2Bucket }) {
+  constructor(db: AppDb, identityEmail: string, env: { EXOTEL_API_KEY?: string; EXOTEL_API_TOKEN?: string; EXOTEL_ACCOUNT_SID?: string; EXOTEL_SUBDOMAIN?: string; MEDIA_BUCKET?: R2Bucket }) {
     const repos = buildPhase1Repositories(db);
     this.audit = new AuditLogService(db);
     this.access = new AccessControl(repos, this.audit, identityEmail);

@@ -3,7 +3,7 @@ import type { Env } from '../types';
 import { ApiError, parseServiceAccount } from '../types';
 import { buildContext } from '../lib/requestContext';
 import { timingSafeEqual } from '../lib/auth';
-import { FirebaseDb } from '../lib/firebaseAdmin';
+import { buildAppDb } from '../lib/appDb';
 import { Phase3Api } from '../services/phase3Api';
 import { Phase4Api } from '../services/phase4Api';
 import { Phase5Api } from '../services/phase5Api';
@@ -128,7 +128,7 @@ export function registerMessagingRoutes(router: RouterType) {
     try {
       payload = await request.json();
       const serviceAccount = parseServiceAccount(env);
-      const db = new FirebaseDb(serviceAccount, env.FIREBASE_DATABASE_URL);
+      const db = buildAppDb(serviceAccount, env.FIREBASE_DATABASE_URL, env);
       const normalized = new ExotelProvider(requireExotelConfig(env)).processWebhook(payload as never);
       const result = await new Phase4Api(db).ingestInboundMessage(normalized);
       outcome = { status: 'ok', result };

@@ -1,6 +1,6 @@
 import { Ids } from '../domain/phase1';
 import { Repository, type Record_ } from './repository';
-import type { FirebaseDb } from './firebaseAdmin';
+import type { AppDb } from './appDb';
 
 export interface AuditEntry extends Record_ {
   occurredAt: string;
@@ -20,7 +20,7 @@ export interface AuditEntryWithActor extends AuditEntry {
 
 export class AuditLogService {
   private repo: Repository<AuditEntry>;
-  constructor(db: FirebaseDb) {
+  constructor(db: AppDb) {
     this.repo = new Repository<AuditEntry>(db, 'auditLog');
   }
   async write(actorUserId: string | null, action: string, targetType: string, targetId: string, metadata: Record<string, unknown> = {}): Promise<void> {

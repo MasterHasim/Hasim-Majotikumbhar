@@ -15,7 +15,7 @@ import type { Conversation, CustomerStage, Message, Stage, User } from '../domai
 import { Repository } from '../lib/repository';
 import { AccessControl } from '../lib/accessControl';
 import { AuditLogService } from '../lib/auditLog';
-import { FirebaseDb } from '../lib/firebaseAdmin';
+import { AppDb } from '../lib/appDb';
 import { buildPhase1Repositories } from '../lib/phase1Repositories';
 import { Phase5Api } from './phase5Api';
 
@@ -46,7 +46,7 @@ export class Phase14Api {
   private customerStages: Repository<CustomerStage>;
   private stages: Repository<Stage>;
 
-  constructor(db: FirebaseDb, identityEmail: string) {
+  constructor(db: AppDb, identityEmail: string) {
     const repos = buildPhase1Repositories(db);
     const audit = new AuditLogService(db);
     this.access = new AccessControl(repos, audit, identityEmail);

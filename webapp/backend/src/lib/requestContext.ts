@@ -1,11 +1,11 @@
 import type { Env } from '../types';
 import { ApiError, parseServiceAccount } from '../types';
 import { bearerToken, verifyIdToken } from './auth';
-import { FirebaseDb } from './firebaseAdmin';
+import { AppDb, buildAppDb } from './appDb';
 import { Phase1Api } from '../services/phase1Api';
 
 export interface RequestContext {
-  db: FirebaseDb;
+  db: AppDb;
   identityEmail: string;
   phase1: Phase1Api;
   env: Env;
@@ -18,6 +18,6 @@ export async function buildContext(request: Request, env: Env): Promise<RequestC
   const serviceAccount = parseServiceAccount(env);
   const decoded = await verifyIdToken(token, serviceAccount.project_id);
   if (!decoded.email) throw new ApiError(401, 'UNAUTHENTICATED', 'Signed-in identity has no email.');
-  const db = new FirebaseDb(serviceAccount, env.FIREBASE_DATABASE_URL);
+  const db = buildAppDb(serviceAccount, env.FIREBASE_DATABASE_URL, env);
   return { db, identityEmail: decoded.email.toLowerCase(), phase1: new Phase1Api(db, decoded.email.toLowerCase(), env), env };
 }
