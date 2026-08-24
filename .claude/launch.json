@@ -5,7 +5,8 @@
       "name": "webapp-frontend",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--prefix", "webapp/frontend"],
-      "port": 5173
+      "port": 5173,
+      "autoPort": true
     }
   ]
 }
