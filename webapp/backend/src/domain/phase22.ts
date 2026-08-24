@@ -6,7 +6,13 @@
 import { ApiError } from '../types';
 import { Validation } from './phase1';
 
-export const Phase22Locations = ['Raipur', 'Rajsamand', 'Coimbatore', 'Prayagraj', 'Alibaug', 'Saraighat'] as const;
+// 'ECHT Marine' added 2026-08-24 — a genuinely separate brand from the Entartica Sea World
+// sites above (the other 6), operating out of Head Office only, not tied to any city site.
+// Named to exactly match the WhatsApp Number's own displayName ("ECHT Marine") so
+// Phase22Api.findNumberForLocation's substring match resolves it automatically, the same way
+// 'Raipur' already resolves to the "Entartica - Raipur" number — no extra config needed for
+// SITE_MANAGER/ADMIN location-visibility scoping to work correctly for this location too.
+export const Phase22Locations = ['Raipur', 'Rajsamand', 'Coimbatore', 'Prayagraj', 'Alibaug', 'Saraighat', 'ECHT Marine'] as const;
 export type Phase22Location = (typeof Phase22Locations)[number];
 
 export const Phase22AssignmentModes = { SINGLE: 'single', ROUND_ROBIN: 'round_robin', MANUAL: 'manual' } as const;

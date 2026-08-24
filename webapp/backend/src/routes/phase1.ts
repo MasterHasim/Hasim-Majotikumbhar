@@ -11,7 +11,9 @@ async function json(request: IRequest): Promise<Record<string, unknown>> {
 function param(request: IRequest, name: string): string {
   const value = request.params[name];
   if (!value) throw new ApiError(400, 'VALIDATION_ERROR', `Missing path parameter: ${name}`);
-  return value;
+  // itty-router does not URL-decode path segments — see routes/phase22.ts's param() for the
+  // real bug this fixes (a location name containing a space arrived here still "%20").
+  try { return decodeURIComponent(value); } catch { return value; }
 }
 
 /** Registers every Phase 1 (auth/roles/teams/number-access) endpoint — one-to-one with apps-script/src/Phase1Endpoints.gs. */

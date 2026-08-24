@@ -41,9 +41,9 @@ describe('Phase22Api (ported from Phase22Domain.gs + Phase22Services.gs)', () =>
   afterEach(() => mock.restore());
 
   describe('listLocations', () => {
-    it('returns the six fixed locations for any authenticated user', async () => {
+    it('returns the seven fixed locations for any authenticated user', async () => {
       const locations = await new Phase22Api(db, AGENT_EMAIL).listLocations();
-      expect(locations).toEqual(['Raipur', 'Rajsamand', 'Coimbatore', 'Prayagraj', 'Alibaug', 'Saraighat']);
+      expect(locations).toEqual(['Raipur', 'Rajsamand', 'Coimbatore', 'Prayagraj', 'Alibaug', 'Saraighat', 'ECHT Marine']);
     });
   });
 

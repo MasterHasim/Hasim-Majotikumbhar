@@ -15,7 +15,11 @@ async function json(request: IRequest): Promise<Record<string, unknown>> {
 function param(request: IRequest, name: string): string {
   const value = request.params[name];
   if (!value) throw new ApiError(400, 'VALIDATION_ERROR', `Missing path parameter: ${name}`);
-  return value;
+  // itty-router does not URL-decode path segments — a value containing a space (e.g. the
+  // "ECHT Marine" location, added 2026-08-24) arrives here still literally "%20", which then
+  // fails validation against the real, decoded value everywhere else in the codebase. Falls
+  // back to the raw value on a malformed escape sequence rather than 500ing on it.
+  try { return decodeURIComponent(value); } catch { return value; }
 }
 function query(request: IRequest, name: string): string | undefined {
   return new URL(request.url).searchParams.get(name) ?? undefined;

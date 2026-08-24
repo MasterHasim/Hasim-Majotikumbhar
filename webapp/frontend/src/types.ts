@@ -202,7 +202,8 @@ export interface Availability {
 
 // --- Phase 22 (location leads + Exotel click-to-call) ---
 
-export const LEAD_LOCATIONS = ['Raipur', 'Rajsamand', 'Coimbatore', 'Prayagraj', 'Alibaug', 'Saraighat'] as const;
+// Keep in sync with backend's Phase22Locations (src/domain/phase22.ts).
+export const LEAD_LOCATIONS = ['Raipur', 'Rajsamand', 'Coimbatore', 'Prayagraj', 'Alibaug', 'Saraighat', 'ECHT Marine'] as const;
 
 export type LeadStatus = 'NEW' | 'ASSIGNED' | 'UNASSIGNED' | 'CALLED';
 
