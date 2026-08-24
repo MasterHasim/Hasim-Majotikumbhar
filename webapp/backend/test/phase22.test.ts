@@ -3,6 +3,7 @@ import { setupMockFirebase, type MockFirebaseContext } from './helpers/mockFireb
 import { FirebaseDb } from '../src/lib/firebaseAdmin';
 import { Phase1Api } from '../src/services/phase1Api';
 import { Phase3Api } from '../src/services/phase3Api';
+import { Phase4Api } from '../src/services/phase4Api';
 import { Phase8Api } from '../src/services/phase8Api';
 import { Phase9Api } from '../src/services/phase9Api';
 import { Phase22Api, computeQuotationTotals, getPublicQuotationView } from '../src/services/phase22Api';
@@ -10,6 +11,8 @@ import { CustomFieldsApi } from '../src/services/customFieldsApi';
 import { ProductsApi } from '../src/services/productsApi';
 import { parseCallStatusCallback } from '../src/services/exotelVoiceProvider';
 import { Roles } from '../src/domain/phase1';
+import { Repository } from '../src/lib/repository';
+import type { LeadRemark, LeadStageAssignment, Reminder } from '../src/domain/types';
 
 const ADMIN_EMAIL = 'admin@example.com';
 const AGENT_EMAIL = 'agent@example.com';
@@ -41,9 +44,9 @@ describe('Phase22Api (ported from Phase22Domain.gs + Phase22Services.gs)', () =>
   afterEach(() => mock.restore());
 
   describe('listLocations', () => {
-    it('returns the seven fixed locations for any authenticated user', async () => {
+    it('returns the ten fixed locations for any authenticated user', async () => {
       const locations = await new Phase22Api(db, AGENT_EMAIL).listLocations();
-      expect(locations).toEqual(['Raipur', 'Rajsamand', 'Coimbatore', 'Prayagraj', 'Alibaug', 'Saraighat', 'ECHT Marine']);
+      expect(locations).toEqual(['Raipur', 'Rajsamand', 'Coimbatore', 'Prayagraj', 'Alibaug', 'Saraighat', 'ECHT Marine', 'Compliances', 'Entartica Partner Desk', 'Entartica CRM']);
     });
   });
 
@@ -876,6 +879,102 @@ describe('Phase22Api (ported from Phase22Domain.gs + Phase22Services.gs)', () =>
 
       await expect(new Phase22Api(db, MANAGER_A_EMAIL).getLocationConfig('Raipur')).resolves.toBeNull(); // no config set yet, but the call itself is not denied
       await expect(new Phase22Api(db, MANAGER_A_EMAIL).addLocationParticipant('Raipur', managerAId)).resolves.toMatchObject({ location: 'Raipur', userId: managerAId });
+    });
+  });
+
+  describe('autoCreateLeadFromConversation (a new WhatsApp conversation falls under a real Lead, 2026-08-24)', () => {
+    let numberId: string;
+
+    beforeEach(async () => {
+      const number = await new Phase3Api(db, ADMIN_EMAIL).createNumber({ displayName: 'Entartica - Raipur', phoneNumber: '079-485-02804', provider: 'exotel' });
+      numberId = number.id;
+    });
+
+    async function ingestFirstMessage(fromPhone: string, profileName: string) {
+      return new Phase4Api(db).ingestInboundMessage({
+        providerMessageId: `msg-${fromPhone}`, fromPhone, providerNumberId: '+917948502804',
+        direction: 'INBOUND', messageType: 'text', text: 'Hello', timestamp: new Date().toISOString(), status: null,
+        profileName,
+      });
+    }
+
+    it('creates a Lead under the resolved location for a brand-new customer, and it gets auto-assigned per that location\'s config', async () => {
+      await new Phase22Api(db, ADMIN_EMAIL).setLocationConfig('Raipur', { mode: 'single', singleUserId: agentId });
+      await ingestFirstMessage('+919876512340', 'Priya');
+      const leads = await new Phase22Api(db, ADMIN_EMAIL).listLeads({ location: 'Raipur' });
+      const lead = leads.find((l) => l.phone === '+919876512340');
+      expect(lead).toBeTruthy();
+      expect(lead!.name).toBe('Priya');
+      expect(lead!.location).toBe('Raipur');
+      expect(lead!.assignedUserId).toBe(agentId);
+      expect(lead!.uploadedBy).toBe('whatsapp');
+    });
+
+    it('does not create a second Lead if this phone number already has one, even under a different location', async () => {
+      await new Phase22Api(db, ADMIN_EMAIL).createLead({ name: 'Existing', phone: '+919876512341', location: 'Rajsamand' });
+      await ingestFirstMessage('+919876512341', 'Someone Else');
+      const allLeads = await new Phase22Api(db, ADMIN_EMAIL).listLeads();
+      expect(allLeads.filter((l) => l.phone === '+919876512341')).toHaveLength(1);
+      expect(allLeads.find((l) => l.phone === '+919876512341')!.location).toBe('Rajsamand'); // untouched, still the original
+    });
+
+    it('a second message on the SAME already-open conversation does not create a second Lead', async () => {
+      await ingestFirstMessage('+919876512342', 'Priya');
+      await new Phase4Api(db).ingestInboundMessage({
+        providerMessageId: 'msg-second', fromPhone: '+919876512342', providerNumberId: '+917948502804',
+        direction: 'INBOUND', messageType: 'text', text: 'Second message', timestamp: new Date().toISOString(), status: null,
+        profileName: 'Priya',
+      });
+      const leads = await new Phase22Api(db, ADMIN_EMAIL).listLeads();
+      expect(leads.filter((l) => l.phone === '+919876512342')).toHaveLength(1);
+    });
+
+    it('never blocks message ingestion even if Lead creation would otherwise fail (a number with no resolvable location)', async () => {
+      const unmatched = await new Phase3Api(db, ADMIN_EMAIL).createNumber({ displayName: 'Totally Unrelated Name', phoneNumber: '079-485-09999', provider: 'exotel' });
+      const result = await new Phase4Api(db).ingestInboundMessage({
+        providerMessageId: 'msg-unmatched', fromPhone: '+919876512343', providerNumberId: unmatched.phoneNumber,
+        direction: 'INBOUND', messageType: 'text', text: 'Hello', timestamp: new Date().toISOString(), status: null,
+        profileName: 'Someone',
+      });
+      expect(result.duplicate).toBe(false); // message ingestion succeeded regardless
+      const leads = await new Phase22Api(db, ADMIN_EMAIL).listLeads();
+      expect(leads.find((l) => l.phone === '+919876512343')).toBeUndefined(); // no lead created, no location to put it under
+    });
+  });
+
+  describe('deleteLead (2026-08-24)', () => {
+    let leadId: string;
+
+    beforeEach(async () => {
+      const lead = await new Phase22Api(db, ADMIN_EMAIL).createLead({ name: 'Delete Me', phone: '+919876599999', location: 'Raipur' });
+      leadId = lead.id;
+      await new Phase22Api(db, ADMIN_EMAIL).addLeadRemark(leadId, 'a remark');
+      const stages = await new Phase8Api(db, ADMIN_EMAIL).seedDefaultLeadStages();
+      await new Phase22Api(db, ADMIN_EMAIL).setLeadStage(leadId, stages[0]!.id);
+      await new Phase22Api(db, ADMIN_EMAIL).createLeadReminder(leadId, 'follow up', new Date(Date.now() + 86400000).toISOString());
+    });
+
+    it('denies a plain AGENT (no LEADS_MANAGE), even if the lead is assigned to them', async () => {
+      await new Phase22Api(db, ADMIN_EMAIL).reassignLead(leadId, agentId);
+      await expect(new Phase22Api(db, AGENT_EMAIL).deleteLead(leadId)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      expect(await new Phase22Api(db, ADMIN_EMAIL).listLeads()).toEqual(expect.arrayContaining([expect.objectContaining({ id: leadId })]));
+    });
+
+    it('ADMIN can delete a lead, along with its remarks, stage assignment, and pending reminders', async () => {
+      await new Phase22Api(db, ADMIN_EMAIL).deleteLead(leadId);
+      const leads = await new Phase22Api(db, ADMIN_EMAIL).listLeads();
+      expect(leads.find((l) => l.id === leadId)).toBeUndefined();
+
+      // listLeadRemarks/getLeadStage/listLeadReminders all 404 once the lead itself is gone
+      // (they fetch the lead first for authorization) -- verify the cascade cleanup directly
+      // against the raw collections instead.
+      expect((await new Repository<LeadRemark>(db, 'leadRemarks').list()).filter((r) => r.leadId === leadId)).toEqual([]);
+      expect(await new Repository<LeadStageAssignment>(db, 'leadStageAssignments').get(leadId)).toBeNull();
+      expect((await new Repository<Reminder>(db, 'reminders').list()).filter((r) => r.leadId === leadId)).toEqual([]);
+    });
+
+    it('deleting a lead that does not exist 404s', async () => {
+      await expect(new Phase22Api(db, ADMIN_EMAIL).deleteLead('nonexistent')).rejects.toMatchObject({ code: 'NOT_FOUND' });
     });
   });
 

@@ -224,6 +224,8 @@ export const backendApi = {
   updateLeadDetails: (leadId: string, patch: { name?: string; phone?: string }) =>
     apiFetch<Lead>(`/api/leads/${encodeURIComponent(leadId)}`, { method: 'PATCH', body: JSON.stringify(patch) }),
 
+  deleteLead: (leadId: string) => apiFetch<{ status: string }>(`/api/leads/${encodeURIComponent(leadId)}`, { method: 'DELETE' }),
+
   listCallHistory: () => apiFetch<CallLogWithContext[]>('/api/call-history'),
 
   refreshCallStatus: (callId: string) => apiFetch<CallLog>(`/api/calls/${encodeURIComponent(callId)}/refresh-status`, { method: 'POST' }),

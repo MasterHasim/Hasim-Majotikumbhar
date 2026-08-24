@@ -36,6 +36,7 @@ export function LeadDetailModal({
   const [activity, setActivity] = useState<AuditEntryWithActor[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const canTouch = isManager || lead.assignedUserId === currentUserId;
 
@@ -82,6 +83,14 @@ export function LeadDetailModal({
     await guard(async () => {
       const result = await backendApi.startWhatsAppFromLead(lead.id);
       onOpenConversation(result.conversationId, result.numberId);
+    });
+  }
+
+  async function handleDelete() {
+    await guard(async () => {
+      await backendApi.deleteLead(lead.id);
+      onChanged();
+      onClose();
     });
   }
 
@@ -211,7 +220,19 @@ export function LeadDetailModal({
               >
                 Add comment
               </button>
-              <button className="btn" onClick={onClose}>Close</button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {isManager && !confirmingDelete && (
+                  <button className="btn danger" disabled={busy} onClick={() => setConfirmingDelete(true)}>Delete lead</button>
+                )}
+                {isManager && confirmingDelete && (
+                  <>
+                    <span style={{ fontSize: 12, color: 'var(--text-secondary)', alignSelf: 'center' }}>Delete this lead permanently?</span>
+                    <button className="btn" disabled={busy} onClick={() => setConfirmingDelete(false)}>Cancel</button>
+                    <button className="btn danger" disabled={busy} onClick={() => void handleDelete()}>Confirm delete</button>
+                  </>
+                )}
+                <button className="btn" onClick={onClose}>Close</button>
+              </div>
             </div>
 
             <details className="detail-section">

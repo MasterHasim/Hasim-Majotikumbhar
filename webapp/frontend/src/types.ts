@@ -202,8 +202,12 @@ export interface Availability {
 
 // --- Phase 22 (location leads + Exotel click-to-call) ---
 
-// Keep in sync with backend's Phase22Locations (src/domain/phase22.ts).
-export const LEAD_LOCATIONS = ['Raipur', 'Rajsamand', 'Coimbatore', 'Prayagraj', 'Alibaug', 'Saraighat', 'ECHT Marine'] as const;
+// Keep in sync with backend's Phase22Locations (src/domain/phase22.ts) — one per registered
+// WhatsApp Number, so every number's conversations can fall under a real Lead.
+export const LEAD_LOCATIONS = [
+  'Raipur', 'Rajsamand', 'Coimbatore', 'Prayagraj', 'Alibaug', 'Saraighat', 'ECHT Marine',
+  'Compliances', 'Entartica Partner Desk', 'Entartica CRM',
+] as const;
 
 export type LeadStatus = 'NEW' | 'ASSIGNED' | 'UNASSIGNED' | 'CALLED';
 

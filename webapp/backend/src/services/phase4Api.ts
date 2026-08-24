@@ -18,6 +18,7 @@ import { AuditLogService } from '../lib/auditLog';
 import { AppDb } from '../lib/appDb';
 import { normalizePhoneTail, type NormalizedWebhookMessage } from './exotelProvider';
 import { Phase7Api } from './phase7Api';
+import { Phase22Api } from './phase22Api';
 
 export interface IngestResult {
   duplicate?: boolean;
@@ -94,6 +95,10 @@ export class Phase4Api {
       // identity is never actually checked (assignConversation makes no
       // AccessControl calls, same as apps-script/src/Phase7Services.gs's version).
       await new Phase7Api(this.db, 'system@internal').assignConversation(conversation, isNewCustomer);
+      // Added 2026-08-24, per an explicit product decision: every new WhatsApp conversation
+      // should fall under a real Lead. Best-effort/non-blocking internally (see
+      // Phase22Api.autoCreateLeadFromConversation) — never allowed to fail this request.
+      await new Phase22Api(this.db, 'system@internal').autoCreateLeadFromConversation(customer.name, customer.phone, number.id);
     }
 
     return { duplicate: false, messageId: message.id, conversationId: conversation.id, customerId: customer.id };

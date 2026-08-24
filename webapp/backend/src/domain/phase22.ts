@@ -6,13 +6,19 @@
 import { ApiError } from '../types';
 import { Validation } from './phase1';
 
-// 'ECHT Marine' added 2026-08-24 — a genuinely separate brand from the Entartica Sea World
-// sites above (the other 6), operating out of Head Office only, not tied to any city site.
-// Named to exactly match the WhatsApp Number's own displayName ("ECHT Marine") so
+// 'ECHT Marine', 'Compliances', 'Entartica Partner Desk', 'Entartica CRM' added 2026-08-24 so
+// every registered WhatsApp Number has a matching Lead location — per an explicit product
+// decision that a new WhatsApp conversation on ANY number should be able to fall under a real
+// Lead (see Phase22Api.autoCreateLeadFromConversation), not just the original 6 customer-facing
+// sites. Each is named to exactly match its WhatsApp Number's own displayName so
 // Phase22Api.findNumberForLocation's substring match resolves it automatically, the same way
 // 'Raipur' already resolves to the "Entartica - Raipur" number — no extra config needed for
-// SITE_MANAGER/ADMIN location-visibility scoping to work correctly for this location too.
-export const Phase22Locations = ['Raipur', 'Rajsamand', 'Coimbatore', 'Prayagraj', 'Alibaug', 'Saraighat', 'ECHT Marine'] as const;
+// SITE_MANAGER/ADMIN location-visibility scoping, or for the reverse (number -> location)
+// lookup autoCreateLeadFromConversation needs, to work correctly for these too.
+export const Phase22Locations = [
+  'Raipur', 'Rajsamand', 'Coimbatore', 'Prayagraj', 'Alibaug', 'Saraighat', 'ECHT Marine',
+  'Compliances', 'Entartica Partner Desk', 'Entartica CRM',
+] as const;
 export type Phase22Location = (typeof Phase22Locations)[number];
 
 export const Phase22AssignmentModes = { SINGLE: 'single', ROUND_ROBIN: 'round_robin', MANUAL: 'manual' } as const;

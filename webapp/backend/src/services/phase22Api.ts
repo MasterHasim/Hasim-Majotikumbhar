@@ -186,6 +186,64 @@ export class Phase22Api {
     return assigned;
   }
 
+  /** Reverse of findNumberForLocation — given a WhatsApp Number id, finds which Phase22Location
+   * resolves to it, by the same displayName substring match. Every registered number is meant
+   * to have exactly one matching location (see Phase22Locations' 2026-08-24 comment) so this
+   * should always find one in practice; returns null defensively for a number added without a
+   * corresponding location yet, rather than throwing. */
+  private async resolveLocationForNumber(numberId: string): Promise<Phase22Location | null> {
+    for (const location of Phase22Locations) {
+      const number = await this.findNumberForLocation(location);
+      if (number?.id === numberId) return location;
+    }
+    return null;
+  }
+
+  /** System-triggered from Phase4Api.ingestInboundMessage on every brand-new conversation — no
+   * signed-in actor, no AccessControl check, same reasoning as Phase7Api.assignConversation
+   * which already runs from the same call site. Per an explicit product decision 2026-08-24:
+   * every new WhatsApp conversation should fall under a real Lead, deduped by phone number ONLY
+   * (broader than createLead/uploadLeads' phone+location dedup — a WhatsApp-originated contact
+   * must never get a second Lead record just because they messaged a different site/number).
+   * Best-effort and non-blocking: any failure here must never break message ingestion, the same
+   * principle docs/ZOHO_PHASE_2.md already states for the future Zoho sync. */
+  async autoCreateLeadFromConversation(name: string, phone: string, numberId: string): Promise<void> {
+    try {
+      const normalizedPhone = Phase22Validation.phone(phone);
+      if (await this.leads.findOne((lead) => lead.phone === normalizedPhone)) return;
+      const location = await this.resolveLocationForNumber(numberId);
+      if (!location) return;
+      const now = Ids.now();
+      const lead: Lead = { id: Ids.create('lead'), name: name || normalizedPhone, phone: normalizedPhone, location, status: Phase22LeadStatus.NEW, assignedUserId: '', assignedAt: '', uploadBatchId: Ids.create('uploadbatch'), uploadedBy: 'whatsapp', createdAt: now, updatedAt: now };
+      await this.leads.create(lead);
+      await this.assignLead(lead);
+      await this.audit.write(null, 'lead.autoCreated', 'lead', lead.id, { name, phone: normalizedPhone, location, numberId });
+    } catch (err) {
+      console.error('autoCreateLeadFromConversation: failed, not blocking message ingestion', err);
+    }
+  }
+
+  /** ADMIN or SITE_MANAGER only (LEADS_MANAGE + the same location-isolation check every other
+   * lead mutation already uses) — deletes the Lead itself plus records that only make sense
+   * attached to it (its stage assignment, its remarks, any still-PENDING reminder). Leaves
+   * CallLog and Quotation rows alone: those represent real business history (a call that
+   * happened, a quote that was sent/may be linked from an emailed quotation URL) that shouldn't
+   * silently vanish just because the Lead record referencing it was deleted. */
+  async deleteLead(leadId: string): Promise<void> {
+    const actor = await this.access.require(Permissions.LEADS_MANAGE);
+    const lead = await this.leads.get(leadId);
+    if (!lead) throw new ApiError(404, 'NOT_FOUND', 'Lead was not found.');
+    if (!(await this.canSeeLocation(actor, lead.location))) await this.denied(actor, leadId);
+
+    const stageAssignment = await this.leadStages.get(leadId);
+    if (stageAssignment) await this.leadStages.remove(leadId);
+    for (const remark of (await this.leadRemarks.list()).filter((r) => r.leadId === leadId)) await this.leadRemarks.remove(remark.id);
+    for (const reminder of (await this.reminders.list()).filter((r) => r.leadId === leadId && r.status === 'PENDING')) await this.reminders.remove(reminder.id);
+
+    await this.leads.remove(leadId);
+    await this.audit.write(actor.id, 'lead.deleted', 'lead', leadId, { name: lead.name, phone: lead.phone, location: lead.location });
+  }
+
   async reassignLead(leadId: string, userId: string): Promise<Lead> {
     const actor = await this.access.require(Permissions.LEADS_MANAGE);
     const lead = await this.leads.get(leadId);
