@@ -803,8 +803,8 @@ Backend deployed live to `https://whatsapp-panel-backend.hasim-c9e.workers.dev`.
 | 15 | Audit, Security, Backup & Reliability | 🟡 Code done, Node-tested — live verify pending you | New OAuth scopes added (drive.file, script.scriptapp) — fresh consent screen expected |
 | 16 | Testing & QA | ✅ Done | Found + fixed one real access-control bug (getCustomerStage) — see below |
 | 17 | Production Deployment | 🟡 Readiness checklist done (`docs/DEPLOYMENT.md`) — go-live is your decision | This system has effectively been live since Phase 4; nothing left is a code gap |
-| 18 | Zoho Integration Preparation | ✅ Done — mapping documented (`docs/ZOHO_PHASE_2.md`) | 5 open questions only you can answer before Phase 19 can start |
-| 19 | Zoho CRM Integration | ⬜ Blocked — needs your Zoho credentials + answers to Phase 18's open questions | |
+| 18 | Zoho Integration Preparation | ✅ Done — mapping documented (`apps-script/docs/ZOHO_PHASE_2.md`) | 5 open questions only you can answer before Phase 19 can start |
+| 19 | Zoho CRM Integration | ⬜ Still blocked (reconfirmed 2026-08-24) — needs a Zoho OAuth client + sandbox org, and your answers to Phase 18's 5 open questions (Lead vs. Contact, what "Won" maps to, the dedupe key, your Zoho edition/customizations, sync conflict resolution) | Nothing changed here — reconfirmed the doc is still accurate on a status check. One real staleness found: the doc still lives under `apps-script/` and cites apps-script file names (`src/Phase4Services.gs`) even though the webapp is now the primary system — the mapping itself is unaffected, but refresh those references when Phase 19 actually starts, not before |
 | 20 | Production Hardening & Optimization | ⬜ Blocked — needs real usage data that doesn't exist yet | |
 | 21 | Final Documentation & Handover | ⬜ Deliberately not started — depends on Phases 17/19/20 per the roadmap's "do not build out of order" rule, and those are blocked on you | |
 
@@ -854,7 +854,7 @@ Backend deployed live to `https://whatsapp-panel-backend.hasim-c9e.workers.dev`.
 4. Create at least one quick reply — Settings-adjacent Quick Replies page — so the compose box's dropdown has something in it.
 5. Fill in `Spreewalk - Raipur` / `ECHT Advisory` provider fields — WhatsApp Numbers page → Edit (optional).
 6. Remove the ngrok callback URL from Exotel (optional).
-7. **Read `docs/ZOHO_PHASE_2.md` and answer its 5 open questions** whenever you're ready to think about Zoho.
+7. **Read `apps-script/docs/ZOHO_PHASE_2.md` and answer its 5 open questions** whenever you're ready to think about Zoho — reconfirmed 2026-08-24, nothing has changed: still needs a Zoho OAuth client + sandbox org, plus Lead-vs-Contact, the "Won" mapping, the dedupe key, your Zoho edition/customizations, and sync conflict resolution.
 8. ~~[webapp] Click through the new Inbox UI~~ — ✅ done by you 2026-08-18. Registered all 10 numbers, confirmed the Inbox shell, a real inbound test message via the actual webhook pipeline, and a real reply sent successfully through Exotel.
 9. **[webapp] Place one real Exotel Voice call to verify Phase 22's click-to-call.** The Exotel Voice secrets are now set on the live backend, but `ExotelVoiceProvider`'s request/response field names are still UNVERIFIED (carried over from the Apps Script build's own unverified version) — a real agent needs a `phone` set (Admin Panel → Users, once that page exists on the new backend, or via the API directly for now) and a lead assigned to them, then click-to-call once so I can confirm/fix the response parsing against what Exotel actually returns.
 10. ~~[webapp] Enable R2 in the Cloudflare dashboard~~ — ✅ done by you 2026-08-19, no credit card needed. Bucket created, bound, and local-file media upload (the last piece of Phase 10/11) is built, tested, and deployed.
