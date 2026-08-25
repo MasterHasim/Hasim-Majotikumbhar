@@ -178,7 +178,7 @@ export function registerPhase22Routes(router: RouterType) {
 
   router.post('/api/leads/:id/start-whatsapp', async (request: IRequest, env: Env) => {
     const ctx = await buildContext(request, env);
-    return Response.json(await new Phase22Api(ctx.db, ctx.identityEmail).startWhatsAppFromLead(param(request, 'id')));
+    return Response.json(await new Phase22Api(ctx.db, ctx.identityEmail, env).startWhatsAppFromLead(param(request, 'id')));
   });
   router.post('/api/conversations/:id/call', async (request: IRequest, env: Env) => {
     const ctx = await buildContext(request, env);

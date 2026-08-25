@@ -10,6 +10,8 @@ import { Phase5Api } from '../services/phase5Api';
 import { Phase6Api } from '../services/phase6Api';
 import { WorkspaceApi } from '../services/workspaceApi';
 import { ExotelProvider, requireExotelConfig } from '../services/exotelProvider';
+import { ChatbotIntegrationApi } from '../services/chatbotIntegrationApi';
+import { Permissions } from '../domain/phase1';
 
 async function json(request: IRequest): Promise<Record<string, unknown>> {
   return (await request.json().catch(() => ({}))) as Record<string, unknown>;
@@ -39,6 +41,18 @@ export function registerMessagingRoutes(router: RouterType) {
   router.get('/api/my-numbers', async (request: IRequest, env: Env) => {
     const ctx = await buildContext(request, env);
     return Response.json(await new Phase5Api(ctx.db, ctx.identityEmail).listMyNumbers());
+  });
+  // Admin-only configuration/status. The generated raw key is returned once from the rotate
+  // endpoint and is never persisted or returned by the status endpoint.
+  router.get('/api/numbers/:id/chatbot/connection', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    await ctx.phase1.access.require(Permissions.NUMBERS_ADMIN);
+    return Response.json(await new ChatbotIntegrationApi(ctx.db, env).getConnectionStatus(param(request, 'id')));
+  });
+  router.post('/api/numbers/:id/chatbot/key', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    await ctx.phase1.access.require(Permissions.NUMBERS_ADMIN);
+    return Response.json(await new ChatbotIntegrationApi(ctx.db, env).rotateNumberApiKey(param(request, 'id')));
   });
 
   // --- Conversations (Phase5Api) ---
@@ -71,6 +85,14 @@ export function registerMessagingRoutes(router: RouterType) {
     const ctx = await buildContext(request, env);
     const body = (await json(request)) as { text: string };
     return Response.json(await new Phase6Api(ctx.db, ctx.identityEmail, env).sendReply(param(request, 'id'), body.text));
+  });
+  router.post('/api/conversations/:id/chatbot/handoff', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    return Response.json(await new Phase6Api(ctx.db, ctx.identityEmail, env).handoffChatbotToHuman(param(request, 'id')));
+  });
+  router.post('/api/conversations/:id/chatbot/resume', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    return Response.json(await new Phase6Api(ctx.db, ctx.identityEmail, env).resumeChatbot(param(request, 'id')));
   });
   router.post('/api/conversations/:id/resolve', async (request: IRequest, env: Env) => {
     const ctx = await buildContext(request, env);
@@ -132,7 +154,7 @@ export function registerMessagingRoutes(router: RouterType) {
       const serviceAccount = parseServiceAccount(env);
       const db = buildAppDb(serviceAccount, env.FIREBASE_DATABASE_URL, env);
       const normalized = new ExotelProvider(requireExotelConfig(env)).processWebhook(payload as never);
-      const result = await new Phase4Api(db).ingestInboundMessage(normalized);
+      const result = await new Phase4Api(db, env.ZOHO_CUSTOMER_SYNC_QUEUE).ingestInboundMessage(normalized);
       outcome = { status: 'ok', result };
     } catch (err) {
       outcome = { status: 'error', message: err instanceof Error ? err.message : String(err) };
@@ -143,5 +165,17 @@ export function registerMessagingRoutes(router: RouterType) {
     }
     console.log('webhook/exotel', JSON.stringify(outcome));
     return Response.json(outcome);
+  });
+
+  /**
+   * Per-number callback for the chatbot team. This endpoint intentionally uses only the
+   * dedicated per-number key, never a Firebase browser token or an ECHT Connect user account.
+   */
+  router.post('/api/integrations/chatbot/numbers/:id/reply', async (request: IRequest, env: Env) => {
+    const authorization = request.headers.get('Authorization') ?? '';
+    const apiKey = authorization.startsWith('Bearer ') ? authorization.slice('Bearer '.length).trim() : '';
+    const serviceAccount = parseServiceAccount(env);
+    const db = buildAppDb(serviceAccount, env.FIREBASE_DATABASE_URL, env);
+    return Response.json(await new ChatbotIntegrationApi(db, env).receiveReply(param(request, 'id'), apiKey, await json(request) as never));
   });
 }

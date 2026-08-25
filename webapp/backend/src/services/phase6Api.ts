@@ -22,6 +22,7 @@ import { AuditLogService } from '../lib/auditLog';
 import { AppDb } from '../lib/appDb';
 import { buildPhase1Repositories } from '../lib/phase1Repositories';
 import { ExotelProvider, requireExotelConfig, type ExotelConfig } from './exotelProvider';
+import { enqueueCustomerSync, type CustomerSyncQueue } from './zohoCrm';
 
 /**
  * Builds the "components" array Exotel's WhatsApp template-send endpoint actually expects —
@@ -102,7 +103,7 @@ export function toE164(phoneNumber: string): string {
  * envelope Phase10Api's syncTemplatesFromProvider already confirmed live for the templates
  * endpoint. Real payload seen: {"response":{"whatsapp":{"messages":[{"data":{"sid":"..."}}]}}}.
  */
-function extractOutboundProviderMessageId(response: unknown): string | null {
+export function extractOutboundProviderMessageId(response: unknown): string | null {
   if (!response || typeof response !== 'object') return null;
   const r = response as Record<string, unknown>;
   if (typeof r.sid === 'string') return r.sid;
@@ -129,8 +130,9 @@ export class Phase6Api {
   private products: Repository<Product>;
   private exotelConfig: ExotelConfig;
   private mediaBucket?: R2Bucket;
+  private customerSyncQueue?: CustomerSyncQueue;
 
-  constructor(db: AppDb, identityEmail: string, env: { EXOTEL_API_KEY?: string; EXOTEL_API_TOKEN?: string; EXOTEL_ACCOUNT_SID?: string; EXOTEL_SUBDOMAIN?: string; MEDIA_BUCKET?: R2Bucket }) {
+  constructor(db: AppDb, identityEmail: string, env: { EXOTEL_API_KEY?: string; EXOTEL_API_TOKEN?: string; EXOTEL_ACCOUNT_SID?: string; EXOTEL_SUBDOMAIN?: string; MEDIA_BUCKET?: R2Bucket; ZOHO_CUSTOMER_SYNC_QUEUE?: CustomerSyncQueue }) {
     const repos = buildPhase1Repositories(db);
     this.audit = new AuditLogService(db);
     this.access = new AccessControl(repos, this.audit, identityEmail);
@@ -143,11 +145,43 @@ export class Phase6Api {
     this.products = new Repository<Product>(db, 'products');
     this.exotelConfig = requireExotelConfig(env);
     this.mediaBucket = env.MEDIA_BUCKET;
+    this.customerSyncQueue = env.ZOHO_CUSTOMER_SYNC_QUEUE;
   }
 
   async sendReply(conversationId: string, text: string): Promise<Message> {
     const validText = Validation.requiredString(text, 'text');
-    return this.sendOutbound(conversationId, 'text', validText, true, (provider, number, customer) => provider.sendText(toE164(number.phoneNumber), toE164(customer.phone), validText));
+    const message = await this.sendOutbound(conversationId, 'text', validText, true, (provider, number, customer) => provider.sendText(toE164(number.phoneNumber), toE164(customer.phone), validText));
+    await this.markChatbotHumanHandoff(conversationId, 'agent_reply');
+    return message;
+  }
+
+  /** Agent-controlled state transition used both after a manual reply and by the Inbox takeover button. */
+  async handoffChatbotToHuman(conversationId: string, reason = 'agent_takeover'): Promise<Conversation> {
+    const conversation = await this.conversations.get(conversationId);
+    if (!conversation) throw new ApiError(404, 'NOT_FOUND', 'Conversation was not found.');
+    const teamId = await this.access.resolveTeamIdForNumber(conversation.numberId);
+    const actor = await this.access.requireConversationOperation('reply', { numberId: conversation.numberId, teamId, assignedUserId: conversation.assignedUserId });
+    const record = await this.conversations.update(conversationId, { chatbotState: 'HUMAN', chatbotHandoffAt: Ids.now(), chatbotHandoffReason: reason, needsResponse: true });
+    await this.audit.write(actor.id, 'chatbot.handedOffToHuman', 'conversation', conversationId, { reason });
+    return record;
+  }
+
+  async resumeChatbot(conversationId: string): Promise<Conversation> {
+    const conversation = await this.conversations.get(conversationId);
+    if (!conversation) throw new ApiError(404, 'NOT_FOUND', 'Conversation was not found.');
+    const teamId = await this.access.resolveTeamIdForNumber(conversation.numberId);
+    const actor = await this.access.requireConversationOperation('reply', { numberId: conversation.numberId, teamId, assignedUserId: conversation.assignedUserId });
+    const number = await this.numbers.get(conversation.numberId);
+    if (!number || (number.chatbotMode ?? 'off') !== 'active') throw new ApiError(400, 'CHATBOT_NOT_ACTIVE', 'This number must be in active chatbot mode before the chatbot can be resumed.');
+    const record = await this.conversations.update(conversationId, { chatbotState: 'BOT', chatbotHandoffAt: '', chatbotHandoffReason: '' });
+    await this.audit.write(actor.id, 'chatbot.resumed', 'conversation', conversationId, {});
+    return record;
+  }
+
+  private async markChatbotHumanHandoff(conversationId: string, reason: string): Promise<void> {
+    const conversation = await this.conversations.get(conversationId);
+    if (!conversation || conversation.chatbotState === 'HUMAN') return;
+    await this.conversations.update(conversationId, { chatbotState: 'HUMAN', chatbotHandoffAt: Ids.now(), chatbotHandoffReason: reason });
   }
 
   /** Send an approved template with variables substituted into its components. UNVERIFIED — sendTemplate has never been called live, same as sendText. */
@@ -217,6 +251,7 @@ export class Phase6Api {
     if (!customer) {
       customer = { id: Ids.create('customer'), phone: validPhone, name: name?.trim() || '', email: '', company: '', source: 'manual', createdAt: now, updatedAt: now };
       await this.customers.create(customer);
+      await enqueueCustomerSync(this.customerSyncQueue, customer.id);
     }
     let conversation = await this.conversations.findOne((c) => c.customerId === customer!.id && c.numberId === numberId && c.status === 'OPEN');
     if (!conversation) {

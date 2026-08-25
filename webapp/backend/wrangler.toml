@@ -41,3 +41,15 @@ bucket_name = "whatsapp-panel-media"
 binding = "DB"
 database_name = "whatsapp-panel-db-staging"
 database_id = "e2ba6025-625c-4496-b09b-8702afa6f99e"
+
+# Create these queues before deployment (`wrangler queues create ...`). Customer records are
+# first committed to Firebase RTDB, then their ids are delivered to this consumer for Zoho sync.
+[[queues.producers]]
+binding = "ZOHO_CUSTOMER_SYNC_QUEUE"
+queue = "whatsapp-panel-zoho-customer-sync"
+
+[[queues.consumers]]
+queue = "whatsapp-panel-zoho-customer-sync"
+max_batch_size = 10
+max_retries = 8
+dead_letter_queue = "whatsapp-panel-zoho-customer-sync-dlq"

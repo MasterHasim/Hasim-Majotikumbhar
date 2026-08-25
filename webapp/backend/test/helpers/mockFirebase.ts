@@ -43,6 +43,10 @@ export interface MockFirebaseContext {
   metaAdsCalls: { url: string }[];
   /** Override the next Meta Graph API response (status + body) — defaults to a 200 with no rows. */
   setNextMetaAdsResponse(status: number, body: unknown): void;
+  /** Mock Zoho OAuth/CRM environment; its values are intentionally available only to backend tests. */
+  zohoEnv: { ZOHO_CLIENT_ID: string; ZOHO_CLIENT_SECRET: string; ZOHO_REFRESH_TOKEN: string; ZOHO_ACCOUNTS_URL: string; ZOHO_CONTACT_EXTERNAL_ID_FIELD: string };
+  /** Every Contact upsert made to the mock Zoho API. */
+  zohoContactUpserts: { authorization: string | null; body: Record<string, unknown> }[];
 }
 
 function base64UrlFromBuffer(bytes: ArrayBuffer): string {
@@ -102,6 +106,9 @@ export async function setupMockFirebase(projectId = 'test-project'): Promise<Moc
   const metaAdsCalls: { url: string }[] = [];
   let nextMetaAdsResponse: { status: number; body: unknown } | null = null;
 
+  const zohoEnv = { ZOHO_CLIENT_ID: 'test-zoho-client', ZOHO_CLIENT_SECRET: 'test-zoho-secret', ZOHO_REFRESH_TOKEN: 'test-zoho-refresh', ZOHO_ACCOUNTS_URL: 'https://accounts.zoho.test', ZOHO_CONTACT_EXTERNAL_ID_FIELD: 'Echt_Customer_ID' };
+  const zohoContactUpserts: { authorization: string | null; body: Record<string, unknown> }[] = [];
+
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
@@ -154,6 +161,15 @@ export async function setupMockFirebase(projectId = 'test-project'): Promise<Moc
         return new Response(JSON.stringify(respBody), { status });
       }
       return new Response(JSON.stringify({ data: [] }), { status: 200 });
+    }
+
+    if (url === `${zohoEnv.ZOHO_ACCOUNTS_URL}/oauth/v2/token`) {
+      return new Response(JSON.stringify({ access_token: 'mock-zoho-access-token', api_domain: 'https://zoho-api.test', expires_in: 3600 }), { status: 200 });
+    }
+    if (url === 'https://zoho-api.test/crm/v8/Contacts/upsert') {
+      const body = JSON.parse(init!.body as string) as Record<string, unknown>;
+      zohoContactUpserts.push({ authorization: new Headers(init?.headers).get('Authorization'), body });
+      return new Response(JSON.stringify({ data: [{ status: 'success', code: 'SUCCESS', details: { id: `zoho-contact-${zohoContactUpserts.length}` } }] }), { status: 200 });
     }
 
     if (url === 'https://oauth2.googleapis.com/token') {
@@ -210,6 +226,8 @@ export async function setupMockFirebase(projectId = 'test-project'): Promise<Moc
     metaAdsEnv,
     metaAdsCalls,
     setNextMetaAdsResponse: (status: number, body: unknown) => { nextMetaAdsResponse = { status, body }; },
+    zohoEnv,
+    zohoContactUpserts,
     restore: () => {
       globalThis.fetch = originalFetch;
     },

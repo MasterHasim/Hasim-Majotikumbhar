@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState } from 'react';
-import type { AdAccount, AssignmentEligibilityStatus, AuditEntry, AutoDialerSettings, CustomFieldDefinition, CustomFieldEntityType, CustomFieldType, NumberAccess, NumberAssignmentConfig, NumberAssignmentUser, Product, QuickReply, Role, Stage, Team, TeamMember, Template, User, WhatsAppNumber, WhoAmI } from '../types';
+import type { AdAccount, AssignmentEligibilityStatus, AuditEntry, AutoDialerSettings, ChatbotConnectionStatus, CustomFieldDefinition, CustomFieldEntityType, CustomFieldType, NumberAccess, NumberAssignmentConfig, NumberAssignmentUser, Product, QuickReply, Role, Stage, Team, TeamMember, Template, User, WhatsAppNumber, WhoAmI } from '../types';
 import { backendApi } from '../lib/backendApi';
 import { ApiClientError } from '../lib/api';
 
@@ -285,9 +285,9 @@ function NumbersTab() {
         not the phone number's own "Phone Profile" ID). Needed for Templates → Create/Sync.
       </p>
       <table className="data-table">
-        <thead><tr><th>Name</th><th>Phone</th><th>WABA ID</th><th>Active</th></tr></thead>
+        <thead><tr><th>Name</th><th>Phone</th><th>WABA ID</th><th>Chatbot</th><th>Active</th></tr></thead>
         <tbody>
-          {numbers === null && <tr><td colSpan={4} className="empty">Loading…</td></tr>}
+          {numbers === null && <tr><td colSpan={5} className="empty">Loading…</td></tr>}
           {numbers?.map((n) => (
             <tr key={n.id}>
               <td>
@@ -297,10 +297,18 @@ function NumbersTab() {
               <td>
                 <input placeholder="e.g. 1960468407986497" style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }} defaultValue={n.wabaId} onBlur={(e) => { if (e.target.value !== n.wabaId) void guard(() => backendApi.updateNumber(n.id, { wabaId: e.target.value.trim() })); }} />
               </td>
+              <td>
+                <select value={n.chatbotMode ?? 'off'} disabled={busy} onChange={(e) => void guard(() => backendApi.updateNumber(n.id, { chatbotMode: e.target.value }))}>
+                  <option value="off">Off — agents only</option>
+                  <option value="shadow">Shadow — draft only</option>
+                  <option value="active">Active — auto reply</option>
+                  <option value="paused">Paused</option>
+                </select>
+              </td>
               <td><input type="checkbox" checked={n.active} disabled={busy} onChange={(e) => void guard(() => backendApi.updateNumber(n.id, { active: e.target.checked }))} /></td>
             </tr>
           ))}
-          {numbers?.length === 0 && <tr><td colSpan={4} className="empty">None yet.</td></tr>}
+          {numbers?.length === 0 && <tr><td colSpan={5} className="empty">None yet.</td></tr>}
         </tbody>
       </table>
       {error && <div className="form-error">{error}</div>}
@@ -320,6 +328,94 @@ function NumbersTab() {
           Add number
         </button>
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+function ChatbotTab({ numbers }: { numbers: WhatsAppNumber[] }) {
+  const [numberId, setNumberId] = useState('');
+  const [webhookUrl, setWebhookUrl] = useState('');
+  const [profileId, setProfileId] = useState('');
+  const [status, setStatus] = useState<ChatbotConnectionStatus | null>(null);
+  const [newApiKey, setNewApiKey] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const selected = numbers.find((number) => number.id === numberId) ?? null;
+
+  useEffect(() => { if (!numberId && numbers[0]) setNumberId(numbers[0].id); }, [numberId, numbers]);
+  useEffect(() => {
+    setNewApiKey(null);
+    if (!selected) { setStatus(null); return; }
+    setWebhookUrl(selected.chatbotWebhookUrl ?? '');
+    setProfileId(selected.chatbotProfileId ?? '');
+    backendApi.getChatbotConnectionStatus(selected.id).then(setStatus).catch((err) => setError(errMsg(err)));
+  }, [selected?.id]);
+
+  async function saveSettings() {
+    if (!selected) return;
+    setBusy(true); setError(null);
+    try {
+      await backendApi.updateNumber(selected.id, { chatbotWebhookUrl: webhookUrl.trim(), chatbotProfileId: profileId.trim() });
+      setStatus(await backendApi.getChatbotConnectionStatus(selected.id));
+    } catch (err) { setError(errMsg(err)); } finally { setBusy(false); }
+  }
+  async function rotateKey() {
+    if (!selected || !window.confirm('Generate a new key? The previous key will stop working immediately.')) return;
+    setBusy(true); setError(null);
+    try {
+      const result = await backendApi.rotateChatbotApiKey(selected.id);
+      setNewApiKey(result.apiKey);
+      setStatus(await backendApi.getChatbotConnectionStatus(selected.id));
+    } catch (err) { setError(errMsg(err)); } finally { setBusy(false); }
+  }
+  async function copyKey() {
+    if (!newApiKey) return;
+    await navigator.clipboard.writeText(newApiKey);
+  }
+
+  const replyEndpoint = selected ? `${import.meta.env.VITE_API_BASE_URL}/api/integrations/chatbot/numbers/${encodeURIComponent(selected.id)}/reply` : '';
+  return (
+    <div className="card" style={{ maxWidth: 900 }}>
+      <h2 className="section-title" style={{ marginTop: 0 }}>Chatbot Integration</h2>
+      <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+        Configure the internal chatbot separately for each WhatsApp number. This screen never stores or re-displays its API key; copy a generated key once and give it only to the chatbot team.
+      </p>
+      <div className="form-row">
+        <label>WhatsApp number</label>
+        <select value={numberId} onChange={(e) => setNumberId(e.target.value)} disabled={busy}>
+          {numbers.length === 0 && <option value="">No numbers available</option>}
+          {numbers.map((number) => <option key={number.id} value={number.id}>{number.displayName} · {number.phoneNumber}</option>)}
+        </select>
+        {selected && <span className="pill">Mode: {selected.chatbotMode ?? 'off'}</span>}
+      </div>
+      {selected && <>
+        <div className="form-row">
+          <input style={{ flex: 1, minWidth: 300 }} placeholder="Chatbot incoming webhook URL (https://...)" value={webhookUrl} disabled={busy} onChange={(e) => setWebhookUrl(e.target.value)} />
+          <input style={{ minWidth: 180 }} placeholder="Bot profile / agent ID" value={profileId} disabled={busy} onChange={(e) => setProfileId(e.target.value)} />
+          <button className="btn primary" disabled={busy} onClick={() => void saveSettings()}>Save settings</button>
+        </div>
+        <div className="form-row" style={{ alignItems: 'center' }}>
+          <button className="btn" disabled={busy} onClick={() => void rotateKey()}>{status?.apiKeyConfigured ? 'Rotate API key' : 'Generate API key'}</button>
+          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+            {status?.apiKeyConfigured ? `Configured (${status.apiKeyPrefix}…)` : 'No per-number key generated yet.'}
+            {status?.keyLastRotatedAt ? ` · last changed ${fmt(status.keyLastRotatedAt)}` : ''}
+          </span>
+        </div>
+        {newApiKey && <div className="form-row" style={{ alignItems: 'center' }}>
+          <code style={{ overflowWrap: 'anywhere', flex: 1 }}>{newApiKey}</code>
+          <button className="btn primary" onClick={() => void copyKey()}>Copy once</button>
+          <button className="btn" onClick={() => setNewApiKey(null)}>Hide</button>
+        </div>}
+        <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>Give this callback URL and the generated key to the chatbot team:</p>
+        <code style={{ display: 'block', overflowWrap: 'anywhere', fontSize: 12 }}>{replyEndpoint}</code>
+        <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+          Callback body must include <code>conversationId</code>, <code>inReplyToMessageId</code>, optional <code>reply</code>, and optional <code>handover</code>. Shadow mode records a safe activity only; active mode can deliver a bot reply and hand the chat to the team.
+        </p>
+        {status?.latestActivity && <div className="meta">Latest activity: {status.latestActivity.kind} · {status.latestActivity.detail} · {fmt(status.latestActivity.createdAt)}</div>}
+      </>}
+      {error && <div className="form-error">{error}</div>}
     </div>
   );
 }
@@ -1246,7 +1342,7 @@ function AdAccountsTab() {
 
 // ---------------------------------------------------------------------------
 
-type AdminTab = 'users' | 'teams' | 'numbers' | 'access' | 'assignment' | 'quickReplies' | 'templates' | 'leadStages' | 'customFields' | 'products' | 'adAccounts' | 'autoDialer' | 'audit' | 'backup';
+type AdminTab = 'users' | 'teams' | 'numbers' | 'chatbot' | 'access' | 'assignment' | 'quickReplies' | 'templates' | 'leadStages' | 'customFields' | 'products' | 'adAccounts' | 'autoDialer' | 'audit' | 'backup';
 
 export function Admin({ whoAmI }: { whoAmI: WhoAmI }) {
   const isFullAdmin = whoAmI.roleKeys.includes('ADMIN');
@@ -1264,7 +1360,7 @@ export function Admin({ whoAmI }: { whoAmI: WhoAmI }) {
 
   const tabs: [AdminTab, string][] = isFullAdmin
     ? [
-        ['users', 'Users'], ['teams', 'Teams'], ['numbers', 'Numbers'], ['access', 'Number Access'],
+        ['users', 'Users'], ['teams', 'Teams'], ['numbers', 'Numbers'], ['chatbot', 'Chatbot'], ['access', 'Number Access'],
         ['assignment', 'Assignment Rules'], ['quickReplies', 'Quick Replies'], ['templates', 'Templates'],
         ['leadStages', 'Lead Stages'], ['customFields', 'Custom Fields'], ['products', 'Products'], ['adAccounts', 'Ad Accounts'],
         ['autoDialer', 'Auto Dialer'], ['audit', 'Audit Log'], ['backup', 'Backup'],
@@ -1283,6 +1379,7 @@ export function Admin({ whoAmI }: { whoAmI: WhoAmI }) {
       {tab === 'users' && <UsersTab roles={roles} />}
       {tab === 'teams' && <TeamsTab users={users} roles={roles} />}
       {tab === 'numbers' && <NumbersTab />}
+      {tab === 'chatbot' && <ChatbotTab numbers={numbers} />}
       {tab === 'access' && <NumberAccessTab users={users} numbers={numbers} />}
       {tab === 'assignment' && <AssignmentRulesTab users={users} numbers={numbers} />}
       {tab === 'quickReplies' && <QuickRepliesSection />}

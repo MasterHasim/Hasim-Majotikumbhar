@@ -19,6 +19,8 @@ import { AppDb } from '../lib/appDb';
 import { normalizePhoneTail, type NormalizedWebhookMessage } from './exotelProvider';
 import { Phase7Api } from './phase7Api';
 import { Phase22Api } from './phase22Api';
+import { enqueueCustomerSync, type CustomerSyncQueue } from './zohoCrm';
+import { decideInboundChatbotRouting, type ChatbotInboundDecision } from './chatbotRouting';
 
 export interface IngestResult {
   duplicate?: boolean;
@@ -29,6 +31,7 @@ export interface IngestResult {
   conversationId?: string;
   customerId?: string;
   status?: string | null;
+  chatbot?: ChatbotInboundDecision;
 }
 
 export class Phase4Api {
@@ -39,7 +42,7 @@ export class Phase4Api {
   private messages: Repository<Message>;
   private messageMedia: Repository<MessageMedia>;
 
-  constructor(private db: AppDb) {
+  constructor(private db: AppDb, private customerSyncQueue?: CustomerSyncQueue) {
     this.audit = new AuditLogService(db);
     this.numbers = new Repository<WhatsAppNumber>(db, 'numbers');
     this.customers = new Repository<Customer>(db, 'customers');
@@ -67,6 +70,7 @@ export class Phase4Api {
       customer = { id: Ids.create('customer'), phone: normalized.fromPhone ?? '', name: normalized.profileName || '', email: '', company: '', source: 'whatsapp', createdAt: now, updatedAt: now };
       await this.customers.create(customer);
       isNewCustomer = true;
+      await enqueueCustomerSync(this.customerSyncQueue, customer.id);
     }
 
     let conversation = await this.conversations.findOne((c) => c.customerId === customer!.id && c.numberId === number.id && c.status === 'OPEN');
@@ -101,7 +105,13 @@ export class Phase4Api {
       await new Phase22Api(this.db, 'system@internal').autoCreateLeadFromConversation(customer.name, customer.phone, number.id);
     }
 
-    return { duplicate: false, messageId: message.id, conversationId: conversation.id, customerId: customer.id };
+    const chatbot = decideInboundChatbotRouting(number, conversation);
+    // This records routing readiness only. No external bot call is made until a provider adapter
+    // and its request/response contract are configured server-side.
+    if (chatbot.action !== 'disabled') {
+      await this.audit.write(null, 'chatbot.inboundRouted', 'conversation', conversation.id, { mode: chatbot.mode, action: chatbot.action, reason: chatbot.reason });
+    }
+    return { duplicate: false, messageId: message.id, conversationId: conversation.id, customerId: customer.id, chatbot };
   }
 
   private async applyStatusUpdate(normalized: NormalizedWebhookMessage): Promise<IngestResult> {

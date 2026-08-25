@@ -6,6 +6,30 @@ export interface WhatsAppNumber {
   phoneNumber: string;
   active: boolean;
   wabaId?: string;
+  chatbotMode?: 'off' | 'shadow' | 'active' | 'paused';
+  chatbotWebhookUrl?: string;
+  chatbotProfileId?: string;
+  chatbotKeyPrefix?: string;
+  chatbotKeyLastRotatedAt?: string;
+}
+
+export interface ChatbotConnectionActivity {
+  id: string;
+  numberId: string;
+  kind: 'KEY_ROTATED' | 'SHADOW_REPLY_RECEIVED' | 'REPLY_SENT' | 'HANDOVER' | 'REPLY_REJECTED';
+  detail: string;
+  createdAt: string;
+}
+
+export interface ChatbotConnectionStatus {
+  numberId: string;
+  mode: 'off' | 'shadow' | 'active' | 'paused';
+  webhookUrlConfigured: boolean;
+  profileId: string;
+  apiKeyConfigured: boolean;
+  apiKeyPrefix: string;
+  keyLastRotatedAt: string;
+  latestActivity: ChatbotConnectionActivity | null;
 }
 
 export interface Customer {
@@ -30,6 +54,9 @@ export interface Conversation {
   lastCustomerMessageAt?: string;
   /** Product IDs (from this number's catalog) the customer has expressed interest in during this conversation. */
   interestedProductIds?: string[];
+  chatbotState?: 'BOT' | 'HUMAN';
+  chatbotHandoffAt?: string;
+  chatbotHandoffReason?: string;
   createdAt: string;
 }
 

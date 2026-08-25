@@ -11,6 +11,10 @@ import { registerSearchRoutes } from './routes/search';
 import { registerDashboardRoutes } from './routes/dashboard';
 import { registerBackupRoutes } from './routes/backup';
 import { registerAdsRoutes } from './routes/ads';
+import { registerZohoTestRoutes } from './routes/zohoTest';
+import { syncCustomerToZoho, type ZohoCustomerSyncJob } from './services/zohoCrm';
+import { buildAppDb } from './lib/appDb';
+import { parseServiceAccount } from './types';
 
 const router = Router();
 
@@ -25,6 +29,7 @@ registerSearchRoutes(router);
 registerDashboardRoutes(router);
 registerBackupRoutes(router);
 registerAdsRoutes(router);
+registerZohoTestRoutes(router);
 
 router.all('*', () => new Response('Not found', { status: 404 }));
 
@@ -38,6 +43,20 @@ export default {
       const apiError = err instanceof ApiError ? err : new ApiError(500, 'INTERNAL_ERROR', err instanceof Error ? err.message : String(err));
       if (apiError.status >= 500) console.error(apiError);
       return withCors(Response.json({ code: apiError.code, message: apiError.message }, { status: apiError.status }), request, env);
+    }
+  },
+  /** Cloudflare Queue consumer: retries transient Zoho/Firebase failures without involving React or the request path. */
+  async queue(batch: MessageBatch<ZohoCustomerSyncJob>, env: Env): Promise<void> {
+    for (const message of batch.messages) {
+      try {
+        const serviceAccount = parseServiceAccount(env);
+        const db = buildAppDb(serviceAccount, env.FIREBASE_DATABASE_URL, env);
+        await syncCustomerToZoho(db, message.body.customerId, env);
+        message.ack();
+      } catch (err) {
+        console.error('Zoho customer sync failed; queue message will retry.', err);
+        message.retry();
+      }
     }
   },
 };

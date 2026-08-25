@@ -2,7 +2,7 @@
 import { apiFetch } from './api';
 import type {
   AdAccount, AdInsights, AssignableUser, AssignmentEligibility, AssignmentEligibilityStatus, AuditEntry, AuditEntryWithActor, Availability,
-  AutoDialerSettings, AvailabilityStatus, CallLog,
+  AutoDialerSettings, AvailabilityStatus, CallLog, ChatbotConnectionStatus,
   CallLogWithContext, Conversation, ConversationListItem, Customer, CustomerStage, CustomFieldDefinition, CustomFieldEntityType, CustomFieldType,
   DashboardMetrics, HomeMetrics, Lead, LeadFunnel, LeadRemark, LeadStageAssignment,
   LocationAssignmentConfig, LocationAssignmentUser, NumberAccess, NumberAssignmentConfig, NumberAssignmentUser, Product, PublicQuotationView,
@@ -23,6 +23,12 @@ export const backendApi = {
 
   updateNumber: (id: string, patch: Record<string, unknown>) =>
     apiFetch<WhatsAppNumber>(`/api/numbers/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+
+  getChatbotConnectionStatus: (numberId: string) => apiFetch<ChatbotConnectionStatus>(`/api/numbers/${encodeURIComponent(numberId)}/chatbot/connection`),
+  rotateChatbotApiKey: (numberId: string) => apiFetch<{ numberId: string; apiKey: string; apiKeyPrefix: string; generatedAt: string }>(`/api/numbers/${encodeURIComponent(numberId)}/chatbot/key`, { method: 'POST' }),
+
+  handoffChatbot: (conversationId: string) => apiFetch<Conversation>(`/api/conversations/${encodeURIComponent(conversationId)}/chatbot/handoff`, { method: 'POST' }),
+  resumeChatbot: (conversationId: string) => apiFetch<Conversation>(`/api/conversations/${encodeURIComponent(conversationId)}/chatbot/resume`, { method: 'POST' }),
 
   listConversations: (numberId: string) => apiFetch<ConversationListItem[]>(`/api/conversations?numberId=${encodeURIComponent(numberId)}`),
 

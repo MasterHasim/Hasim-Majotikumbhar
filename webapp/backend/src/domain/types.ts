@@ -64,6 +64,9 @@ export interface AssignmentEligibility extends Record_ {
 
 // --- Messaging core (port of apps-script/src/Phase2Domain.gs's Phase2Schemas) ---
 
+/** Per-number rollout state for the server-side chatbot integration. */
+export type ChatbotMode = 'off' | 'shadow' | 'active' | 'paused';
+
 export interface WhatsAppNumber extends Record_ {
   displayName: string;
   phoneNumber: string;
@@ -72,6 +75,33 @@ export interface WhatsAppNumber extends Record_ {
   wabaId: string;
   providerNumberId: string;
   active: boolean;
+  /** Missing on older Firebase records means `off`; only an ADMIN can change it. */
+  chatbotMode?: ChatbotMode;
+  /** Non-secret per-number destination/profile settings. The chatbot key itself is never stored here. */
+  chatbotWebhookUrl?: string;
+  chatbotProfileId?: string;
+  chatbotKeyPrefix?: string;
+  chatbotKeyLastRotatedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** One hashed, rotatable server-to-server credential per WhatsApp number. No plaintext API key is stored in Firebase. */
+export interface ChatbotIntegrationCredential extends Record_ {
+  numberId: string;
+  keyHash: string;
+  keyPrefix: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Bounded audit/status event visible to admins; never contains a bot API key or full customer message. */
+export interface ChatbotConnectionActivity extends Record_ {
+  numberId: string;
+  conversationId?: string;
+  inReplyToMessageId?: string;
+  kind: 'KEY_ROTATED' | 'SHADOW_REPLY_RECEIVED' | 'REPLY_SENT' | 'HANDOVER' | 'REPLY_REJECTED';
+  detail: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -91,6 +121,8 @@ export interface Customer extends Record_ {
    * definition's `key`, denormalized directly on the record rather than a separate
    * per-value table, same tradeoff as tags. */
   customFields?: Record<string, string | number>;
+  /** Server-managed identifier returned by Zoho CRM after a successful Contact upsert. */
+  zohoContactId?: string;
 }
 
 export interface Conversation extends Record_ {
@@ -110,6 +142,10 @@ export interface Conversation extends Record_ {
    * the conversation (not the Customer) since Products themselves are per-number and the same
    * customer can have separate conversations on different numbers with different interests. */
   interestedProductIds?: string[];
+  /** Once a person takes over, automatic replies stay disabled for this conversation until an agent resumes the bot. */
+  chatbotState?: 'BOT' | 'HUMAN';
+  chatbotHandoffAt?: string;
+  chatbotHandoffReason?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -125,6 +161,8 @@ export interface Message extends Record_ {
   messageType: string;
   messageText: string;
   providerMessageId: string;
+  /** Idempotency link used only for a server-to-server chatbot callback. */
+  chatbotInReplyToMessageId?: string;
   status: MessageStatus;
   timestamp: string;
   /** Set only for messageType 'template' — the template's own name, kept separate from

@@ -27,6 +27,7 @@ import { AppDb } from '../lib/appDb';
 import { buildPhase1Repositories } from '../lib/phase1Repositories';
 import { ExotelVoiceProvider, requireExotelVoiceConfig, type ExotelVoiceConfig, type CallStatusEvent } from './exotelVoiceProvider';
 import { validateCustomFieldValues } from './customFieldsApi';
+import { enqueueCustomerSync, type CustomerSyncQueue } from './zohoCrm';
 
 /** Call outcomes that mean "the lead/customer never actually picked up" — drives the
  * missed-call auto-reminder in applyCallStatusEvent. Uppercased to match
@@ -108,8 +109,9 @@ export class Phase22Api {
   private products: Repository<Product>;
   private quotations: Repository<Quotation>;
   private exotelVoiceConfig?: ExotelVoiceConfig;
+  private customerSyncQueue?: CustomerSyncQueue;
 
-  constructor(private db: AppDb, identityEmail: string, env?: { EXOTEL_VOICE_ACCOUNT_SID?: string; EXOTEL_VOICE_API_KEY?: string; EXOTEL_VOICE_API_TOKEN?: string; EXOTEL_VOICE_CALLER_ID?: string }) {
+  constructor(private db: AppDb, identityEmail: string, env?: { EXOTEL_VOICE_ACCOUNT_SID?: string; EXOTEL_VOICE_API_KEY?: string; EXOTEL_VOICE_API_TOKEN?: string; EXOTEL_VOICE_CALLER_ID?: string; ZOHO_CUSTOMER_SYNC_QUEUE?: CustomerSyncQueue }) {
     this.phase1Repos = buildPhase1Repositories(db);
     this.audit = new AuditLogService(db);
     this.access = new AccessControl(this.phase1Repos, this.audit, identityEmail);
@@ -128,7 +130,12 @@ export class Phase22Api {
     this.customFieldDefs = new Repository<CustomFieldDefinition>(db, 'customFieldDefinitions');
     this.products = new Repository<Product>(db, 'products');
     this.quotations = new Repository<Quotation>(db, 'quotations');
-    if (env) this.exotelVoiceConfig = requireExotelVoiceConfig(env);
+    // Some non-call routes also receive Env solely to obtain the Zoho queue. Do not require
+    // unrelated Exotel Voice credentials unless this instance was actually given them.
+    if (env?.EXOTEL_VOICE_ACCOUNT_SID || env?.EXOTEL_VOICE_API_KEY || env?.EXOTEL_VOICE_API_TOKEN || env?.EXOTEL_VOICE_CALLER_ID) {
+      this.exotelVoiceConfig = requireExotelVoiceConfig(env);
+    }
+    this.customerSyncQueue = env?.ZOHO_CUSTOMER_SYNC_QUEUE;
   }
 
   async listLocations(): Promise<readonly string[]> {
@@ -869,6 +876,7 @@ export class Phase22Api {
     if (!customer) {
       customer = { id: Ids.create('customer'), phone: lead.phone, name: lead.name, email: '', company: '', source: 'location_lead', createdAt: now, updatedAt: now };
       await this.customers.create(customer);
+      await enqueueCustomerSync(this.customerSyncQueue, customer.id);
     }
     let conversation = await this.conversations.findOne((c) => c.customerId === customer!.id && c.numberId === number.id && c.status === 'OPEN');
     if (!conversation) {

@@ -9,6 +9,7 @@ import { AuditLogService, type AuditEntryWithActor } from '../lib/auditLog';
 import { AppDb } from '../lib/appDb';
 import { buildPhase1Repositories } from '../lib/phase1Repositories';
 import { validateCustomFieldValues } from './customFieldsApi';
+import { enqueueCustomerSync, type CustomerSyncQueue } from './zohoCrm';
 
 const DEFAULT_STAGES = [
   { key: 'new_leads', name: 'New Leads' },
@@ -30,7 +31,7 @@ export class Phase8Api {
   private remarks: Repository<Remark>;
   private customFieldDefs: Repository<CustomFieldDefinition>;
 
-  constructor(db: AppDb, identityEmail: string) {
+  constructor(db: AppDb, identityEmail: string, private customerSyncQueue?: CustomerSyncQueue) {
     this.phase1Repos = buildPhase1Repositories(db);
     this.audit = new AuditLogService(db);
     this.access = new AccessControl(this.phase1Repos, this.audit, identityEmail);
@@ -177,6 +178,7 @@ export class Phase8Api {
     }
     const record = await this.customers.update(customerId, safePatch as Partial<Customer>);
     await this.audit.write(actor.id, 'customer.updated', 'customer', customerId, { patch: safePatch });
+    await enqueueCustomerSync(this.customerSyncQueue, record.id);
     return record;
   }
 

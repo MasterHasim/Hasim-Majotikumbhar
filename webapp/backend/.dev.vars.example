@@ -46,4 +46,21 @@ META_ACCESS_TOKEN=
 RESEND_API_KEY=
 RESEND_FROM_EMAIL=
 
+# Zoho CRM Contact sync. Keep all three OAuth values server-side only (Worker secrets in
+# production). Set ZOHO_ACCOUNTS_URL to your data centre, e.g. https://accounts.zoho.in.
+# The external-id field must already exist on Zoho Contacts and be configured as unique.
+ZOHO_CLIENT_ID=
+ZOHO_CLIENT_SECRET=
+ZOHO_REFRESH_TOKEN=
+ZOHO_ACCOUNTS_URL=https://accounts.zoho.com
+ZOHO_CONTACT_EXTERNAL_ID_FIELD=Echt_Customer_ID
+
+# Development-only Zoho Function test path. Keep the complete Function URL (including any
+# API-key query value) in this secret; never put it in frontend/.env*. It remains disabled until
+# the Function's request contract is documented and explicitly verified.
+ZOHO_TEST_FUNCTION_URL= https://www.zohoapis.in/crm/v7/functions/dashboardreq/actions/execute?auth_type=apikey&zapikey=1003.d58c0e20866dd5d85ad6a7ee7382871f.4dbdcdc01a927bc66f4ac9ca3bbff5b6
+ZOHO_TEST_FUNCTION_CONTRACT_VERIFIED=false
+# Optional: export only explicitly-approved Customer/Lead custom-field keys, comma-separated.
+ZOHO_TEST_CUSTOM_FIELD_ALLOWLIST=expected_revenue
+
 # R2 bucket binding is configured in wrangler.toml, not here — see [[r2_buckets]].

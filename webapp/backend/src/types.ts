@@ -1,7 +1,9 @@
 import type { FirebaseServiceAccount } from './lib/firebaseAdmin';
+import type { CustomerSyncQueue, ZohoCrmConfig } from './services/zohoCrm';
+import type { ZohoTestFunctionConfig } from './services/zohoTestFunction';
 
 /** Wrangler bindings — vars come from wrangler.toml, secrets from `wrangler secret put`. See README.md for the one-time setup list. */
-export interface Env {
+export interface Env extends ZohoCrmConfig, ZohoTestFunctionConfig {
   FIREBASE_DATABASE_URL: string;
   ENVIRONMENT: string;
   /** Full service account JSON, as a string (`wrangler secret put FIREBASE_SERVICE_ACCOUNT_JSON`). */
@@ -41,6 +43,8 @@ export interface Env {
   /** Per-collection data-backend override, JSON: {"leads": "dual", "adAccounts": "d1", ...}.
    * A collection absent from this map defaults to 'firebase'. See lib/appDb.ts. */
   DATA_BACKEND_MODES?: string;
+  /** Durable server-side job queue for Firebase Realtime Database customer -> Zoho Contact sync. */
+  ZOHO_CUSTOMER_SYNC_QUEUE?: CustomerSyncQueue;
 }
 
 export function parseServiceAccount(env: Env): FirebaseServiceAccount {

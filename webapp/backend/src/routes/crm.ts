@@ -112,7 +112,7 @@ export function registerCrmRoutes(router: RouterType) {
   });
   router.patch('/api/customers/:id', async (request: IRequest, env: Env) => {
     const ctx = await buildContext(request, env);
-    return Response.json(await new Phase8Api(ctx.db, ctx.identityEmail).updateCustomer(param(request, 'id'), await json(request)));
+    return Response.json(await new Phase8Api(ctx.db, ctx.identityEmail, env.ZOHO_CUSTOMER_SYNC_QUEUE).updateCustomer(param(request, 'id'), await json(request)));
   });
 
   // --- Phase9Api: reminders, snooze ---

@@ -48,6 +48,82 @@ npm test           # runs test/*.test.ts against a mocked Firebase + Exotel
 npm run typecheck
 ```
 
+## Zoho CRM Contact synchronization
+
+Firebase Realtime Database is the source of truth. Creating a customer from an inbound
+WhatsApp message or updating one through the Customer API enqueues only its local id on the
+Cloudflare Queue `whatsapp-panel-zoho-customer-sync`. The queue consumer re-reads the current
+customer, upserts it to Zoho CRM Contacts, and stores the returned `zohoContactId` back on the
+same Firebase customer record. React never receives, stores, or sends Zoho credentials.
+
+Before deploying, create `whatsapp-panel-zoho-customer-sync` and
+`whatsapp-panel-zoho-customer-sync-dlq` with Wrangler, then set these Worker secrets:
+
+```bash
+wrangler secret put ZOHO_CLIENT_ID
+wrangler secret put ZOHO_CLIENT_SECRET
+wrangler secret put ZOHO_REFRESH_TOKEN
+```
+
+Set `ZOHO_ACCOUNTS_URL` for the Zoho data centre (for example,
+`https://accounts.zoho.in`) and create a unique custom field on the Zoho Contacts module named
+`Echt_Customer_ID` (or set `ZOHO_CONTACT_EXTERNAL_ID_FIELD` to that field's API name). That
+stable local id makes queue retries idempotent and prevents duplicate Contacts.
+
+### Development-only Zoho Function payload test
+
+`POST /api/admin/zoho-test/customers/:id/sync` is an ADMIN-only development route that reads
+the authoritative Firebase Realtime Database customer graph and constructs a bounded
+`customer-sync-test-v1` payload. It returns only a status and record counts. It never returns
+the payload or the endpoint secret to React.
+
+Set the complete Function endpoint (including its API-key query parameter) with
+`wrangler secret put ZOHO_TEST_FUNCTION_URL`; do not place it in `wrangler.toml` or any frontend
+environment file. The Function contract was not present in this repository when this path was
+added, so outbound delivery is intentionally disabled unless the development-only
+`ZOHO_TEST_FUNCTION_CONTRACT_VERIFIED` value is explicitly `true`. Keep it `false` until the
+Function owner has confirmed its argument names. Zoho's Functions REST API uses a `POST`
+`multipart/form-data` body with the JSON payload in its `arguments` field (not a raw JSON body).
+The currently configured `DashboardReq` Function expects one string argument named
+`crmAPIRequest`, so the Worker sends `arguments={"crmAPIRequest":"<serialized payload>"}`.
+Zoho has a 95,000-character argument limit; this implementation caps payloads at 90,000
+characters. This test path is independent
+from, and does not alter, the production OAuth Contact synchronization.
+
+## Per-number chatbot callback API
+
+An ADMIN configures each WhatsApp number in **Admin → Chatbot**. The screen holds non-secret
+settings (mode, an optional internal webhook URL, and profile ID), and can generate a distinct
+API key for each number. A generated key is returned to the administrator once only; Firebase
+stores a SHA-256 verification hash, never the plaintext key. Rotating a key immediately makes
+the prior key invalid.
+
+The chatbot team calls this endpoint after it has decided how to handle one customer message:
+
+```text
+POST /api/integrations/chatbot/numbers/{numberId}/reply
+Authorization: Bearer {per-number-chatbot-api-key}
+Content-Type: application/json
+```
+
+```json
+{
+  "conversationId": "conversation_...",
+  "inReplyToMessageId": "message_...",
+  "reply": "Our team will share the details shortly.",
+  "handover": false
+}
+```
+
+Set `handover` to `true` (and optionally include `handoverReason`) to mark the conversation as
+human-owned and turn on ECHT Connect's existing needs-response state. The callback is scoped to
+the number encoded in its URL and key; it cannot access Firebase, another number, ECHT Connect
+users, Zoho, or any general-purpose reply route. `shadow` mode records the received result in
+Admin → Chatbot without sending WhatsApp; only `active` can send a reply. Duplicate callbacks for
+the same inbound message are idempotently ignored. The current implementation does not call an
+external chatbot webhook yet: that outbound request is intentionally pending the chatbot team's
+verified request/response contract.
+
 ## Structure
 
 - `src/index.ts` — router + top-level error/CORS handling.

@@ -1,5 +1,7 @@
 node_modules/
 .wrangler/
 .dev.vars
+# Local Firebase service-account key downloaded for `wrangler dev`; never commit it.
+echt_connect.json
 dist/
 *.log

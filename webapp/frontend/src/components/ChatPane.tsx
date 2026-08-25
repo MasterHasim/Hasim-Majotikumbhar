@@ -116,6 +116,7 @@ export function ChatPane({ workspace, quickReplies, templates, onAfterSend, onRe
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [calling, setCalling] = useState(false);
+  const [chatbotChanging, setChatbotChanging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showMedia, setShowMedia] = useState(false);
   const [mediaType, setMediaType] = useState('image');
@@ -166,6 +167,21 @@ export function ChatPane({ workspace, quickReplies, templates, onAfterSend, onRe
       setError(err instanceof ApiClientError ? `${err.code}: ${err.message}` : String(err));
     } finally {
       setCalling(false);
+    }
+  }
+
+  async function changeChatbotState(action: 'handoff' | 'resume') {
+    if (chatbotChanging) return;
+    setChatbotChanging(true);
+    setError(null);
+    try {
+      if (action === 'handoff') await backendApi.handoffChatbot(workspace.conversation.id);
+      else await backendApi.resumeChatbot(workspace.conversation.id);
+      onAfterSend();
+    } catch (err) {
+      setError(err instanceof ApiClientError ? `${err.code}: ${err.message}` : String(err));
+    } finally {
+      setChatbotChanging(false);
     }
   }
 
@@ -223,6 +239,11 @@ export function ChatPane({ workspace, quickReplies, templates, onAfterSend, onRe
         <div className="meta">
           {workspace.customer?.phone} · Assigned to {workspace.assignedUserName || 'nobody'}
         </div>
+        {workspace.number?.chatbotMode && workspace.number.chatbotMode !== 'off' && (
+          <div className="meta">
+            Chatbot: <strong>{workspace.number.chatbotMode}</strong>{workspace.conversation.chatbotState === 'HUMAN' ? ' · handed to team' : ''}
+          </div>
+        )}
         <div className="chat-actions">
           {workspace.customer?.phone && (
             <button className="btn call" disabled={calling} onClick={() => void call()}>
@@ -231,6 +252,10 @@ export function ChatPane({ workspace, quickReplies, templates, onAfterSend, onRe
           )}
           {workspace.conversation.status === 'OPEN' && (
             <button className="btn" onClick={onResolve}>Resolve</button>
+          )}
+          {workspace.number?.chatbotMode === 'active' && (workspace.conversation.chatbotState === 'HUMAN'
+            ? <button className="btn" disabled={chatbotChanging} onClick={() => void changeChatbotState('resume')}>{chatbotChanging ? 'Updating…' : 'Resume bot'}</button>
+            : <button className="btn" disabled={chatbotChanging} onClick={() => void changeChatbotState('handoff')}>{chatbotChanging ? 'Updating…' : 'Take over'}</button>
           )}
           {onToggleDetail && <button className="chat-info-btn" aria-label="Customer details" onClick={onToggleDetail}>ℹ</button>}
         </div>
