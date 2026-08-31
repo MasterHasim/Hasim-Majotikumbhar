@@ -52,14 +52,14 @@ export function registerTemplateRoutes(router: RouterType) {
 
   router.post('/api/quick-replies', async (request: IRequest, env: Env) => {
     const ctx = await buildContext(request, env);
-    return Response.json(await new Phase11Api(ctx.db, ctx.identityEmail).createQuickReply(await json(request) as never));
+    return Response.json(await new Phase11Api(ctx.db, ctx.identityEmail, ctx.env).createQuickReply(await json(request) as never));
   });
   router.patch('/api/quick-replies/:id', async (request: IRequest, env: Env) => {
     const ctx = await buildContext(request, env);
-    return Response.json(await new Phase11Api(ctx.db, ctx.identityEmail).updateQuickReply(param(request, 'id'), await json(request)));
+    return Response.json(await new Phase11Api(ctx.db, ctx.identityEmail, ctx.env).updateQuickReply(param(request, 'id'), await json(request)));
   });
   router.get('/api/quick-replies', async (request: IRequest, env: Env) => {
     const ctx = await buildContext(request, env);
-    return Response.json(await new Phase11Api(ctx.db, ctx.identityEmail).listQuickReplies());
+    return Response.json(await new Phase11Api(ctx.db, ctx.identityEmail, ctx.env).listQuickReplies());
   });
 }

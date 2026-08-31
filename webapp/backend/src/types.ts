@@ -45,6 +45,11 @@ export interface Env extends ZohoCrmConfig, ZohoTestFunctionConfig {
   DATA_BACKEND_MODES?: string;
   /** Durable server-side job queue for Firebase Realtime Database customer -> Zoho Contact sync. */
   ZOHO_CUSTOMER_SYNC_QUEUE?: CustomerSyncQueue;
+  /** Free-tier edge cache for a small set of low-risk, rarely-changing collections (lead
+   * stages, quick replies, custom field definitions) — see lib/kvCache.ts. Optional: every
+   * caller falls back to reading Firebase directly when this binding is absent (e.g. a test
+   * environment), so this is additive, never required for correctness. */
+  CONFIG_CACHE?: KVNamespace;
 }
 
 export function parseServiceAccount(env: Env): FirebaseServiceAccount {

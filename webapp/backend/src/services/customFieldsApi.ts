@@ -13,9 +13,11 @@ import { AccessControl, type Phase1Repositories } from '../lib/accessControl';
 import { AuditLogService } from '../lib/auditLog';
 import { AppDb } from '../lib/appDb';
 import { buildPhase1Repositories } from '../lib/phase1Repositories';
+import { cachedList, invalidateCache } from '../lib/kvCache';
 
 const FIELD_TYPES: readonly CustomFieldType[] = ['text', 'number', 'select', 'date', 'campaign'];
 const ENTITY_TYPES: readonly CustomFieldEntityType[] = ['lead', 'customer'];
+const DEFINITIONS_CACHE_KEY = 'customFieldDefinitions:all';
 
 function slugify(label: string): string {
   return label.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
@@ -26,7 +28,7 @@ export class CustomFieldsApi {
   private audit: AuditLogService;
   private definitions: Repository<CustomFieldDefinition>;
 
-  constructor(db: AppDb, identityEmail: string) {
+  constructor(db: AppDb, identityEmail: string, private cache?: KVNamespace) {
     const repos: Phase1Repositories = buildPhase1Repositories(db);
     this.audit = new AuditLogService(db);
     this.access = new AccessControl(repos, this.audit, identityEmail);
@@ -34,10 +36,12 @@ export class CustomFieldsApi {
   }
 
   /** Any authenticated user can read definitions — needed to render a Lead/Customer's own
-   * fields for anyone who can already touch that record, not just the managers who define them. */
+   * fields for anyone who can already touch that record, not just the managers who define them.
+   * Caches the full, unfiltered list (all entity types) under one key, filtering per-call after
+   * the cache read — so a 'lead' and a 'customer' request share the same cached fetch. */
   async listDefinitions(entityType?: string): Promise<CustomFieldDefinition[]> {
     await this.access.currentUser();
-    const all = await this.definitions.list();
+    const all = await cachedList(this.cache, DEFINITIONS_CACHE_KEY, () => this.definitions.list());
     return all
       .filter((d) => !entityType || d.entityType === entityType)
       .sort((a, b) => a.sequenceOrder - b.sequenceOrder);
@@ -62,6 +66,7 @@ export class CustomFieldsApi {
       sequenceOrder: sameEntity.length + 1, createdAt: now, updatedAt: now,
     };
     await this.definitions.create(record);
+    await invalidateCache(this.cache, DEFINITIONS_CACHE_KEY);
     await this.audit.write(actor.id, 'customField.created', 'customFieldDefinition', record.id, { entityType, key, type });
     return record;
   }
@@ -81,6 +86,7 @@ export class CustomFieldsApi {
     if (safePatch.label !== undefined) safePatch.label = Validation.requiredString(safePatch.label, 'label');
     if (safePatch.options !== undefined) safePatch.options = Validation.stringArray(safePatch.options, 'options').map((o) => String(o).trim()).filter(Boolean);
     const record = await this.definitions.update(id, safePatch as Partial<CustomFieldDefinition>);
+    await invalidateCache(this.cache, DEFINITIONS_CACHE_KEY);
     await this.audit.write(actor.id, 'customField.updated', 'customFieldDefinition', id, { patch: safePatch });
     return record;
   }

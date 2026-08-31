@@ -187,15 +187,15 @@ export function registerPhase22Routes(router: RouterType) {
 
   router.get('/api/custom-fields', async (request: IRequest, env: Env) => {
     const ctx = await buildContext(request, env);
-    return Response.json(await new CustomFieldsApi(ctx.db, ctx.identityEmail).listDefinitions(query(request, 'entityType')));
+    return Response.json(await new CustomFieldsApi(ctx.db, ctx.identityEmail, ctx.env.CONFIG_CACHE).listDefinitions(query(request, 'entityType')));
   });
   router.post('/api/custom-fields', async (request: IRequest, env: Env) => {
     const ctx = await buildContext(request, env);
-    return Response.json(await new CustomFieldsApi(ctx.db, ctx.identityEmail).createDefinition(await json(request) as never));
+    return Response.json(await new CustomFieldsApi(ctx.db, ctx.identityEmail, ctx.env.CONFIG_CACHE).createDefinition(await json(request) as never));
   });
   router.patch('/api/custom-fields/:id', async (request: IRequest, env: Env) => {
     const ctx = await buildContext(request, env);
-    return Response.json(await new CustomFieldsApi(ctx.db, ctx.identityEmail).updateDefinition(param(request, 'id'), await json(request)));
+    return Response.json(await new CustomFieldsApi(ctx.db, ctx.identityEmail, ctx.env.CONFIG_CACHE).updateDefinition(param(request, 'id'), await json(request)));
   });
 
   // --- Product Master ---

@@ -25,6 +25,16 @@
 
 Full backend suite: 237/237 passing (added 2 regression tests during these fixes, on top of the 234 already there). Frontend: typecheck clean, build clean, 8/8 new tests passing. Both backend and frontend deployed and live-verified.
 
+## ✅ Two more free-tier perf items: preconnect hints + Workers KV read-through cache (2026-08-31)
+
+**Continuing the free-tier perf list from the same day**, per your explicit "continue with #3 and #5":
+
+**#5 — Preconnect hints.** `index.html` now preconnects to the backend API origin and Google's Identity Toolkit/Secure Token endpoints (every Firebase Auth sign-in/token-refresh call goes to those), alongside the Google Fonts preconnects already there. Uses Vite's `%VITE_API_BASE_URL%` env substitution so this stays correct across environments instead of hardcoding the URL — verified the built `dist/index.html` actually resolved it correctly, not just trusting the syntax.
+
+**#3 — Cloudflare Workers KV read-through cache** (free tier: 100k reads/day, 1k writes/day, 1GB storage), for a small, deliberately narrow set of collections: **lead stages, quick replies, and custom field definitions**. All three are read on nearly every page load but almost never written (admin-only config), so they were hitting Firebase fresh every single time for no reason. New `lib/kvCache.ts` — a generic `cachedList`/`invalidateCache` pair, moderate TTL (5 min) as a safety net, but real freshness comes from every create/update on a cached collection deleting its own cache key immediately. Deliberately did **not** cache `roles`/permissions — a stale permission grant is a real security concern, not just a UX one, and that path already has its own per-request-only cache from earlier subrequest-limit work; a cross-request cache on something security-sensitive needs more care than a first pass like this. The cache is fully optional everywhere (`kv?: KVNamespace`) — absent in tests or a misconfigured environment, everything just falls back to reading Firebase directly, never a hard failure.
+
+6 new tests (the generic helper's hit/miss/invalidate behavior, plus one real end-to-end test per collection proving a write actually clears the cache key, not just that the code compiles). 279 backend tests + 8 frontend tests passing, both deployed.
+
 ## ✅ Frontend load-time optimization, free-tier only (2026-08-31)
 
 **Per your ask for faster load times, free stack only.** Checked concretely rather than guessing, found two genuinely dead dependencies actually bloating the bundle, and removed them, plus lazy-loaded the remaining pages that weren't already split:

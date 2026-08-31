@@ -65,19 +65,19 @@ export function registerCrmRoutes(router: RouterType) {
   // --- Phase8Api: lead stages, customer stage, remarks, customers ---
   router.post('/api/lead-stages/seed-defaults', async (request: IRequest, env: Env) => {
     const ctx = await buildContext(request, env);
-    return Response.json(await new Phase8Api(ctx.db, ctx.identityEmail).seedDefaultLeadStages());
+    return Response.json(await new Phase8Api(ctx.db, ctx.identityEmail, undefined, env.CONFIG_CACHE).seedDefaultLeadStages());
   });
   router.post('/api/lead-stages', async (request: IRequest, env: Env) => {
     const ctx = await buildContext(request, env);
-    return Response.json(await new Phase8Api(ctx.db, ctx.identityEmail).createStage(await json(request) as never));
+    return Response.json(await new Phase8Api(ctx.db, ctx.identityEmail, undefined, env.CONFIG_CACHE).createStage(await json(request) as never));
   });
   router.patch('/api/lead-stages/:id', async (request: IRequest, env: Env) => {
     const ctx = await buildContext(request, env);
-    return Response.json(await new Phase8Api(ctx.db, ctx.identityEmail).updateStage(param(request, 'id'), await json(request)));
+    return Response.json(await new Phase8Api(ctx.db, ctx.identityEmail, undefined, env.CONFIG_CACHE).updateStage(param(request, 'id'), await json(request)));
   });
   router.get('/api/lead-stages', async (request: IRequest, env: Env) => {
     const ctx = await buildContext(request, env);
-    return Response.json(await new Phase8Api(ctx.db, ctx.identityEmail).listStages());
+    return Response.json(await new Phase8Api(ctx.db, ctx.identityEmail, undefined, env.CONFIG_CACHE).listStages());
   });
   router.post('/api/customers/:id/stage', async (request: IRequest, env: Env) => {
     const ctx = await buildContext(request, env);

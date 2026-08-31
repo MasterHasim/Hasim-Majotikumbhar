@@ -14,18 +14,23 @@ import { AccessControl, type Phase1Repositories } from '../lib/accessControl';
 import { AuditLogService } from '../lib/auditLog';
 import { AppDb } from '../lib/appDb';
 import { buildPhase1Repositories } from '../lib/phase1Repositories';
+import { cachedList, invalidateCache } from '../lib/kvCache';
+
+const CACHE_KEY = 'quickReplies:active';
 
 export class Phase11Api {
   readonly access: AccessControl;
   private phase1Repos: Phase1Repositories;
   private audit: AuditLogService;
   private quickReplies: Repository<QuickReply>;
+  private cache?: KVNamespace;
 
-  constructor(db: AppDb, identityEmail: string) {
+  constructor(db: AppDb, identityEmail: string, env?: { CONFIG_CACHE?: KVNamespace }) {
     this.phase1Repos = buildPhase1Repositories(db);
     this.audit = new AuditLogService(db);
     this.access = new AccessControl(this.phase1Repos, this.audit, identityEmail);
     this.quickReplies = new Repository<QuickReply>(db, 'quickReplies');
+    this.cache = env?.CONFIG_CACHE;
   }
 
   async createQuickReply(input: { shortcut: string; text: string; active?: boolean }): Promise<QuickReply> {
@@ -35,6 +40,7 @@ export class Phase11Api {
     const now = Ids.now();
     const record: QuickReply = { id: Ids.create('quickreply'), shortcut, text: Validation.requiredString(input.text, 'text'), active: input.active !== false, createdAt: now, updatedAt: now };
     await this.quickReplies.create(record);
+    await invalidateCache(this.cache, CACHE_KEY);
     await this.audit.write(actor.id, 'quickReply.created', 'quickReply', record.id, {});
     return record;
   }
@@ -49,12 +55,14 @@ export class Phase11Api {
       safePatch[key] = patch[key];
     }
     const record = await this.quickReplies.update(id, safePatch as Partial<QuickReply>);
+    await invalidateCache(this.cache, CACHE_KEY);
     await this.audit.write(actor.id, 'quickReply.updated', 'quickReply', id, {});
     return record;
   }
 
   async listQuickReplies(): Promise<QuickReply[]> {
     await this.access.currentUser(); // any authenticated user may see the quick-reply list (used for the compose box)
-    return (await this.quickReplies.list()).filter((q) => q.active !== false).sort((a, b) => (a.shortcut || '').localeCompare(b.shortcut || ''));
+    return cachedList(this.cache, CACHE_KEY, async () =>
+      (await this.quickReplies.list()).filter((q) => q.active !== false).sort((a, b) => (a.shortcut || '').localeCompare(b.shortcut || '')));
   }
 }

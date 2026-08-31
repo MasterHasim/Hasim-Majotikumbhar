@@ -53,3 +53,12 @@ queue = "whatsapp-panel-zoho-customer-sync"
 max_batch_size = 10
 max_retries = 8
 dead_letter_queue = "whatsapp-panel-zoho-customer-sync-dlq"
+
+# Free-tier edge cache (KV free tier: 100k reads/day, 1k writes/day, 1GB storage) for a small,
+# deliberately narrow set of low-security-risk, rarely-changing collections (lead stages, quick
+# replies, custom field definitions — see lib/kvCache.ts). Every write to a cached collection
+# invalidates its key, with a moderate TTL as a safety net; nothing security-sensitive (roles,
+# permissions) is cached here.
+[[kv_namespaces]]
+binding = "CONFIG_CACHE"
+id = "a5851fcc388d4092af969715947b3b7d"

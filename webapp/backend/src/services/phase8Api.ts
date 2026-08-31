@@ -10,6 +10,9 @@ import { AppDb } from '../lib/appDb';
 import { buildPhase1Repositories } from '../lib/phase1Repositories';
 import { validateCustomFieldValues } from './customFieldsApi';
 import { enqueueCustomerSync, type CustomerSyncQueue } from './zohoCrm';
+import { cachedList, invalidateCache } from '../lib/kvCache';
+
+const STAGES_CACHE_KEY = 'stages:all';
 
 const DEFAULT_STAGES = [
   { key: 'new_leads', name: 'New Leads' },
@@ -31,7 +34,7 @@ export class Phase8Api {
   private remarks: Repository<Remark>;
   private customFieldDefs: Repository<CustomFieldDefinition>;
 
-  constructor(db: AppDb, identityEmail: string, private customerSyncQueue?: CustomerSyncQueue) {
+  constructor(db: AppDb, identityEmail: string, private customerSyncQueue?: CustomerSyncQueue, private cache?: KVNamespace) {
     this.phase1Repos = buildPhase1Repositories(db);
     this.audit = new AuditLogService(db);
     this.access = new AccessControl(this.phase1Repos, this.audit, identityEmail);
@@ -54,6 +57,7 @@ export class Phase8Api {
       await this.stages.create(record);
       created.push(record);
     }
+    await invalidateCache(this.cache, STAGES_CACHE_KEY);
     return created;
   }
 
@@ -64,6 +68,7 @@ export class Phase8Api {
     const now = Ids.now();
     const record: Stage = { id: Ids.create('stage'), key, name: Validation.requiredString(input.name, 'name'), sequenceOrder: input.sequenceOrder || (await this.stages.count()) + 1, active: input.active !== false, createdAt: now, updatedAt: now };
     await this.stages.create(record);
+    await invalidateCache(this.cache, STAGES_CACHE_KEY);
     await this.audit.write(actor.id, 'leadStage.created', 'leadStage', record.id, {});
     return record;
   }
@@ -78,13 +83,14 @@ export class Phase8Api {
       safePatch[key] = patch[key];
     }
     const record = await this.stages.update(id, safePatch as Partial<Stage>);
+    await invalidateCache(this.cache, STAGES_CACHE_KEY);
     await this.audit.write(actor.id, 'leadStage.updated', 'leadStage', id, {});
     return record;
   }
 
   async listStages(): Promise<Stage[]> {
     await this.access.currentUser(); // any authenticated user may see the stage list
-    return (await this.stages.list()).sort((a, b) => a.sequenceOrder - b.sequenceOrder);
+    return cachedList(this.cache, STAGES_CACHE_KEY, async () => (await this.stages.list()).sort((a, b) => a.sequenceOrder - b.sequenceOrder));
   }
 
   async setCustomerStage(customerId: string, stageId: string): Promise<CustomerStage> {
