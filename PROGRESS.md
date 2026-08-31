@@ -25,6 +25,18 @@
 
 Full backend suite: 237/237 passing (added 2 regression tests during these fixes, on top of the 234 already there). Frontend: typecheck clean, build clean, 8/8 new tests passing. Both backend and frontend deployed and live-verified.
 
+## ✅ Frontend load-time optimization, free-tier only (2026-08-31)
+
+**Per your ask for faster load times, free stack only.** Checked concretely rather than guessing, found two genuinely dead dependencies actually bloating the bundle, and removed them, plus lazy-loaded the remaining pages that weren't already split:
+
+1. **`firebase/database`'s `getDatabase()`/`realtimeDb`** in `lib/firebase.ts` was created but imported nowhere else — the realtime feature deliberately uses REST + `EventSource` instead (a real architectural choice made earlier this project, with its own doc comment explaining why), so this was pure dead weight.
+2. **`react-router-dom`** was a listed dependency imported nowhere in the source at all — the app does its own `page`-state switching, never actual URL routing. Removed from `package.json` and the lockfile.
+3. **Lazy-loaded Leads, Reminders, Call History, and Customers** the same way Admin/Dashboard/Home already were (2026-08-24) — each only loads its JS chunk the first time a session actually visits it. Inbox stays eager, since it's what the common case (a signed-in AGENT) lands on immediately; splitting it would just add a loading flicker to the busiest path for no benefit.
+
+**Real, measured result**: the main bundle dropped from **557.68 kB → 355.48 kB** (gzip: 138.22 kB → 92.77 kB) — the Vite "chunk exceeds 500kB" warning is gone entirely for the first time. Typecheck clean, 8 frontend tests passing, deployed.
+
+**Further free-tier options discussed, not yet built** (your call on priority): caching hot/rarely-changing data (roles, stages, quick replies, custom field definitions) in Cloudflare Workers KV instead of hitting Firebase fresh every time; a service-worker cache-first app shell once the PWA conversion happens (repeat visits skip the network for JS/CSS almost entirely); `<link rel="preconnect">` hints for the backend API and Firebase Auth origins to shave DNS/TLS time off the first request. The in-progress D1 migration (see above) serves this same goal for real backend response time once it's cut over.
+
 ## ✅ Chatbot integration now actually delivers messages, not just decides to (2026-08-31)
 
 **Per your explicit ask**: you have a real, ready-to-publish FastAPI + Exotel + Supabase chatbot and wanted a placeholder/contract your team can connect to, where updates on their side "automatically update" here. Turned out the scaffolding for this was already built (from the "Add secure Zoho and per-number chatbot integrations" work just before this session) — Admin → Chatbot already had per-number mode (off/shadow/active/paused), a webhook URL + profile ID field, and a one-time API-key generator for the *inbound* direction (chatbot → panel, to submit a reply or request a human handover). What was missing, confirmed by `chatbotRouting.ts`'s own comment ("provider credentials and a verified request contract must be added before any live number can receive automatic bot replies"): the **outbound** half — this panel never actually called the chatbot's webhook. Every inbound WhatsApp message computed a routing decision and logged it, with nowhere for that decision to go.

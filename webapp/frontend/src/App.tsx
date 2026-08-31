@@ -7,19 +7,23 @@ import type { WhatsAppNumber, WhoAmI } from './types';
 import { NumberPicker } from './components/NumberPicker';
 import { Sidebar, type Page } from './components/Sidebar';
 import { Inbox } from './components/Inbox';
-import { Leads } from './components/Leads';
-import { Reminders } from './components/Reminders';
-import { CallHistory } from './components/CallHistory';
-import { Customers } from './components/Customers';
 import { PublicQuotationView } from './components/PublicQuotationView';
 
-// Code-split the three heaviest, least-immediately-needed surfaces (Admin alone is ~1300 lines,
-// over a third of all component code) out of the initial bundle — audit 2026-08-24 flagged the
-// single ~609kB chunk. Each is only rendered behind its own REPORTS_VIEW/ADMIN role gate anyway,
-// so a signed-in AGENT (the common case) never even requests these chunks.
+// Code-split every page except Inbox out of the initial bundle — Inbox is what the common case
+// (a signed-in AGENT) lands on immediately, so lazy-loading it would just add a loading flicker
+// to the busiest path for no benefit; everything else is only visited some sessions, not every
+// one. Admin alone is ~1300 lines, over a third of all component code (audit 2026-08-24 flagged
+// the original single ~609kB chunk) — each of these is also gated behind its own permission
+// check, so a role that can't see a page never even requests its chunk.
 const Admin = lazy(() => import('./components/Admin').then((m) => ({ default: m.Admin })));
+const Leads = lazy(() => import('./components/Leads').then((m) => ({ default: m.Leads })));
+const Reminders = lazy(() => import('./components/Reminders').then((m) => ({ default: m.Reminders })));
+const CallHistory = lazy(() => import('./components/CallHistory').then((m) => ({ default: m.CallHistory })));
+const Customers = lazy(() => import('./components/Customers').then((m) => ({ default: m.Customers })));
 const Dashboard = lazy(() => import('./components/Dashboard').then((m) => ({ default: m.Dashboard })));
 const Home = lazy(() => import('./components/Home').then((m) => ({ default: m.Home })));
+
+const pageLoadingFallback = <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>Loading…</p>;
 
 /** Mirrors Sidebar's REPORTS_ROLES — the roles that can see Home/Dashboard. Used to pick a
  * default landing page that a given signed-in user can actually see, instead of always
@@ -231,7 +235,7 @@ export default function App() {
       <div id="mainArea">
         <div id="pageContent">
           {page === 'home' && (
-            <Suspense fallback={<p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>Loading…</p>}>
+            <Suspense fallback={pageLoadingFallback}>
               <Home />
             </Suspense>
           )}
@@ -239,18 +243,32 @@ export default function App() {
             <Inbox number={activeNumber} initialConversationId={pendingConversationId} onInitialConversationConsumed={() => setPendingConversationId(null)} />
           )}
           {page === 'leads' && (
-            <Leads whoAmI={whoAmI} onOpenConversation={openConversation} initialLeadId={pendingLeadId} onInitialLeadConsumed={() => setPendingLeadId(null)} callPromptEnabled={callPromptEnabled} />
+            <Suspense fallback={pageLoadingFallback}>
+              <Leads whoAmI={whoAmI} onOpenConversation={openConversation} initialLeadId={pendingLeadId} onInitialLeadConsumed={() => setPendingLeadId(null)} callPromptEnabled={callPromptEnabled} />
+            </Suspense>
           )}
-          {page === 'reminders' && <Reminders number={activeNumber} onOpenConversation={openConversation} onOpenLead={openLead} />}
-          {page === 'callHistory' && <CallHistory isManager={whoAmI.roleKeys.includes('ADMIN') || whoAmI.roleKeys.includes('SITE_MANAGER')} onOpenConversation={openConversation} />}
-          {page === 'customers' && <Customers number={activeNumber} onOpenConversation={openConversation} />}
+          {page === 'reminders' && (
+            <Suspense fallback={pageLoadingFallback}>
+              <Reminders number={activeNumber} onOpenConversation={openConversation} onOpenLead={openLead} />
+            </Suspense>
+          )}
+          {page === 'callHistory' && (
+            <Suspense fallback={pageLoadingFallback}>
+              <CallHistory isManager={whoAmI.roleKeys.includes('ADMIN') || whoAmI.roleKeys.includes('SITE_MANAGER')} onOpenConversation={openConversation} />
+            </Suspense>
+          )}
+          {page === 'customers' && (
+            <Suspense fallback={pageLoadingFallback}>
+              <Customers number={activeNumber} onOpenConversation={openConversation} />
+            </Suspense>
+          )}
           {page === 'dashboard' && (
-            <Suspense fallback={<p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>Loading…</p>}>
+            <Suspense fallback={pageLoadingFallback}>
               <Dashboard number={activeNumber} />
             </Suspense>
           )}
           {page === 'admin' && (whoAmI.roleKeys.includes('ADMIN') || whoAmI.roleKeys.includes('SUPERVISOR') || whoAmI.roleKeys.includes('SITE_MANAGER')) && (
-            <Suspense fallback={<p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>Loading…</p>}>
+            <Suspense fallback={pageLoadingFallback}>
               <Admin whoAmI={whoAmI} />
             </Suspense>
           )}
