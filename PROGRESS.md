@@ -25,6 +25,20 @@
 
 Full backend suite: 237/237 passing (added 2 regression tests during these fixes, on top of the 234 already there). Frontend: typecheck clean, build clean, 8/8 new tests passing. Both backend and frontend deployed and live-verified.
 
+## ✅ Firebase RTDB → D1 migration, Phase 4: first real staged cutover live (2026-08-31)
+
+**Per your "deploy the D1 migration's next phase."** Phase 1 (foundations, staging-only) was done earlier — this is the real thing: production D1, and the first two collections actually cut over.
+
+- **Production D1 database created** (`whatsapp-panel-db`, separate from the staging one used for Phase 1's validation), same 34-table schema applied.
+- **New ops tooling** (`D1MigrationApi`, ADMIN-only): `backfill` (one-time, idempotent copy of a collection's current Firebase data into D1) and `verifyParity` (diffs Firebase against D1 record-by-record, correctly treating Firebase's "drops empty arrays/objects on write" quirk as a non-mismatch rather than a false positive). Not exposed in the UI — these are for me to run while a collection is being staged, not a feature you'll use directly.
+- **`adAccounts` and `quickReplies` are now in `dual` mode** — the two lowest-risk collections (barely written, nothing PII/money-bearing), writing to *both* Firebase and D1 on every change while still reading from Firebase. Per the approved plan: a 1-week validation window starts now, watched with `verifyParity`, before either flips to D1 as the actual read source.
+- **A real config bug caught before it mattered**: `DATA_BACKEND_MODES` was first written right after a `[[d1_databases]]` table in `wrangler.toml` — TOML silently attached it to *that table* instead of `[vars]`, so it would have deployed with dual-mode silently not active. Caught by wrangler's own "unexpected field" warning on deploy, not assumed to be fine; fixed and redeployed, confirmed the var actually shows up in the Vars list this time.
+- **Verified live against real production data, not just tests**: ran the backfill for real (2 `adAccounts` records copied, 0 `quickReplies` — none exist yet), confirmed clean parity (zero missing/extra/mismatched), then made a real write (patched a real ad account) and re-ran parity — the fresh write landed correctly in D1 too. Dual-write is genuinely live, not just configured.
+
+7 new backend tests for the backfill/parity logic itself. 286 backend tests passing overall, deployed.
+
+**Next**: after about a week of clean `verifyParity` checks, flip `adAccounts` and `quickReplies` to pure `d1` mode (Phase 4's completion), then start the same staged process on the next tier of collections.
+
 ## ✅ Two more free-tier perf items: preconnect hints + Workers KV read-through cache (2026-08-31)
 
 **Continuing the free-tier perf list from the same day**, per your explicit "continue with #3 and #5":

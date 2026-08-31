@@ -12,6 +12,7 @@ import { registerDashboardRoutes } from './routes/dashboard';
 import { registerBackupRoutes } from './routes/backup';
 import { registerAdsRoutes } from './routes/ads';
 import { registerZohoTestRoutes } from './routes/zohoTest';
+import { registerD1MigrationRoutes } from './routes/d1Migration';
 import { syncCustomerToZoho, type ZohoCustomerSyncJob } from './services/zohoCrm';
 import { buildAppDb } from './lib/appDb';
 import { parseServiceAccount } from './types';
@@ -30,6 +31,7 @@ registerDashboardRoutes(router);
 registerBackupRoutes(router);
 registerAdsRoutes(router);
 registerZohoTestRoutes(router);
+registerD1MigrationRoutes(router);
 
 router.all('*', () => new Response('Not found', { status: 404 }));
 

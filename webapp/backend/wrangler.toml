@@ -23,6 +23,16 @@ ALLOWED_ORIGINS = "http://localhost:5173,https://whatsapp-panel-frontend.hasim-c
 RESEND_FROM_EMAIL = "ECHT Connect <notifications@updates.echt.co.in>"
 FRONTEND_URL = "https://whatsapp-panel-frontend.hasim-c9e.workers.dev"
 
+# First staged cutover of the Firebase RTDB -> D1 migration (see the migration plan /
+# PROGRESS.md, Phase 4): the two lowest-risk collections — barely written, no PII/money on the
+# line — go to 'dual' mode now (write both Firebase and D1, read from Firebase). A 1-week
+# validation window with verifyD1Parity runs before either is flipped to pure 'd1' mode, per the
+# approved plan. Everything else stays 'firebase' (unlisted = default) until its own turn. Must
+# live in [vars] -- it was briefly misplaced right after a [[d1_databases]] table, where TOML
+# silently attached it to that table instead (wrangler's own "unexpected field" deploy warning
+# is what caught it), so it never actually took effect on that one deploy.
+DATA_BACKEND_MODES = "{\"adAccounts\":\"dual\",\"quickReplies\":\"dual\"}"
+
 # R2 free tier: 10 GB storage, 1M Class A + 10M Class B operations/month, no
 # credit card required. Hosts agent-uploaded media (Phase 6/11's
 # uploadConversationMedia) — the free-tier equivalent of the Apps Script
@@ -31,14 +41,22 @@ FRONTEND_URL = "https://whatsapp-panel-frontend.hasim-c9e.workers.dev"
 binding = "MEDIA_BUCKET"
 bucket_name = "whatsapp-panel-media"
 
-# Firebase RTDB -> D1 migration (see the migration plan / PROGRESS.md). This is the STAGING
-# database — used for backfill/parity-script testing (Phase 3 of the rollout) before any real
-# production data ever touches D1. A separate production D1 database + binding gets added only
-# once staging validates cleanly (decision: staging first, per the approved migration plan).
-# Binding this alone changes nothing: every collection defaults to 'firebase' mode unless
-# explicitly listed in the DATA_BACKEND_MODES var, which is deliberately unset here.
+# Firebase RTDB -> D1 migration (see the migration plan / PROGRESS.md). Phase 1 (foundations,
+# schema, AppDb) and Phase 3 (backfill/parity scripts, sanity-checked against real SQL) were
+# validated against a staging database first, per the approved plan's "staging first" decision.
+# This is now the PRODUCTION database — Phase 4 of the rollout: staged per-collection cutover,
+# starting with low-risk collections (see DATA_BACKEND_MODES below). Binding this alone changes
+# nothing on its own: every collection still defaults to 'firebase' unless explicitly listed in
+# DATA_BACKEND_MODES.
 [[d1_databases]]
 binding = "DB"
+database_name = "whatsapp-panel-db"
+database_id = "1bffae02-c796-4433-8be4-78e97b0d3e1d"
+
+# Staging database, kept bound under a second name for any future backfill/parity dry-runs
+# before a NEW collection's first cutover — not used by anything at runtime today.
+[[d1_databases]]
+binding = "STAGING_DB"
 database_name = "whatsapp-panel-db-staging"
 database_id = "e2ba6025-625c-4496-b09b-8702afa6f99e"
 

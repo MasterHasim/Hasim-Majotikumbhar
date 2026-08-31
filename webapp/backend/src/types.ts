@@ -40,6 +40,10 @@ export interface Env extends ZohoCrmConfig, ZohoTestFunctionConfig {
    * read/write goes to Firebase exactly as before -- this binding only matters for collections
    * explicitly put in 'dual' or 'd1' mode. */
   DB?: D1Database;
+  /** The staging D1 database — kept bound for a future collection's own pre-cutover backfill/
+   * parity dry-run (see the migration plan's "staging first" decision, applied per-collection).
+   * Not used by anything at runtime today. */
+  STAGING_DB?: D1Database;
   /** Per-collection data-backend override, JSON: {"leads": "dual", "adAccounts": "d1", ...}.
    * A collection absent from this map defaults to 'firebase'. See lib/appDb.ts. */
   DATA_BACKEND_MODES?: string;
