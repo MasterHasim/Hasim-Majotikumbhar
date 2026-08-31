@@ -37,7 +37,7 @@ Full backend suite: 237/237 passing (added 2 regression tests during these fixes
 
 7 new backend tests for the backfill/parity logic itself. 286 backend tests passing overall, deployed.
 
-**Next**: after about a week of clean `verifyParity` checks, flip `adAccounts` and `quickReplies` to pure `d1` mode (Phase 4's completion), then start the same staged process on the next tier of collections.
+**Next**: per your explicit instruction, waiting ~1 week before checking — **not before 2026-09-07**. Nothing further happens automatically in the meantime (dual-write just keeps running as configured); when you're ready, ask me to run `verifyParity` again and, if it's still clean, flip `adAccounts`/`quickReplies` to pure `d1` mode (completing Phase 4), then start the same staged process on the next tier of collections.
 
 ## ✅ Two more free-tier perf items: preconnect hints + Workers KV read-through cache (2026-08-31)
 
