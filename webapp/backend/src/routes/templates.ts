@@ -33,7 +33,8 @@ export function registerTemplateRoutes(router: RouterType) {
   });
   router.get('/api/templates', async (request: IRequest, env: Env) => {
     const ctx = await buildContext(request, env);
-    return Response.json(await new Phase10Api(ctx.db, ctx.identityEmail).listTemplates());
+    const wabaId = new URL(request.url).searchParams.get('wabaId') ?? undefined;
+    return Response.json(await new Phase10Api(ctx.db, ctx.identityEmail).listTemplates({ wabaId }));
   });
   router.get('/api/templates/:id', async (request: IRequest, env: Env) => {
     const ctx = await buildContext(request, env);

@@ -123,9 +123,16 @@ export class Phase10Api {
     return updated;
   }
 
-  async listTemplates(): Promise<Template[]> {
+  /** wabaId, when given, scopes the result to just that WABA's templates — the isolation an
+   * agent composing a reply on one number needs (they shouldn't see, let alone be able to
+   * accidentally send, a template approved for a completely different number/brand). Omitted
+   * entirely for Admin's own template-management view, which still needs to see everything to
+   * administer the whole catalog — TEMPLATES_MANAGE is already ADMIN-only, a much smaller trust
+   * boundary than "every signed-in user" that reads this method today. */
+  async listTemplates(filters: { wabaId?: string } = {}): Promise<Template[]> {
     await this.access.currentUser();
-    return (await this.templates.list()).map(normalizeTemplate);
+    const all = (await this.templates.list()).map(normalizeTemplate);
+    return filters.wabaId ? all.filter((t) => t.wabaId === filters.wabaId) : all;
   }
 
   async getTemplate(id: string): Promise<Template> {

@@ -86,11 +86,16 @@ export function Inbox({ number, initialConversationId, onInitialConversationCons
   // Search/filter change (or number switch, or the poll interval): refresh the list without touching the open conversation.
   useEffect(() => { void loadConversations(); }, [loadConversations]);
 
-  // Quick replies and templates aren't number-scoped — fetch once, not on every number switch.
+  // Quick replies aren't number-scoped — fetch once, not on every number switch.
   useEffect(() => {
     backendApi.listQuickReplies().then(setQuickReplies).catch(() => setQuickReplies([]));
-    backendApi.listTemplates().then(setTemplates).catch(() => setTemplates([]));
   }, []);
+
+  // Templates ARE scoped to this number's own WABA — refetch on every number switch, so an
+  // agent composing here never sees (or sends) a template approved for a different number/brand.
+  useEffect(() => {
+    backendApi.listTemplates(number.wabaId).then(setTemplates).catch(() => setTemplates([]));
+  }, [number.wabaId]);
 
   useEffect(() => {
     const interval = setInterval(() => void loadConversations(), LIST_POLL_MS);

@@ -312,7 +312,10 @@ export const backendApi = {
 
   // --- Phase 10/11: templates, quick replies ---
 
-  listTemplates: () => apiFetch<Template[]>('/api/templates'),
+  /** wabaId scopes to just that WABA's templates — pass the current number's wabaId when
+   * composing a reply so an agent never sees (or sends) another number's approved templates.
+   * Omit entirely for Admin's template-management view, which needs to see everything. */
+  listTemplates: (wabaId?: string) => apiFetch<Template[]>(`/api/templates${wabaId ? `?wabaId=${encodeURIComponent(wabaId)}` : ''}`),
 
   createDraftTemplate: (input: { name: string; language: string; category: string; wabaId?: string; components?: unknown[] }) =>
     apiFetch<Template>('/api/templates', { method: 'POST', body: JSON.stringify(input) }),

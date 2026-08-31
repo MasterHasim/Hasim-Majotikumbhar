@@ -85,6 +85,20 @@ describe('Phase10Api / Phase11Api / Phase6Api template+media additions', () => {
       expect(fetched.id).toBe(draft.id);
     });
 
+    it('listTemplates(wabaId) scopes to just that WABA\'s templates, per an explicit request 2026-08-24 that agents on one number should never see another number\'s approved templates', async () => {
+      const draftA = await new Phase10Api(db, ADMIN_EMAIL).createDraftTemplate({ name: 'welcome-a', language: 'en', category: 'MARKETING', wabaId: 'waba-a' });
+      const draftB = await new Phase10Api(db, ADMIN_EMAIL).createDraftTemplate({ name: 'welcome-b', language: 'en', category: 'MARKETING', wabaId: 'waba-b' });
+
+      const unfiltered = await new Phase10Api(db, AGENT_EMAIL).listTemplates();
+      expect(unfiltered.map((t) => t.id)).toEqual(expect.arrayContaining([draftA.id, draftB.id]));
+
+      const scopedToA = await new Phase10Api(db, AGENT_EMAIL).listTemplates({ wabaId: 'waba-a' });
+      expect(scopedToA.map((t) => t.id)).toEqual([draftA.id]);
+
+      const scopedToB = await new Phase10Api(db, AGENT_EMAIL).listTemplates({ wabaId: 'waba-b' });
+      expect(scopedToB.map((t) => t.id)).toEqual([draftB.id]);
+    });
+
     it('listTemplates/getTemplate normalize a legacy record missing "variables" (and/or "components") entirely — real bug, confirmed live 2026-08-23: RTDB omits absent keys, so an old pre-variables-field record came back as undefined and crashed the frontend\'s .join(...)', async () => {
       const draft = await new Phase10Api(db, ADMIN_EMAIL).createDraftTemplate({ name: 'legacy', language: 'en', category: 'MARKETING' });
       const raw = (await db.get(`templates/${draft.id}`)) as Record<string, unknown>;
