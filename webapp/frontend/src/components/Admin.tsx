@@ -340,6 +340,7 @@ function ChatbotTab({ numbers }: { numbers: WhatsAppNumber[] }) {
   const [profileId, setProfileId] = useState('');
   const [status, setStatus] = useState<ChatbotConnectionStatus | null>(null);
   const [newApiKey, setNewApiKey] = useState<string | null>(null);
+  const [newWebhookSecret, setNewWebhookSecret] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const selected = numbers.find((number) => number.id === numberId) ?? null;
@@ -347,6 +348,7 @@ function ChatbotTab({ numbers }: { numbers: WhatsAppNumber[] }) {
   useEffect(() => { if (!numberId && numbers[0]) setNumberId(numbers[0].id); }, [numberId, numbers]);
   useEffect(() => {
     setNewApiKey(null);
+    setNewWebhookSecret(null);
     if (!selected) { setStatus(null); return; }
     setWebhookUrl(selected.chatbotWebhookUrl ?? '');
     setProfileId(selected.chatbotProfileId ?? '');
@@ -362,17 +364,17 @@ function ChatbotTab({ numbers }: { numbers: WhatsAppNumber[] }) {
     } catch (err) { setError(errMsg(err)); } finally { setBusy(false); }
   }
   async function rotateKey() {
-    if (!selected || !window.confirm('Generate a new key? The previous key will stop working immediately.')) return;
+    if (!selected || !window.confirm('Generate a new key? The previous key and webhook secret will stop working immediately.')) return;
     setBusy(true); setError(null);
     try {
       const result = await backendApi.rotateChatbotApiKey(selected.id);
       setNewApiKey(result.apiKey);
+      setNewWebhookSecret(result.webhookSecret);
       setStatus(await backendApi.getChatbotConnectionStatus(selected.id));
     } catch (err) { setError(errMsg(err)); } finally { setBusy(false); }
   }
-  async function copyKey() {
-    if (!newApiKey) return;
-    await navigator.clipboard.writeText(newApiKey);
+  async function copyText(value: string) {
+    await navigator.clipboard.writeText(value);
   }
 
   const replyEndpoint = selected ? `${import.meta.env.VITE_API_BASE_URL}/api/integrations/chatbot/numbers/${encodeURIComponent(selected.id)}/reply` : '';
@@ -404,14 +406,26 @@ function ChatbotTab({ numbers }: { numbers: WhatsAppNumber[] }) {
           </span>
         </div>
         {newApiKey && <div className="form-row" style={{ alignItems: 'center' }}>
+          <span style={{ fontSize: 12, minWidth: 110 }}>API key:</span>
           <code style={{ overflowWrap: 'anywhere', flex: 1 }}>{newApiKey}</code>
-          <button className="btn primary" onClick={() => void copyKey()}>Copy once</button>
-          <button className="btn" onClick={() => setNewApiKey(null)}>Hide</button>
+          <button className="btn primary" onClick={() => void copyText(newApiKey)}>Copy once</button>
         </div>}
-        <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>Give this callback URL and the generated key to the chatbot team:</p>
+        {newWebhookSecret && <div className="form-row" style={{ alignItems: 'center' }}>
+          <span style={{ fontSize: 12, minWidth: 110 }}>Webhook secret:</span>
+          <code style={{ overflowWrap: 'anywhere', flex: 1 }}>{newWebhookSecret}</code>
+          <button className="btn primary" onClick={() => void copyText(newWebhookSecret)}>Copy once</button>
+        </div>}
+        {(newApiKey || newWebhookSecret) && <div className="form-row"><button className="btn" onClick={() => { setNewApiKey(null); setNewWebhookSecret(null); }}>Hide</button></div>}
+
+        <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 10, marginBottom: 4 }}>
+          <strong>Outbound — we call the chatbot.</strong> Every inbound WhatsApp message on this number (while mode is <code>active</code> or <code>shadow</code>, and the conversation isn't handed off to a human) is POSTed as JSON to the webhook URL above, with a body of <code>{'{event, mode, numberId, conversationId, messageId, customerId, customerPhone, customerName, messageType, messageText, timestamp, isNewConversation, isNewCustomer}'}</code>. The request carries a <code>X-Chatbot-Signature: sha256=&lt;hex&gt;</code> header — an HMAC-SHA256 of the raw JSON body using the webhook secret above — so the bot can verify it's really from us before acting on it.
+        </p>
+        <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>
+          <strong>Inbound — the chatbot calls us back.</strong> Give this callback URL and the API key to the chatbot team:
+        </p>
         <code style={{ display: 'block', overflowWrap: 'anywhere', fontSize: 12 }}>{replyEndpoint}</code>
         <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-          Callback body must include <code>conversationId</code>, <code>inReplyToMessageId</code>, optional <code>reply</code>, and optional <code>handover</code>. Shadow mode records a safe activity only; active mode can deliver a bot reply and hand the chat to the team.
+          Authenticated with header <code>Authorization: Bearer &lt;api key&gt;</code>, body must include <code>conversationId</code>, <code>inReplyToMessageId</code>, optional <code>reply</code>, and optional <code>handover</code>. Shadow mode records a safe activity only; active mode can deliver a bot reply and hand the chat to the team.
         </p>
         {status?.latestActivity && <div className="meta">Latest activity: {status.latestActivity.kind} · {status.latestActivity.detail} · {fmt(status.latestActivity.createdAt)}</div>}
       </>}

@@ -21,6 +21,7 @@ import { Phase7Api } from './phase7Api';
 import { Phase22Api } from './phase22Api';
 import { enqueueCustomerSync, type CustomerSyncQueue } from './zohoCrm';
 import { decideInboundChatbotRouting, type ChatbotInboundDecision } from './chatbotRouting';
+import { ChatbotIntegrationApi } from './chatbotIntegrationApi';
 
 export interface IngestResult {
   duplicate?: boolean;
@@ -106,10 +107,15 @@ export class Phase4Api {
     }
 
     const chatbot = decideInboundChatbotRouting(number, conversation);
-    // This records routing readiness only. No external bot call is made until a provider adapter
-    // and its request/response contract are configured server-side.
     if (chatbot.action !== 'disabled') {
       await this.audit.write(null, 'chatbot.inboundRouted', 'conversation', conversation.id, { mode: chatbot.mode, action: chatbot.action, reason: chatbot.reason });
+    }
+    if (chatbot.action === 'reply' || chatbot.action === 'shadow') {
+      // Added 2026-08-31 — this is the provider adapter chatbotRouting.ts's original comment
+      // flagged as missing: actually deliver the message to the chatbot's own webhook, not just
+      // decide and log that it should be. Best-effort/non-blocking internally (see
+      // ChatbotIntegrationApi.notifyInboundMessage) — never allowed to fail this request.
+      await new ChatbotIntegrationApi(this.db, {}).notifyInboundMessage(number, conversation, message, customer, chatbot, isNewConversation, isNewCustomer);
     }
     return { duplicate: false, messageId: message.id, conversationId: conversation.id, customerId: customer.id, chatbot };
   }

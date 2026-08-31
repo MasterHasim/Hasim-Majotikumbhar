@@ -1,6 +1,7 @@
 import { ApiError } from '../types';
 import { Ids } from '../domain/phase1';
 import type { ChatbotConnectionActivity, ChatbotIntegrationCredential, Conversation, Customer, Message, WhatsAppNumber } from '../domain/types';
+import type { ChatbotInboundDecision } from './chatbotRouting';
 import { AppDb } from '../lib/appDb';
 import { Repository } from '../lib/repository';
 import { timingSafeEqual } from '../lib/auth';
@@ -39,6 +40,29 @@ async function sha256(value: string): Promise<string> {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
+async function hmacSha256Hex(secret: string, payload: string): Promise<string> {
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const signature = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payload)));
+  return Array.from(signature, (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+export interface ChatbotInboundWebhookPayload {
+  event: 'inbound_message';
+  mode: 'active' | 'shadow';
+  numberId: string;
+  numberDisplayName: string;
+  conversationId: string;
+  messageId: string;
+  customerId: string;
+  customerPhone: string;
+  customerName: string;
+  messageType: string;
+  messageText: string;
+  timestamp: string;
+  isNewConversation: boolean;
+  isNewCustomer: boolean;
+}
+
 /** Per-number server-to-server API. It deliberately never exposes Firebase, user, or provider credentials to the chatbot. */
 export class ChatbotIntegrationApi {
   private numbers: Repository<WhatsAppNumber>;
@@ -57,19 +81,60 @@ export class ChatbotIntegrationApi {
     this.messages = new Repository<Message>(db, 'webapp_messages');
   }
 
-  /** ADMIN-only caller is checked by the route. The plaintext key exists only in this response. */
-  async rotateNumberApiKey(numberId: string): Promise<{ numberId: string; apiKey: string; apiKeyPrefix: string; generatedAt: string }> {
+  /** ADMIN-only caller is checked by the route. The plaintext key AND webhook secret exist only
+   * in this one response — give both to the chatbot team together: the key authenticates their
+   * calls to receiveReply, the secret lets them verify our outbound webhook calls are really
+   * from us (see notifyInboundMessage). */
+  async rotateNumberApiKey(numberId: string): Promise<{ numberId: string; apiKey: string; apiKeyPrefix: string; webhookSecret: string; generatedAt: string }> {
     const number = await this.numbers.get(numberId);
     if (!number) throw new ApiError(404, 'NOT_FOUND', 'WhatsApp number was not found.');
     const apiKey = `echtcb_${base64Url(crypto.getRandomValues(new Uint8Array(32)))}`;
     const keyPrefix = apiKey.slice(0, 15);
+    const webhookSecret = `echtcbwh_${base64Url(crypto.getRandomValues(new Uint8Array(32)))}`;
     const now = Ids.now();
-    const record: ChatbotIntegrationCredential = { id: numberId, numberId, keyHash: await sha256(apiKey), keyPrefix, createdAt: now, updatedAt: now };
+    const record: ChatbotIntegrationCredential = { id: numberId, numberId, keyHash: await sha256(apiKey), keyPrefix, webhookSecret, createdAt: now, updatedAt: now };
     if (await this.credentials.get(numberId)) await this.credentials.replace(numberId, record);
     else await this.credentials.create(record);
     await this.numbers.update(numberId, { chatbotKeyPrefix: keyPrefix, chatbotKeyLastRotatedAt: now });
-    await this.writeActivity(numberId, 'KEY_ROTATED', 'Per-number chatbot API key generated or rotated.');
-    return { numberId, apiKey, apiKeyPrefix: keyPrefix, generatedAt: now };
+    await this.writeActivity(numberId, 'KEY_ROTATED', 'Per-number chatbot API key and webhook secret generated or rotated.');
+    return { numberId, apiKey, apiKeyPrefix: keyPrefix, webhookSecret, generatedAt: now };
+  }
+
+  /** The other half of the integration: pushes a new inbound message out to the chatbot's own
+   * webhook URL, so it actually learns a message arrived instead of the routing decision just
+   * being computed and logged with nowhere to go (see chatbotRouting.ts's original "future
+   * provider adapter" note — this is that adapter). Signed with HMAC-SHA256 over the raw JSON
+   * body using the per-number webhookSecret, in an `X-Chatbot-Signature: sha256=<hex>` header,
+   * the same convention GitHub/Stripe webhooks use, so the chatbot can verify authenticity
+   * without needing mutual TLS or an allowlist. Deliberately best-effort and non-blocking: this
+   * is called from the live message-ingestion path, and a chatbot outage or misconfigured URL
+   * must never stop a real WhatsApp message from being recorded — every failure is caught and
+   * logged as a WEBHOOK_FAILED activity instead of thrown. */
+  async notifyInboundMessage(number: WhatsAppNumber, conversation: Conversation, message: Message, customer: Customer, decision: Extract<ChatbotInboundDecision, { action: 'reply' | 'shadow' }>, isNewConversation: boolean, isNewCustomer: boolean): Promise<void> {
+    const webhookUrl = number.chatbotWebhookUrl;
+    if (!webhookUrl) return;
+    try {
+      const credential = await this.credentials.get(number.id);
+      if (!credential) { await this.writeActivity(number.id, 'WEBHOOK_FAILED', 'No chatbot credential configured — rotate a key first.', conversation.id, message.id); return; }
+      const payload: ChatbotInboundWebhookPayload = {
+        event: 'inbound_message', mode: decision.action === 'reply' ? 'active' : 'shadow',
+        numberId: number.id, numberDisplayName: number.displayName, conversationId: conversation.id, messageId: message.id,
+        customerId: customer.id, customerPhone: customer.phone, customerName: customer.name,
+        messageType: message.messageType, messageText: message.messageText, timestamp: message.timestamp,
+        isNewConversation, isNewCustomer,
+      };
+      const body = JSON.stringify(payload);
+      const signature = await hmacSha256Hex(credential.webhookSecret, body);
+      const res = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Chatbot-Signature': `sha256=${signature}` },
+        body,
+      });
+      if (!res.ok) { await this.writeActivity(number.id, 'WEBHOOK_FAILED', `Chatbot webhook returned ${res.status}.`, conversation.id, message.id); return; }
+      await this.writeActivity(number.id, 'WEBHOOK_SENT', 'Inbound message forwarded to the chatbot webhook.', conversation.id, message.id);
+    } catch (err) {
+      await this.writeActivity(number.id, 'WEBHOOK_FAILED', `Chatbot webhook request failed: ${err instanceof Error ? err.message : String(err)}`, conversation.id, message.id);
+    }
   }
 
   async getConnectionStatus(numberId: string): Promise<ChatbotConnectionStatus> {

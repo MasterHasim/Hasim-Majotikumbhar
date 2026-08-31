@@ -1,9 +1,11 @@
 import type { ChatbotMode, Conversation, WhatsAppNumber } from '../domain/types';
 
 /**
- * Pure routing guard shared by inbound ingestion and the future chatbot provider adapter.
- * It deliberately does not call an external engine: provider credentials and a verified request
- * contract must be added before any live WhatsApp number can receive automatic bot replies.
+ * Pure routing guard shared by inbound ingestion and the chatbot provider adapter
+ * (ChatbotIntegrationApi.notifyInboundMessage, wired up 2026-08-31). This function only decides
+ * WHETHER and under what mode a message should reach the chatbot — it deliberately never makes
+ * the actual outbound call itself, so the decision stays trivially unit-testable in isolation
+ * from network/signing concerns.
  */
 export type ChatbotInboundDecision =
   | { action: 'disabled'; mode: 'off' | 'paused'; reason: string }

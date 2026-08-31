@@ -91,6 +91,14 @@ export interface ChatbotIntegrationCredential extends Record_ {
   numberId: string;
   keyHash: string;
   keyPrefix: string;
+  /** Unlike keyHash (the chatbot's key TO call us, one-way hashed, never re-readable), this is
+   * the secret WE use to sign every outbound webhook call TO the chatbot, so it can verify the
+   * call really came from this panel — the server has to be able to read it back on every
+   * inbound message, so it's stored plaintext (same trust boundary as the Firebase service
+   * account itself: only reachable through AccessControl-gated backend code, never exposed via
+   * any list/read API). Generated alongside apiKey at rotation time; returned once in that same
+   * response for the admin to hand to the chatbot team together with the key. */
+  webhookSecret: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -100,7 +108,7 @@ export interface ChatbotConnectionActivity extends Record_ {
   numberId: string;
   conversationId?: string;
   inReplyToMessageId?: string;
-  kind: 'KEY_ROTATED' | 'SHADOW_REPLY_RECEIVED' | 'REPLY_SENT' | 'HANDOVER' | 'REPLY_REJECTED';
+  kind: 'KEY_ROTATED' | 'SHADOW_REPLY_RECEIVED' | 'REPLY_SENT' | 'HANDOVER' | 'REPLY_REJECTED' | 'WEBHOOK_SENT' | 'WEBHOOK_FAILED';
   detail: string;
   createdAt: string;
   updatedAt: string;

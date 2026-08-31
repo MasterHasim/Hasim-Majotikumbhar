@@ -63,4 +63,100 @@ describe('per-number chatbot modes', () => {
     expect(status).toMatchObject({ mode: 'shadow', webhookUrlConfigured: true, profileId: 'location-sales', apiKeyConfigured: true });
     expect(status.latestActivity?.kind).toBe('SHADOW_REPLY_RECEIVED');
   });
+
+  describe('notifyInboundMessage (the outbound half — actually delivering to the chatbot\'s webhook, 2026-08-31)', () => {
+    async function hmacHex(secret: string, body: string): Promise<string> {
+      const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+      const sig = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(body)));
+      return Array.from(sig, (b) => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    it('POSTs the inbound message to the number\'s webhook URL, signed with the per-number secret, when mode is active', async () => {
+      const numbers = new Phase3Api(db, ADMIN_EMAIL);
+      const created = await numbers.createNumber({ displayName: 'Chatbot number', phoneNumber: '+917948502802', provider: 'exotel' });
+      const key = await new ChatbotIntegrationApi(db, {}).rotateNumberApiKey(created.id);
+      await numbers.updateNumber(created.id, { chatbotMode: 'active', chatbotWebhookUrl: 'https://bot.internal.example/inbound' });
+
+      let captured: { url: string; body: string; signature: string | null } | null = null;
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+        if (url === 'https://bot.internal.example/inbound') {
+          captured = { url, body: init!.body as string, signature: (init!.headers as Record<string, string>)['X-Chatbot-Signature'] ?? null };
+          return new Response('ok', { status: 200 });
+        }
+        return originalFetch(input, init);
+      }) as typeof fetch;
+
+      try {
+        await new Phase4Api(db).ingestInboundMessage({
+          providerMessageId: 'inbound-chatbot-active-1', fromPhone: '+919876543299', providerNumberId: '+917948502802',
+          direction: 'INBOUND', messageType: 'text', text: 'Hello, need help', timestamp: new Date().toISOString(), status: null, profileName: 'Priya',
+        });
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+
+      expect(captured).not.toBeNull();
+      const payload = JSON.parse(captured!.body);
+      expect(payload).toMatchObject({ event: 'inbound_message', mode: 'active', numberId: created.id, customerPhone: '+919876543299', customerName: 'Priya', messageText: 'Hello, need help', isNewConversation: true, isNewCustomer: true });
+      expect(captured!.signature).toBe(`sha256=${await hmacHex(key.webhookSecret, captured!.body)}`);
+
+      const status = await new ChatbotIntegrationApi(db, {}).getConnectionStatus(created.id);
+      expect(status.latestActivity?.kind).toBe('WEBHOOK_SENT');
+    });
+
+    it('never throws and never blocks ingestion when the webhook call fails', async () => {
+      const numbers = new Phase3Api(db, ADMIN_EMAIL);
+      const created = await numbers.createNumber({ displayName: 'Chatbot number', phoneNumber: '+917948502803', provider: 'exotel' });
+      await new ChatbotIntegrationApi(db, {}).rotateNumberApiKey(created.id);
+      await numbers.updateNumber(created.id, { chatbotMode: 'active', chatbotWebhookUrl: 'https://bot.internal.example/unreachable' });
+
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+        if (url === 'https://bot.internal.example/unreachable') throw new Error('network unreachable');
+        return originalFetch(input, init);
+      }) as typeof fetch;
+
+      let result;
+      try {
+        result = await new Phase4Api(db).ingestInboundMessage({
+          providerMessageId: 'inbound-chatbot-fail-1', fromPhone: '+919876543298', providerNumberId: '+917948502803',
+          direction: 'INBOUND', messageType: 'text', text: 'Hello', timestamp: new Date().toISOString(), status: null,
+        });
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+      expect(result.duplicate).toBe(false); // ingestion succeeded regardless
+
+      const status = await new ChatbotIntegrationApi(db, {}).getConnectionStatus(created.id);
+      expect(status.latestActivity?.kind).toBe('WEBHOOK_FAILED');
+    });
+
+    it('does not call the webhook at all when mode is off/paused, or when the conversation is already handed off to a human', async () => {
+      const numbers = new Phase3Api(db, ADMIN_EMAIL);
+      const created = await numbers.createNumber({ displayName: 'Chatbot number', phoneNumber: '+917948502804', provider: 'exotel' });
+      await new ChatbotIntegrationApi(db, {}).rotateNumberApiKey(created.id);
+      await numbers.updateNumber(created.id, { chatbotMode: 'off', chatbotWebhookUrl: 'https://bot.internal.example/should-not-be-called' });
+
+      const originalFetch = globalThis.fetch;
+      let called = false;
+      globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+        if (url === 'https://bot.internal.example/should-not-be-called') { called = true; return new Response('ok', { status: 200 }); }
+        return originalFetch(input, init);
+      }) as typeof fetch;
+
+      try {
+        await new Phase4Api(db).ingestInboundMessage({
+          providerMessageId: 'inbound-chatbot-off-1', fromPhone: '+919876543297', providerNumberId: '+917948502804',
+          direction: 'INBOUND', messageType: 'text', text: 'Hello', timestamp: new Date().toISOString(), status: null,
+        });
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+      expect(called).toBe(false);
+    });
+  });
 });

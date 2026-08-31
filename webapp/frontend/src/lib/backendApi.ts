@@ -25,7 +25,7 @@ export const backendApi = {
     apiFetch<WhatsAppNumber>(`/api/numbers/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) }),
 
   getChatbotConnectionStatus: (numberId: string) => apiFetch<ChatbotConnectionStatus>(`/api/numbers/${encodeURIComponent(numberId)}/chatbot/connection`),
-  rotateChatbotApiKey: (numberId: string) => apiFetch<{ numberId: string; apiKey: string; apiKeyPrefix: string; generatedAt: string }>(`/api/numbers/${encodeURIComponent(numberId)}/chatbot/key`, { method: 'POST' }),
+  rotateChatbotApiKey: (numberId: string) => apiFetch<{ numberId: string; apiKey: string; apiKeyPrefix: string; webhookSecret: string; generatedAt: string }>(`/api/numbers/${encodeURIComponent(numberId)}/chatbot/key`, { method: 'POST' }),
 
   handoffChatbot: (conversationId: string) => apiFetch<Conversation>(`/api/conversations/${encodeURIComponent(conversationId)}/chatbot/handoff`, { method: 'POST' }),
   resumeChatbot: (conversationId: string) => apiFetch<Conversation>(`/api/conversations/${encodeURIComponent(conversationId)}/chatbot/resume`, { method: 'POST' }),
