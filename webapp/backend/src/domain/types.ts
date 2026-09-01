@@ -114,6 +114,55 @@ export interface ChatbotConnectionActivity extends Record_ {
   updatedAt: string;
 }
 
+/** Added 2026-09-01 — multi-bot-per-number support (Phase 1, additive only, see PROGRESS.md).
+ * One bot attached to exactly one WhatsApp number. Multiple ChatbotProfile records can share a
+ * numberId (the whole point of this system); a profile itself is never shared across numbers.
+ * Entirely parallel to WhatsAppNumber's existing chatbotMode/chatbotWebhookUrl/chatbotProfileId
+ * single-bot fields — those are untouched and continue to be read/written by the original
+ * single-bot code path (chatbotRouting.ts / chatbotIntegrationApi.ts). */
+export interface ChatbotProfile extends Record_ {
+  numberId: string;
+  name: string;
+  mode: ChatbotMode;
+  webhookUrl?: string;
+  externalProfileId?: string;
+  /** Lower = higher priority; admin-orderable among a number's profiles. */
+  priority: number;
+  /** Soft-delete flag, independent of mode — same active+mode split WhatsAppNumber already has. */
+  active: boolean;
+  keyPrefix?: string;
+  keyLastRotatedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** id === profileId. One credential PER PROFILE (not per number) — a leaked key compromises one
+ * bot's reply ability, not every bot on that number; also what makes the reply-callback's
+ * defense-in-depth "wrong profile" check possible (authenticate "which profile" from the key
+ * itself, then verify the conversation was actually routed to it). */
+export interface ChatbotProfileCredential extends Record_ {
+  profileId: string;
+  /** Denormalized so isolation checks never need a second lookup. */
+  numberId: string;
+  keyHash: string;
+  keyPrefix: string;
+  webhookSecret: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ChatbotProfileActivity extends Record_ {
+  profileId: string;
+  numberId: string;
+  conversationId?: string;
+  inReplyToMessageId?: string;
+  kind: 'KEY_ROTATED' | 'SHADOW_REPLY_RECEIVED' | 'REPLY_SENT' | 'HANDOVER' | 'REPLY_REJECTED'
+      | 'WEBHOOK_SENT' | 'WEBHOOK_FAILED' | 'REPLY_REJECTED_WRONG_PROFILE';
+  detail: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Customer extends Record_ {
   phone: string;
   name: string;
@@ -154,6 +203,9 @@ export interface Conversation extends Record_ {
   chatbotState?: 'BOT' | 'HUMAN';
   chatbotHandoffAt?: string;
   chatbotHandoffReason?: string;
+  /** Sticky bot assignment for the multi-bot-profile system (added 2026-09-01). Unset until
+   * first assigned; the original single-bot system never reads or writes this field. */
+  chatbotProfileId?: string;
   createdAt: string;
   updatedAt: string;
 }

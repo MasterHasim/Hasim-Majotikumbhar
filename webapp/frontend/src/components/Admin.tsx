@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState } from 'react';
-import type { AdAccount, AssignmentEligibilityStatus, AuditEntry, AutoDialerSettings, ChatbotConnectionStatus, CustomFieldDefinition, CustomFieldEntityType, CustomFieldType, NumberAccess, NumberAssignmentConfig, NumberAssignmentUser, Product, QuickReply, Role, Stage, Team, TeamMember, Template, User, WhatsAppNumber, WhoAmI } from '../types';
+import type { AdAccount, AssignmentEligibilityStatus, AuditEntry, AutoDialerSettings, ChatbotConnectionStatus, ChatbotProfile, ChatbotProfileConnectionStatus, CustomFieldDefinition, CustomFieldEntityType, CustomFieldType, NumberAccess, NumberAssignmentConfig, NumberAssignmentUser, Product, QuickReply, Role, Stage, Team, TeamMember, Template, User, WhatsAppNumber, WhoAmI } from '../types';
 import { backendApi } from '../lib/backendApi';
 import { ApiClientError } from '../lib/api';
 
@@ -460,6 +460,169 @@ function ChatbotTab({ numbers }: { numbers: WhatsAppNumber[] }) {
         </p>
         {status?.latestActivity && <div className="meta">Latest activity: {status.latestActivity.kind} · {status.latestActivity.detail} · {fmt(status.latestActivity.createdAt)}</div>}
       </>}
+      {error && <div className="form-error">{error}</div>}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+/** Multi-bot-per-number system (Phase 1, added 2026-09-01) — lets several bots share one
+ * WhatsApp number, dispatched in an admin-set priority order (lower listed = tried first). Fully
+ * separate from ChatbotTab above: that single-bot system is untouched, and a number only ever
+ * uses one system or the other (see chatbotProfileApi.ts's dispatch guard). */
+function ChatbotProfilesTab({ numbers }: { numbers: WhatsAppNumber[] }) {
+  const [numberId, setNumberId] = useState('');
+  const [profiles, setProfiles] = useState<ChatbotProfile[] | null>(null);
+  const [statuses, setStatuses] = useState<Record<string, ChatbotProfileConnectionStatus>>({});
+  const [newName, setNewName] = useState('');
+  const [newWebhookUrl, setNewWebhookUrl] = useState('');
+  const [newExternalProfileId, setNewExternalProfileId] = useState('');
+  const [revealed, setRevealed] = useState<{ profileId: string; apiKey: string; webhookSecret: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => { if (!numberId && numbers[0]) setNumberId(numbers[0].id); }, [numberId, numbers]);
+
+  function reload() {
+    if (!numberId) return;
+    backendApi.listChatbotProfiles(numberId).then(async (list) => {
+      setProfiles(list);
+      const entries = await Promise.all(list.map(async (p) => [p.id, await backendApi.getChatbotProfileConnectionStatus(p.id)] as const));
+      setStatuses(Object.fromEntries(entries));
+    }).catch((err) => setError(errMsg(err)));
+  }
+  useEffect(() => { setRevealed(null); setProfiles(null); reload(); }, [numberId]);
+
+  function guard(fn: () => Promise<unknown>) {
+    setBusy(true); setError(null);
+    return fn().then(reload).catch((err) => setError(errMsg(err))).finally(() => setBusy(false));
+  }
+
+  async function addProfile() {
+    const name = newName.trim();
+    if (!name) return;
+    setBusy(true); setError(null);
+    try {
+      await backendApi.createChatbotProfile(numberId, { name, webhookUrl: newWebhookUrl.trim() || undefined, externalProfileId: newExternalProfileId.trim() || undefined });
+      setNewName(''); setNewWebhookUrl(''); setNewExternalProfileId('');
+      reload();
+    } catch (err) { setError(errMsg(err)); } finally { setBusy(false); }
+  }
+
+  async function rotateKey(profileId: string) {
+    if (!window.confirm('Generate a new key for this profile? The previous key and webhook secret will stop working immediately.')) return;
+    setBusy(true); setError(null);
+    try {
+      const result = await backendApi.rotateChatbotProfileApiKey(profileId);
+      setRevealed({ profileId, apiKey: result.apiKey, webhookSecret: result.webhookSecret });
+      reload();
+    } catch (err) { setError(errMsg(err)); } finally { setBusy(false); }
+  }
+
+  function move(profileId: string, direction: -1 | 1) {
+    if (!profiles) return;
+    const index = profiles.findIndex((p) => p.id === profileId);
+    const swapWith = index + direction;
+    if (index < 0 || swapWith < 0 || swapWith >= profiles.length) return;
+    const order = profiles.map((p) => p.id);
+    [order[index], order[swapWith]] = [order[swapWith]!, order[index]!];
+    void guard(() => backendApi.reorderChatbotProfiles(numberId, order));
+  }
+
+  async function copyText(value: string) {
+    await navigator.clipboard.writeText(value);
+  }
+
+  return (
+    <div className="card" style={{ maxWidth: 900 }}>
+      <h2 className="section-title" style={{ marginTop: 0 }}>Chatbot Profiles (multi-bot)</h2>
+      <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+        Attach several independent bots to the same WhatsApp number — e.g. a Sales Bot and a Support Bot both on one number. A new conversation is routed to the highest bot in this list that is Active or Shadow; once routed, that same bot keeps the conversation even if the order changes later. This is a separate system from the single-bot "Chatbot" tab — a number should only ever use one or the other.
+      </p>
+      <div className="form-row">
+        <label>WhatsApp number</label>
+        <select value={numberId} onChange={(e) => setNumberId(e.target.value)} disabled={busy}>
+          {numbers.length === 0 && <option value="">No numbers available</option>}
+          {numbers.map((number) => <option key={number.id} value={number.id}>{number.displayName} · {number.phoneNumber}</option>)}
+        </select>
+        {numberId && numbers.find((n) => n.id === numberId)?.chatbotMode && numbers.find((n) => n.id === numberId)!.chatbotMode !== 'off' && (
+          <span className="pill" title="This number is still on the single-bot Chatbot tab — profiles below will not run until that is turned off.">Legacy chatbot mode: {numbers.find((n) => n.id === numberId)!.chatbotMode}</span>
+        )}
+      </div>
+
+      <table className="data-table">
+        <thead><tr><th>Order</th><th>Name</th><th>Mode</th><th>Active</th><th>Key</th><th></th></tr></thead>
+        <tbody>
+          {profiles === null && <tr><td colSpan={6} className="empty">Loading…</td></tr>}
+          {profiles?.map((p, i) => {
+            const status = statuses[p.id];
+            return (
+              <tr key={p.id}>
+                <td>
+                  <button className="btn" disabled={busy || i === 0} onClick={() => move(p.id, -1)}>↑</button>{' '}
+                  <button className="btn" disabled={busy || i === profiles.length - 1} onClick={() => move(p.id, 1)}>↓</button>
+                </td>
+                <td>{p.name}{p.webhookUrl ? '' : <span className="meta"> (no webhook URL)</span>}</td>
+                <td>
+                  <select value={p.mode} disabled={busy} onChange={(e) => void guard(() => backendApi.updateChatbotProfile(p.id, { mode: e.target.value }))}>
+                    <option value="off">off</option>
+                    <option value="shadow">shadow</option>
+                    <option value="active">active</option>
+                    <option value="paused">paused</option>
+                  </select>
+                </td>
+                <td>
+                  <input type="checkbox" checked={p.active} disabled={busy} onChange={(e) => void guard(() => backendApi.updateChatbotProfile(p.id, { active: e.target.checked }))} />
+                </td>
+                <td style={{ fontSize: 12 }}>{status?.apiKeyConfigured ? `${status.apiKeyPrefix}…` : 'none'}</td>
+                <td><button className="btn" disabled={busy} onClick={() => void rotateKey(p.id)}>{status?.apiKeyConfigured ? 'Rotate' : 'Generate'} key</button></td>
+              </tr>
+            );
+          })}
+          {profiles?.length === 0 && <tr><td colSpan={6} className="empty">No bot profiles on this number yet.</td></tr>}
+        </tbody>
+      </table>
+
+      {revealed && (() => {
+        const replyEndpoint = `${import.meta.env.VITE_API_BASE_URL}/api/integrations/chatbot/profiles/${encodeURIComponent(revealed.profileId)}/reply`;
+        const name = profiles?.find((p) => p.id === revealed.profileId)?.name ?? revealed.profileId;
+        return (
+          <div className="form-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 4 }}>
+            <div className="meta">New credentials for <strong>{name}</strong> — copy now, they are never shown again:</div>
+            <div className="form-row" style={{ alignItems: 'center' }}>
+              <span style={{ fontSize: 12, minWidth: 110 }}>API key:</span>
+              <code style={{ overflowWrap: 'anywhere', flex: 1 }}>{revealed.apiKey}</code>
+              <button className="btn primary" onClick={() => void copyText(revealed.apiKey)}>Copy once</button>
+            </div>
+            <div className="form-row" style={{ alignItems: 'center' }}>
+              <span style={{ fontSize: 12, minWidth: 110 }}>Webhook secret:</span>
+              <code style={{ overflowWrap: 'anywhere', flex: 1 }}>{revealed.webhookSecret}</code>
+              <button className="btn primary" onClick={() => void copyText(revealed.webhookSecret)}>Copy once</button>
+            </div>
+            <div className="form-row" style={{ alignItems: 'center' }}>
+              <span style={{ fontSize: 12, minWidth: 110 }}>Reply callback:</span>
+              <code style={{ overflowWrap: 'anywhere', flex: 1, fontSize: 12 }}>{replyEndpoint}</code>
+            </div>
+            <div className="form-row"><button className="btn" onClick={() => setRevealed(null)}>Hide</button></div>
+          </div>
+        );
+      })()}
+
+      <h3 style={{ fontSize: 14, marginTop: 16 }}>Add a bot profile</h3>
+      <div className="form-row">
+        <input placeholder="Name (e.g. Sales Bot)" value={newName} disabled={busy} onChange={(e) => setNewName(e.target.value)} />
+        <input style={{ flex: 1, minWidth: 260 }} placeholder="Webhook URL (https://...)" value={newWebhookUrl} disabled={busy} onChange={(e) => setNewWebhookUrl(e.target.value)} />
+        <input style={{ minWidth: 160 }} placeholder="Bot profile / agent ID" value={newExternalProfileId} disabled={busy} onChange={(e) => setNewExternalProfileId(e.target.value)} />
+        <button className="btn primary" disabled={busy || !newName.trim() || !numberId} onClick={() => void addProfile()}>Add profile</button>
+      </div>
+
+      <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 10, marginBottom: 4 }}>
+        <strong>Outbound — we call the chatbot.</strong> Every inbound message routed to a profile (mode <code>active</code> or <code>shadow</code>, and the conversation isn't handed off to a human) is POSTed as JSON to that profile's own webhook URL, signed with <code>X-Chatbot-Signature: sha256=&lt;hex&gt;</code> using that profile's own webhook secret — never shared with any other bot on the same number.
+      </p>
+      <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+        <strong>Inbound — the chatbot calls us back.</strong> Give each bot team its own reply callback URL (shown above after generating its key) and API key. Authenticated with <code>Authorization: Bearer &lt;api key&gt;</code>; a reply is rejected if the conversation was actually routed to a different profile on the same number.
+      </p>
       {error && <div className="form-error">{error}</div>}
     </div>
   );
@@ -1387,7 +1550,7 @@ function AdAccountsTab() {
 
 // ---------------------------------------------------------------------------
 
-type AdminTab = 'users' | 'teams' | 'numbers' | 'chatbot' | 'access' | 'assignment' | 'quickReplies' | 'templates' | 'leadStages' | 'customFields' | 'products' | 'adAccounts' | 'autoDialer' | 'audit' | 'backup';
+type AdminTab = 'users' | 'teams' | 'numbers' | 'chatbot' | 'chatbotProfiles' | 'access' | 'assignment' | 'quickReplies' | 'templates' | 'leadStages' | 'customFields' | 'products' | 'adAccounts' | 'autoDialer' | 'audit' | 'backup';
 
 export function Admin({ whoAmI }: { whoAmI: WhoAmI }) {
   const isFullAdmin = whoAmI.roleKeys.includes('ADMIN');
@@ -1405,7 +1568,7 @@ export function Admin({ whoAmI }: { whoAmI: WhoAmI }) {
 
   const tabs: [AdminTab, string][] = isFullAdmin
     ? [
-        ['users', 'Users'], ['teams', 'Teams'], ['numbers', 'Numbers'], ['chatbot', 'Chatbot'], ['access', 'Number Access'],
+        ['users', 'Users'], ['teams', 'Teams'], ['numbers', 'Numbers'], ['chatbot', 'Chatbot'], ['chatbotProfiles', 'Chatbot Profiles'], ['access', 'Number Access'],
         ['assignment', 'Assignment Rules'], ['quickReplies', 'Quick Replies'], ['templates', 'Templates'],
         ['leadStages', 'Lead Stages'], ['customFields', 'Custom Fields'], ['products', 'Products'], ['adAccounts', 'Ad Accounts'],
         ['autoDialer', 'Auto Dialer'], ['audit', 'Audit Log'], ['backup', 'Backup'],
@@ -1425,6 +1588,7 @@ export function Admin({ whoAmI }: { whoAmI: WhoAmI }) {
       {tab === 'teams' && <TeamsTab users={users} roles={roles} />}
       {tab === 'numbers' && <NumbersTab />}
       {tab === 'chatbot' && <ChatbotTab numbers={numbers} />}
+      {tab === 'chatbotProfiles' && <ChatbotProfilesTab numbers={numbers} />}
       {tab === 'access' && <NumberAccessTab users={users} numbers={numbers} />}
       {tab === 'assignment' && <AssignmentRulesTab users={users} numbers={numbers} />}
       {tab === 'quickReplies' && <QuickRepliesSection />}

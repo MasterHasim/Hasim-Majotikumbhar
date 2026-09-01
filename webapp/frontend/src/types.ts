@@ -32,6 +32,45 @@ export interface ChatbotConnectionStatus {
   latestActivity: ChatbotConnectionActivity | null;
 }
 
+/** Multi-bot-per-number system (Phase 1, added 2026-09-01) — one bot attached to a WhatsApp
+ * number; a number can have several. Entirely separate from the single-bot fields above. */
+export interface ChatbotProfile {
+  id: string;
+  numberId: string;
+  name: string;
+  mode: 'off' | 'shadow' | 'active' | 'paused';
+  webhookUrl?: string;
+  externalProfileId?: string;
+  priority: number;
+  active: boolean;
+  keyPrefix?: string;
+  keyLastRotatedAt?: string;
+}
+
+export interface ChatbotProfileActivity {
+  id: string;
+  profileId: string;
+  numberId: string;
+  kind: 'KEY_ROTATED' | 'SHADOW_REPLY_RECEIVED' | 'REPLY_SENT' | 'HANDOVER' | 'REPLY_REJECTED' | 'WEBHOOK_SENT' | 'WEBHOOK_FAILED' | 'REPLY_REJECTED_WRONG_PROFILE';
+  detail: string;
+  createdAt: string;
+}
+
+export interface ChatbotProfileConnectionStatus {
+  profileId: string;
+  numberId: string;
+  name: string;
+  mode: 'off' | 'shadow' | 'active' | 'paused';
+  active: boolean;
+  priority: number;
+  webhookUrlConfigured: boolean;
+  externalProfileId: string;
+  apiKeyConfigured: boolean;
+  apiKeyPrefix: string;
+  keyLastRotatedAt: string;
+  latestActivity: ChatbotProfileActivity | null;
+}
+
 export interface Customer {
   id: string;
   phone: string;

@@ -2,7 +2,7 @@
 import { apiFetch } from './api';
 import type {
   AdAccount, AdInsights, AssignableUser, AssignmentEligibility, AssignmentEligibilityStatus, AuditEntry, AuditEntryWithActor, Availability,
-  AutoDialerSettings, AvailabilityStatus, CallLog, ChatbotConnectionStatus,
+  AutoDialerSettings, AvailabilityStatus, CallLog, ChatbotConnectionStatus, ChatbotProfile, ChatbotProfileConnectionStatus,
   CallLogWithContext, Conversation, ConversationListItem, Customer, CustomerStage, CustomFieldDefinition, CustomFieldEntityType, CustomFieldType,
   DashboardMetrics, HomeMetrics, Lead, LeadFunnel, LeadRemark, LeadStageAssignment,
   LocationAssignmentConfig, LocationAssignmentUser, NotificationSettings, NumberAccess, NumberAssignmentConfig, NumberAssignmentUser, Product, PublicQuotationView,
@@ -26,6 +26,17 @@ export const backendApi = {
 
   getChatbotConnectionStatus: (numberId: string) => apiFetch<ChatbotConnectionStatus>(`/api/numbers/${encodeURIComponent(numberId)}/chatbot/connection`),
   rotateChatbotApiKey: (numberId: string) => apiFetch<{ numberId: string; apiKey: string; apiKeyPrefix: string; webhookSecret: string; generatedAt: string }>(`/api/numbers/${encodeURIComponent(numberId)}/chatbot/key`, { method: 'POST' }),
+
+  listChatbotProfiles: (numberId: string) => apiFetch<ChatbotProfile[]>(`/api/numbers/${encodeURIComponent(numberId)}/chatbot-profiles`),
+  createChatbotProfile: (numberId: string, input: { name: string; webhookUrl?: string; externalProfileId?: string; mode?: string }) =>
+    apiFetch<ChatbotProfile>(`/api/numbers/${encodeURIComponent(numberId)}/chatbot-profiles`, { method: 'POST', body: JSON.stringify(input) }),
+  updateChatbotProfile: (profileId: string, patch: Record<string, unknown>) =>
+    apiFetch<ChatbotProfile>(`/api/chatbot-profiles/${encodeURIComponent(profileId)}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+  reorderChatbotProfiles: (numberId: string, orderedProfileIds: string[]) =>
+    apiFetch<ChatbotProfile[]>(`/api/numbers/${encodeURIComponent(numberId)}/chatbot-profiles/reorder`, { method: 'POST', body: JSON.stringify({ orderedProfileIds }) }),
+  rotateChatbotProfileApiKey: (profileId: string) =>
+    apiFetch<{ profileId: string; apiKey: string; apiKeyPrefix: string; webhookSecret: string; generatedAt: string }>(`/api/chatbot-profiles/${encodeURIComponent(profileId)}/key`, { method: 'POST' }),
+  getChatbotProfileConnectionStatus: (profileId: string) => apiFetch<ChatbotProfileConnectionStatus>(`/api/chatbot-profiles/${encodeURIComponent(profileId)}/connection`),
 
   handoffChatbot: (conversationId: string) => apiFetch<Conversation>(`/api/conversations/${encodeURIComponent(conversationId)}/chatbot/handoff`, { method: 'POST' }),
   resumeChatbot: (conversationId: string) => apiFetch<Conversation>(`/api/conversations/${encodeURIComponent(conversationId)}/chatbot/resume`, { method: 'POST' }),

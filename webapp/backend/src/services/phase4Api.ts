@@ -22,6 +22,7 @@ import { Phase22Api } from './phase22Api';
 import { enqueueCustomerSync, type CustomerSyncQueue } from './zohoCrm';
 import { decideInboundChatbotRouting, type ChatbotInboundDecision } from './chatbotRouting';
 import { ChatbotIntegrationApi } from './chatbotIntegrationApi';
+import { dispatchInboundMessageToChatbotProfiles } from './chatbotProfileApi';
 
 export interface IngestResult {
   duplicate?: boolean;
@@ -117,6 +118,10 @@ export class Phase4Api {
       // ChatbotIntegrationApi.notifyInboundMessage) — never allowed to fail this request.
       await new ChatbotIntegrationApi(this.db, {}).notifyInboundMessage(number, conversation, message, customer, chatbot, isNewConversation, isNewCustomer);
     }
+    // Added 2026-09-01 — the multi-bot-per-number system (Phase 1). Deliberately the only new
+    // line here: dispatchInboundMessageToChatbotProfiles guards itself to a strict no-op for any
+    // number still on the single-bot path above, so the two systems can never double-fire.
+    await dispatchInboundMessageToChatbotProfiles(this.db, {}, number, conversation, message, customer, isNewConversation, isNewCustomer);
     return { duplicate: false, messageId: message.id, conversationId: conversation.id, customerId: customer.id, chatbot };
   }
 

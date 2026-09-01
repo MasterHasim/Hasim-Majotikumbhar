@@ -11,6 +11,7 @@ import { Phase6Api } from '../services/phase6Api';
 import { WorkspaceApi } from '../services/workspaceApi';
 import { ExotelProvider, requireExotelConfig } from '../services/exotelProvider';
 import { ChatbotIntegrationApi } from '../services/chatbotIntegrationApi';
+import { ChatbotProfileApi } from '../services/chatbotProfileApi';
 import { Permissions } from '../domain/phase1';
 
 async function json(request: IRequest): Promise<Record<string, unknown>> {
@@ -53,6 +54,40 @@ export function registerMessagingRoutes(router: RouterType) {
     const ctx = await buildContext(request, env);
     await ctx.phase1.access.require(Permissions.NUMBERS_ADMIN);
     return Response.json(await new ChatbotIntegrationApi(ctx.db, env).rotateNumberApiKey(param(request, 'id')));
+  });
+
+  // --- Chatbot profiles (multi-bot-per-number, Phase 1, added 2026-09-01) — same admin gate as
+  // the single-bot routes above; entirely additive, see chatbotProfileApi.ts. ---
+  router.get('/api/numbers/:numberId/chatbot-profiles', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    await ctx.phase1.access.require(Permissions.NUMBERS_ADMIN);
+    return Response.json(await new ChatbotProfileApi(ctx.db, env).listProfilesForNumber(param(request, 'numberId')));
+  });
+  router.post('/api/numbers/:numberId/chatbot-profiles', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    await ctx.phase1.access.require(Permissions.NUMBERS_ADMIN);
+    return Response.json(await new ChatbotProfileApi(ctx.db, env).createProfile(param(request, 'numberId'), await json(request) as never));
+  });
+  router.patch('/api/chatbot-profiles/:profileId', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    await ctx.phase1.access.require(Permissions.NUMBERS_ADMIN);
+    return Response.json(await new ChatbotProfileApi(ctx.db, env).updateProfile(param(request, 'profileId'), await json(request) as never));
+  });
+  router.post('/api/numbers/:numberId/chatbot-profiles/reorder', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    await ctx.phase1.access.require(Permissions.NUMBERS_ADMIN);
+    const body = (await json(request)) as { orderedProfileIds: string[] };
+    return Response.json(await new ChatbotProfileApi(ctx.db, env).reorderProfiles(param(request, 'numberId'), body.orderedProfileIds ?? []));
+  });
+  router.post('/api/chatbot-profiles/:profileId/key', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    await ctx.phase1.access.require(Permissions.NUMBERS_ADMIN);
+    return Response.json(await new ChatbotProfileApi(ctx.db, env).rotateProfileApiKey(param(request, 'profileId')));
+  });
+  router.get('/api/chatbot-profiles/:profileId/connection', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    await ctx.phase1.access.require(Permissions.NUMBERS_ADMIN);
+    return Response.json(await new ChatbotProfileApi(ctx.db, env).getProfileConnectionStatus(param(request, 'profileId')));
   });
 
   // --- Conversations (Phase5Api) ---
@@ -177,5 +212,15 @@ export function registerMessagingRoutes(router: RouterType) {
     const serviceAccount = parseServiceAccount(env);
     const db = buildAppDb(serviceAccount, env.FIREBASE_DATABASE_URL, env);
     return Response.json(await new ChatbotIntegrationApi(db, env).receiveReply(param(request, 'id'), apiKey, await json(request) as never));
+  });
+
+  /** Same shape as the per-number callback above, but keyed by profile — for the multi-bot
+   * system (Phase 1, added 2026-09-01). Also uses only the dedicated per-profile key. */
+  router.post('/api/integrations/chatbot/profiles/:profileId/reply', async (request: IRequest, env: Env) => {
+    const authorization = request.headers.get('Authorization') ?? '';
+    const apiKey = authorization.startsWith('Bearer ') ? authorization.slice('Bearer '.length).trim() : '';
+    const serviceAccount = parseServiceAccount(env);
+    const db = buildAppDb(serviceAccount, env.FIREBASE_DATABASE_URL, env);
+    return Response.json(await new ChatbotProfileApi(db, env).receiveReply(param(request, 'profileId'), apiKey, await json(request) as never));
   });
 }
