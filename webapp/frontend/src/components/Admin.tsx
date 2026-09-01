@@ -95,7 +95,7 @@ function UsersTab({ roles, numbers }: { roles: Role[]; numbers: WhatsAppNumber[]
                 <td>
                   {roles.map((r) => (
                     <label key={r.id} className="inline" style={{ marginRight: 8 }}>
-                      <input type="checkbox" checked={u.roleIds.includes(r.id)} disabled={busy} onChange={() => toggleRole(u.id, r.id, u.roleIds)} />
+                      <input type="checkbox" checked={(u.roleIds ?? []).includes(r.id)} disabled={busy} onChange={() => toggleRole(u.id, r.id, u.roleIds ?? [])} />
                       {r.key}
                     </label>
                   ))}
@@ -174,7 +174,7 @@ function TeamsTab({ users, roles }: { users: User[]; roles: Role[] }) {
   const [error, setError] = useState<string | null>(null);
 
   const siteManagerRoleId = roles.find((r) => r.key === 'SITE_MANAGER')?.id;
-  const siteManagers = siteManagerRoleId ? users.filter((u) => u.roleIds.includes(siteManagerRoleId)) : [];
+  const siteManagers = siteManagerRoleId ? users.filter((u) => (u.roleIds ?? []).includes(siteManagerRoleId)) : [];
 
   function reload() {
     backendApi.listTeams().then(setTeams).catch((err) => setError(errMsg(err)));
