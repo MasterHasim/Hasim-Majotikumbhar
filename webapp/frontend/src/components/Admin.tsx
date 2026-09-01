@@ -14,7 +14,7 @@ function fmt(iso: string): string {
 
 // ---------------------------------------------------------------------------
 
-function UsersTab({ roles }: { roles: Role[] }) {
+function UsersTab({ roles, numbers }: { roles: Role[]; numbers: WhatsAppNumber[] }) {
   /** null = not loaded yet, [] = loaded and genuinely empty — without this distinction the
    * table shows "No users yet." during the fetch too, which reads as data loss on a slow load. */
   const [users, setUsers] = useState<User[] | null>(null);
@@ -25,6 +25,23 @@ function UsersTab({ roles }: { roles: Role[] }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [emailStatus, setEmailStatus] = useState<Record<string, string>>({});
+  const [welcomeNumberId, setWelcomeNumberId] = useState('');
+  const [welcomeNumberBusy, setWelcomeNumberBusy] = useState(false);
+  const [welcomeNumberSaved, setWelcomeNumberSaved] = useState(false);
+
+  useEffect(() => {
+    backendApi.getNotificationSettings().then((s) => setWelcomeNumberId(s.welcomeWhatsAppNumberId ?? '')).catch(() => {});
+  }, []);
+
+  function saveWelcomeNumber(numberId: string) {
+    setWelcomeNumberId(numberId);
+    setWelcomeNumberSaved(false);
+    setWelcomeNumberBusy(true);
+    backendApi.updateNotificationSettings({ welcomeWhatsAppNumberId: numberId })
+      .then(() => setWelcomeNumberSaved(true))
+      .catch((err) => setError(errMsg(err)))
+      .finally(() => setWelcomeNumberBusy(false));
+  }
 
   function reload() {
     backendApi.listUsers().then(setUsers).catch((err) => setError(errMsg(err)));
@@ -124,6 +141,20 @@ function UsersTab({ roles }: { roles: Role[] }) {
         >
           Add user
         </button>
+      </div>
+
+      <h2 className="section-title">Notification settings</h2>
+      <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: -6 }}>
+        Which number sends the "you've been added" WhatsApp welcome message to a new team member. Leave on Auto to infer it from
+        whichever number's WABA has an APPROVED <code>team_member_welcome</code> template — pick a specific number if more than one
+        WABA might ever have that template approved, so it's unambiguous which one is meant.
+      </p>
+      <div className="form-row" style={{ alignItems: 'center' }}>
+        <select value={welcomeNumberId} disabled={welcomeNumberBusy} onChange={(e) => saveWelcomeNumber(e.target.value)}>
+          <option value="">Auto (infer from template)</option>
+          {numbers.filter((n) => n.active).map((n) => <option key={n.id} value={n.id}>{n.displayName} · {n.phoneNumber}</option>)}
+        </select>
+        {welcomeNumberSaved && !welcomeNumberBusy && <span style={{ fontSize: 12, color: 'var(--accent)' }}>Saved</span>}
       </div>
     </div>
   );
@@ -1390,7 +1421,7 @@ export function Admin({ whoAmI }: { whoAmI: WhoAmI }) {
         ))}
       </div>
 
-      {tab === 'users' && <UsersTab roles={roles} />}
+      {tab === 'users' && <UsersTab roles={roles} numbers={numbers} />}
       {tab === 'teams' && <TeamsTab users={users} roles={roles} />}
       {tab === 'numbers' && <NumbersTab />}
       {tab === 'chatbot' && <ChatbotTab numbers={numbers} />}

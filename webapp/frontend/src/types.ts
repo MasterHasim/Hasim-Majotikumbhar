@@ -181,6 +181,13 @@ export interface AutoDialerSettings {
   callPromptEnabled: boolean;
 }
 
+/** Explicit override for which WhatsApp number sends the new-team-member welcome
+ * notification — unset means "auto" (inferred from whichever number's WABA has an APPROVED
+ * team_member_welcome template). See Admin → Users. */
+export interface NotificationSettings {
+  welcomeWhatsAppNumberId?: string;
+}
+
 export interface AssignableUser {
   id: string;
   displayName: string;

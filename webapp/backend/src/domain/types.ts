@@ -462,6 +462,18 @@ export interface AutoDialerSettings extends Record_ {
   updatedBy: string;
 }
 
+/** Singleton (id='default'), ADMIN-managed. Added 2026-09-01 because the welcome-notification
+ * sending number was previously always inferred from whichever WhatsApp number's WABA has an
+ * APPROVED team_member_welcome template — ambiguous the moment more than one number ever has
+ * an approved template by that name (ADMIN has no way to say which one is meant). */
+export interface NotificationSettings extends Record_ {
+  /** Explicit override for the welcome-WhatsApp sending number. Unset = fall back to the
+   * original by-template-name inference (see Phase1Api.sendWelcomeWhatsApp). */
+  welcomeWhatsAppNumberId?: string;
+  updatedAt: string;
+  updatedBy: string;
+}
+
 export interface LeadStageAssignment extends Record_ {
   leadId: string;
   stageId: string;

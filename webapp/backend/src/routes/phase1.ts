@@ -41,6 +41,14 @@ export function registerPhase1Routes(router: RouterType) {
     const ctx = await buildContext(request, env);
     return Response.json(await ctx.phase1.sendWelcomeEmail(param(request, 'id')));
   });
+  router.get('/api/notification-settings', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    return Response.json(await ctx.phase1.getNotificationSettings());
+  });
+  router.patch('/api/notification-settings', async (request: IRequest, env: Env) => {
+    const ctx = await buildContext(request, env);
+    return Response.json(await ctx.phase1.updateNotificationSettings(await json(request)));
+  });
   router.get('/api/users', async (request: IRequest, env: Env) => {
     const ctx = await buildContext(request, env);
     return Response.json(await ctx.phase1.listUsers());

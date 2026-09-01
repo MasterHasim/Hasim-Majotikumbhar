@@ -25,6 +25,14 @@
 
 Full backend suite: 237/237 passing (added 2 regression tests during these fixes, on top of the 234 already there). Frontend: typecheck clean, build clean, 8/8 new tests passing. Both backend and frontend deployed and live-verified.
 
+## ✅ Explicit welcome-notification sending number + a real ambiguity bug found and closed (2026-09-01)
+
+**Per your ask to switch the new-user welcome WhatsApp from 079-485-02808 (Entartica - Coimbatore) to 079-485-02810 (Compliances)**: checked the real data before touching anything, and found this isn't a config change — `sendWelcomeWhatsApp` picks its sending number by finding whichever number's WABA has an APPROVED `team_member_welcome` template, and **the only approved one right now is on Entartica - Coimbatore's WABA**. Compliances needs its own Meta-approved `team_member_welcome` template first — real external dependency (Meta Business Manager, your side), same category as every other template-approval gap this project has hit.
+
+**Built the fix you asked for anyway**, since it's needed regardless of when that approval lands: a new **Admin → Users → Notification settings** section lets you explicitly pick which number sends the welcome message, instead of it being silently inferred. Also closes a real bug I found while wiring this in: the old inference had no way to disambiguate if *two* numbers ever both had an approved `team_member_welcome` template — it would've picked whichever came first in an unordered list, unpredictably. With an explicit number chosen, the required template must be approved specifically for *that* number's own WABA — no silent fallback to a different number's template if it isn't (matches the point of choosing explicitly). Leaving it on "Auto" preserves exactly today's original behavior for anyone who hasn't touched this yet.
+
+5 new backend tests. 291 backend tests + 8 frontend tests passing, deployed. **Still needs your action**: get `team_member_welcome` approved on Compliances' WABA (`1359198589697291`) in Meta, then pick "Compliances" in the new dropdown.
+
 ## ✅ Firebase RTDB → D1 migration, Phase 4: first real staged cutover live (2026-08-31)
 
 **Per your "deploy the D1 migration's next phase."** Phase 1 (foundations, staging-only) was done earlier — this is the real thing: production D1, and the first two collections actually cut over.

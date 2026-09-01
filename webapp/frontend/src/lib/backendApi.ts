@@ -5,7 +5,7 @@ import type {
   AutoDialerSettings, AvailabilityStatus, CallLog, ChatbotConnectionStatus,
   CallLogWithContext, Conversation, ConversationListItem, Customer, CustomerStage, CustomFieldDefinition, CustomFieldEntityType, CustomFieldType,
   DashboardMetrics, HomeMetrics, Lead, LeadFunnel, LeadRemark, LeadStageAssignment,
-  LocationAssignmentConfig, LocationAssignmentUser, NumberAccess, NumberAssignmentConfig, NumberAssignmentUser, Product, PublicQuotationView,
+  LocationAssignmentConfig, LocationAssignmentUser, NotificationSettings, NumberAccess, NumberAssignmentConfig, NumberAssignmentUser, Product, PublicQuotationView,
   QuickReply, Quotation, Remark, Reminder,
   ReminderWithContext, Role, SearchFilters, SearchResultItem, SnoozeStatus, Stage, Team, TeamMember, Template, UploadLeadsResult, User,
   WhatsAppNumber, WhoAmI, Workspace,
@@ -110,6 +110,11 @@ export const backendApi = {
 
   updateAutoDialerSettings: (patch: Partial<AutoDialerSettings>) =>
     apiFetch<AutoDialerSettings>('/api/auto-dialer-settings', { method: 'PATCH', body: JSON.stringify(patch) }),
+
+  getNotificationSettings: () => apiFetch<NotificationSettings>('/api/notification-settings'),
+
+  updateNotificationSettings: (patch: Partial<NotificationSettings>) =>
+    apiFetch<NotificationSettings>('/api/notification-settings', { method: 'PATCH', body: JSON.stringify(patch) }),
 
   listCustomers: (numberId?: string) =>
     apiFetch<Customer[]>(`/api/customers${numberId ? `?numberId=${encodeURIComponent(numberId)}` : ''}`),

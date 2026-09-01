@@ -5,7 +5,7 @@
  */
 import { ApiError, type Env } from '../types';
 import { ALL_PERMISSIONS, Ids, Permissions, RoleDefinitions, ROLE_KEYS, Roles, Status, Validation, type Permission, type RoleKey } from '../domain/phase1';
-import type { AssignmentEligibility, Availability, NumberAccess, Role, Team, TeamMember, Template, User, WhatsAppNumber } from '../domain/types';
+import type { AssignmentEligibility, Availability, NotificationSettings, NumberAccess, Role, Team, TeamMember, Template, User, WhatsAppNumber } from '../domain/types';
 import { Repository } from '../lib/repository';
 import { AccessControl, type Phase1Repositories } from '../lib/accessControl';
 import { AuditLogService } from '../lib/auditLog';
@@ -81,6 +81,7 @@ export class Phase1Api {
   private exotelConfig: ExotelConfig | null;
   private templates: Repository<Template>;
   private numbers: Repository<WhatsAppNumber>;
+  private notificationSettings: Repository<NotificationSettings>;
   private frontendUrl: string;
 
   constructor(db: AppDb, identityEmail: string, env?: Env) {
@@ -97,22 +98,63 @@ export class Phase1Api {
       : null;
     this.templates = new Repository<Template>(db, 'templates');
     this.numbers = new Repository<WhatsAppNumber>(db, 'numbers');
+    this.notificationSettings = new Repository<NotificationSettings>(db, 'notificationSettings');
     this.frontendUrl = env?.FRONTEND_URL || '';
+  }
+
+  async getNotificationSettings(): Promise<NotificationSettings> {
+    const record = await this.notificationSettings.get('default');
+    return record ?? { id: 'default', updatedAt: '', updatedBy: '' };
+  }
+
+  async updateNotificationSettings(patch: { welcomeWhatsAppNumberId?: unknown }): Promise<NotificationSettings> {
+    const actor = await this.access.require(Permissions.SETTINGS_MANAGE);
+    const current = await this.getNotificationSettings();
+    // An empty string clears the override back to "auto" (the original by-template inference) —
+    // same "blank clears it" convention custom field values already use.
+    const rawNumberId = patch.welcomeWhatsAppNumberId;
+    let welcomeWhatsAppNumberId = current.welcomeWhatsAppNumberId;
+    if (rawNumberId !== undefined) {
+      const trimmed = typeof rawNumberId === 'string' ? rawNumberId.trim() : '';
+      if (trimmed && !(await this.numbers.get(trimmed))) throw new ApiError(404, 'NOT_FOUND', 'WhatsApp number was not found.');
+      welcomeWhatsAppNumberId = trimmed || undefined;
+    }
+    const next: NotificationSettings = { id: 'default', ...(welcomeWhatsAppNumberId ? { welcomeWhatsAppNumberId } : {}), updatedAt: Ids.now(), updatedBy: actor.id };
+    await this.notificationSettings.replace('default', next);
+    await this.audit.write(actor.id, 'notificationSettings.updated', 'notificationSettings', 'default', { patch: next });
+    return next;
   }
 
   /**
    * Best-effort — mirrors createUser's own email send: a failed or unconfigured WhatsApp
    * notification never blocks user creation, and a missing phone/template/sending-number just
-   * means silently no message, not an error. The sending number is resolved from the approved
-   * template's own wabaId (Template.wabaId) — whichever WhatsAppNumber shares that wabaId is the
-   * one Meta will actually let this template send through.
+   * means silently no message, not an error.
+   *
+   * Sending number: if an admin has explicitly set NotificationSettings.welcomeWhatsAppNumberId,
+   * that number is used, and the required template must be APPROVED specifically for its own
+   * WABA — no silent fallback to a different number's template, since that would defeat the
+   * point of an explicit choice. Otherwise falls back to the original inference (any APPROVED
+   * template by this name, whichever number shares its wabaId) — kept for anyone who hasn't set
+   * this explicitly, but genuinely ambiguous the moment more than one number ever has an
+   * APPROVED template with this exact name (added 2026-09-01, found while wiring in the
+   * explicit setting — there was previously no way to say which one was meant).
    */
   private async sendWelcomeWhatsApp(phone: string, displayName: string, roleNames: string[]): Promise<boolean> {
     if (!this.exotelConfig || !phone) return false;
-    const template = await this.templates.findOne((t) => t.name === WELCOME_WHATSAPP_TEMPLATE_NAME && t.status === 'APPROVED');
-    if (!template) return false;
-    const number = await this.numbers.findOne((n) => n.wabaId === template.wabaId && n.active);
-    if (!number) return false;
+    const settings = await this.getNotificationSettings();
+    let number: WhatsAppNumber | null;
+    let template: Template | null;
+    if (settings.welcomeWhatsAppNumberId) {
+      number = await this.numbers.get(settings.welcomeWhatsAppNumberId);
+      if (!number || !number.active) return false;
+      template = await this.templates.findOne((t) => t.name === WELCOME_WHATSAPP_TEMPLATE_NAME && t.status === 'APPROVED' && t.wabaId === number!.wabaId);
+      if (!template) return false;
+    } else {
+      template = await this.templates.findOne((t) => t.name === WELCOME_WHATSAPP_TEMPLATE_NAME && t.status === 'APPROVED');
+      if (!template) return false;
+      number = await this.numbers.findOne((n) => n.wabaId === template!.wabaId && n.active);
+      if (!number) return false;
+    }
     const components = buildTemplateSendComponents(template.components, { 1: displayName, 2: roleNames.join(', ') || 'no role assigned yet', 3: this.frontendUrl });
     try {
       await new ExotelProvider(this.exotelConfig).sendTemplate(toE164(number.phoneNumber), toE164(phone), template.name, template.language, components);

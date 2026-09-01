@@ -163,6 +163,54 @@ describe('Phase1Api (ported from apps-script/src/Phase1Services.gs)', () => {
       await expect(new Phase1Api(db, ADMIN_EMAIL, fullEnv()).createUser({ email: 'wa5@example.com', displayName: 'Wa Five', phone: '+919876500005' })).resolves.toMatchObject({ email: 'wa5@example.com' });
       expect(mock.exotelCalls).toHaveLength(0);
     });
+
+    describe('NotificationSettings.welcomeWhatsAppNumberId (explicit sending-number override, 2026-09-01)', () => {
+      it('defaults to unset (auto/inference), and getNotificationSettings never throws for a fresh install', async () => {
+        const settings = await apiAs(ADMIN_EMAIL).getNotificationSettings();
+        expect(settings).toMatchObject({ id: 'default' });
+        expect(settings.welcomeWhatsAppNumberId).toBeUndefined();
+      });
+
+      it('denies a non-manager (no SETTINGS_MANAGE), and 404s on an unknown numberId', async () => {
+        await expect(apiAs(AGENT_EMAIL).updateNotificationSettings({ welcomeWhatsAppNumberId: 'x' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+        await expect(apiAs(ADMIN_EMAIL).updateNotificationSettings({ welcomeWhatsAppNumberId: 'does-not-exist' })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      });
+
+      it('once set, sends from the explicitly chosen number using ITS OWN approved template, even though a different number also has one approved', async () => {
+        const originalNumber = await seedApprovedWelcomeTemplate(); // wabaId 'waba-welcome-1', has an APPROVED template
+
+        const chosenNumber = await new Phase3Api(db, ADMIN_EMAIL).createNumber({ displayName: 'Chosen Number', phoneNumber: '079-485-02802', provider: 'exotel', wabaId: 'waba-welcome-2' });
+        mock.setNextExotelResponse(200, { response: { whatsapp: { templates: [{ data: { id: 'ptpl-welcome-2', name: 'team_member_welcome', language: 'en', category: 'UTILITY', status: 'APPROVED', components: [{ type: 'BODY', text: 'Hi {{1}}, you are now a {{2}}. Sign in at {{3}}.' }] } }] } } });
+        await new Phase10Api(db, ADMIN_EMAIL, mock.exotelConfig as never).syncTemplatesFromProvider('waba-welcome-2');
+
+        await apiAs(ADMIN_EMAIL).updateNotificationSettings({ welcomeWhatsAppNumberId: chosenNumber.id });
+        await new Phase1Api(db, ADMIN_EMAIL, fullEnv()).createUser({ email: 'wa6@example.com', displayName: 'Wa Six', phone: '+919876500006' });
+
+        const sendCall = mock.exotelCalls.find((c) => c.path === 'messages')!;
+        expect(sendCall).toBeTruthy();
+        // Sent from the CHOSEN number's own phone number, not originalNumber's.
+        expect((sendCall.body as { whatsapp: { messages: { from: string }[] } }).whatsapp.messages[0]!.from).toContain('7948502802');
+        void originalNumber;
+      });
+
+      it('does not fall back to a different number when the explicitly chosen one has no APPROVED template of its own', async () => {
+        await seedApprovedWelcomeTemplate(); // a DIFFERENT number has an approved template
+        const chosenButUnapproved = await new Phase3Api(db, ADMIN_EMAIL).createNumber({ displayName: 'No Template Yet', phoneNumber: '079-485-02803', provider: 'exotel', wabaId: 'waba-no-template' });
+        await apiAs(ADMIN_EMAIL).updateNotificationSettings({ welcomeWhatsAppNumberId: chosenButUnapproved.id });
+
+        await new Phase1Api(db, ADMIN_EMAIL, fullEnv()).createUser({ email: 'wa7@example.com', displayName: 'Wa Seven', phone: '+919876500007' });
+        expect(mock.exotelCalls.filter((c) => c.path === 'messages')).toHaveLength(0); // no silent fallback to the other number
+      });
+
+      it('an empty string clears the override back to auto/inference', async () => {
+        const number = await seedApprovedWelcomeTemplate();
+        await apiAs(ADMIN_EMAIL).updateNotificationSettings({ welcomeWhatsAppNumberId: number.id });
+        expect((await apiAs(ADMIN_EMAIL).getNotificationSettings()).welcomeWhatsAppNumberId).toBe(number.id);
+
+        await apiAs(ADMIN_EMAIL).updateNotificationSettings({ welcomeWhatsAppNumberId: '' });
+        expect((await apiAs(ADMIN_EMAIL).getNotificationSettings()).welcomeWhatsAppNumberId).toBeUndefined();
+      });
+    });
   });
 
   describe('number access', () => {
